@@ -41,7 +41,7 @@ user taps "Включить звук" and is cached by the service worker for of
 The app is published to https://valvk.github.io/mk4-trainer/.
 
 - `npm run release:patch` (or `release:minor`, `release:major`) bumps the version in `package.json`,
-  commits `chore(release): vX.Y.Z`, tags `vX.Y.Z` and pushes. Run it on `main` with a clean working tree.
+  commits `chore(release): vX.Y.Z`, tags `vX.Y.Z` and pushes. Run it on the default branch (`master`) with a clean working tree.
 - The tag starts `.github/workflows/release.yml`: type check, lint and tests (`ci.yml`), a GitHub release
   with generated notes, then `pages.yml` builds with the repository base path and deploys to Pages.
 - `pages.yml` can also be run by hand from the Actions tab to redeploy without a new version.
