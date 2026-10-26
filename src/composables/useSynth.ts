@@ -58,6 +58,12 @@ let starting: Promise<void> | null = null
 let loadedBank: BankId | null = null
 let routed = false
 
+/**
+ * Song mode: the child's keys play on this channel with this preset instead of PLAY_CHANNEL,
+ * so they never clash with the 16 song channels.
+ */
+let learnerTarget: { channel: number, preset: Instrument } | null = null
+
 /** Reads the SoundFont with download progress; the service worker serves it from cache next time. */
 async function fetchSoundFont(url: string): Promise<ArrayBuffer> {
   progress.value = 0
@@ -221,10 +227,19 @@ function routeNotes(): void {
     useNoteSource().onEvent((event) => {
       const instance = synth.value
       if (!instance) return
-      if (event.type === 'noteOn') instance.noteOn(PLAY_CHANNEL, event.note, event.velocity)
-      else if (event.type === 'noteOff') instance.noteOff(PLAY_CHANNEL, event.note)
+      const channel = learnerTarget?.channel ?? PLAY_CHANNEL
+      if (event.type === 'noteOn') instance.noteOn(channel, event.note, event.velocity)
+      else if (event.type === 'noteOff') instance.noteOff(channel, event.note)
     })
   })
+}
+
+/** Routes the child's keys to a song-mode channel with its own preset; null returns to the normal channel. */
+function setLearnerTarget(target: { channel: number, preset: Instrument } | null): void {
+  const instance = synth.value
+  if (instance && learnerTarget) instance.stopAll(true)
+  learnerTarget = target
+  if (instance && target) selectPreset(instance, target.channel, target.preset)
 }
 
 export function useSynth() {
@@ -243,6 +258,9 @@ export function useSynth() {
     setInstrument,
     previewInstrument,
     setBank,
+    setLearnerTarget,
+    /** The shared synthesizer once sound is on (for the song sequencer). */
+    getSynth: (): WorkletSynthesizer | null => synth.value,
     playChord,
     playCue,
   }
