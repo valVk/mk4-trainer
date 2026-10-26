@@ -1,0 +1,69 @@
+@import "tailwindcss";
+@import "@nuxt/ui";
+@import "@fontsource-variable/unbounded";
+@import "@fontsource-variable/golos-text";
+
+@theme {
+  --font-sans: "Golos Text Variable", "Segoe UI", Roboto, sans-serif;
+  --font-display: "Unbounded Variable", "Arial Black", sans-serif;
+
+  /* Pad hues, also used to light piano keys */
+  --color-pad-tomato: #ff5a4e;
+  --color-pad-sun: #ffc53d;
+  --color-pad-aqua: #22b8a6;
+  --color-pad-sky: #3d7bff;
+
+  --ease-out: cubic-bezier(0.23, 1, 0.32, 1);
+}
+
+/* Nuxt UI semantic tokens mapped to the MK4 palette */
+:root {
+  --rubber: #d5dae6;
+  --rubber-edge: #b9c0d2;
+  --key-white: #fbfcff;
+  --key-black: #232740;
+  /* White keys stay light in both themes, so their labels keep fixed dark colors */
+  --key-label: #4b5275;
+  --key-label-dim: #7d84a3;
+  --star-off: #b9c0d2;
+
+  --ui-bg: #e9edf5;
+  --ui-bg-muted: #e1e6f0;
+  --ui-bg-elevated: #f6f8fc;
+  --ui-bg-accented: #d5dae6;
+  --ui-text: #1e2240;
+  --ui-text-highlighted: #1e2240;
+  --ui-text-toned: #3a4062;
+  --ui-text-muted: #5b6283;
+  --ui-text-dimmed: #8a90ab;
+  --ui-border: #cfd5e3;
+  --ui-border-muted: #dde2ec;
+  --ui-border-accented: #b9c0d2;
+  --ui-radius: 0.5rem;
+}
+
+.dark {
+  --rubber: #23283f;
+  --rubber-edge: #0c0e1a;
+  --key-white: #e9ecf6;
+  --key-black: #0f1222;
+  --star-off: #4a5175;
+
+  --ui-bg: #141729;
+  --ui-bg-muted: #191d32;
+  --ui-bg-elevated: #1b1f35;
+  --ui-bg-accented: #262b45;
+  --ui-text: #e6e9f5;
+  --ui-text-highlighted: #f4f6fc;
+  --ui-text-toned: #c3c8de;
+  --ui-text-muted: #9aa1c0;
+  --ui-text-dimmed: #6c7392;
+  --ui-border: #2c3250;
+  --ui-border-muted: #232842;
+  --ui-border-accented: #3a4166;
+}
+
+body {
+  font-family: var(--font-sans);
+  -webkit-tap-highlight-color: transparent;
+}

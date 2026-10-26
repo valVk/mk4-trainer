@@ -1,0 +1,17 @@
+Chord trainer
+Code written from scratch. Ideas inspired by Chord Nebula (Behnam Khanbeigi).
+
+Third-party components
+----------------------
+
+spessasynth_lib (SoundFont synthesizer)
+  License: Apache-2.0
+  Source: https://github.com/spessasus/spessasynth_lib
+
+MuseScore_General.sf3 (default SoundFont, public/soundfonts/)
+  License: MIT
+  Adaptation by S. Christian Collins, based on FluidR3Mono (Michael Cowgill)
+  and FluidR3 (Frank Wen). Full notices and license text:
+  public/soundfonts/MuseScore_General_License.md
+  Source: https://ftp.osuosl.org/pub/musescore/soundfont/MuseScore_General/
+  Not stored in git: run `npm run soundfont` to download it.
