@@ -29,7 +29,7 @@ import {
   type RungMode,
   type Unit,
 } from '@/lib/ladder'
-import { drumKind, padLayout } from '@/lib/padLayout'
+import { drumKind, PAD_NOTE_MIN_S, padLayout } from '@/lib/padLayout'
 import { partPhrases, songSections, type Phrase } from '@/lib/phrases'
 import { chooseWindow, coversStep, octaveHint, stepIndexAt, upcomingKeys } from '@/lib/practice'
 import { parseSong, type Part, type Song } from '@/lib/song'
@@ -147,9 +147,16 @@ const startTime = computed(() => {
   const first = guided.value ? (unit.value?.start ?? 0) : (steps.value[0]?.time ?? 0)
   return Math.max(0, first - barLength.value * (guided.value ? UNIT_LEAD_IN_BARS : FREE_LEAD_IN_BARS))
 })
+// Guided mode shows and plays only the unit's notes; a long last note may ring past the unit's bar line.
+const fallNotes = computed(() => {
+  const notes = part.value?.notes ?? []
+  const current = unit.value
+  if (!guided.value || !current) return notes
+  return notes.filter((note) => note.start >= current.start - 1e-6 && note.start < current.end - 1e-6)
+})
 const endTime = computed(() => {
-  if (guided.value && unit.value) return unit.value.end
-  return (part.value?.notes ?? []).reduce((end, note) => Math.max(end, note.start + note.length), 0)
+  const last = fallNotes.value.reduce((end, note) => Math.max(end, note.start + note.length), 0)
+  return guided.value && unit.value ? Math.max(unit.value.end, last) : last
 })
 const pending = computed(() => (mode.value === 'wait' ? steps.value[pendingIndex.value] : steps.value[stepIndexAt(steps.value, player.time.value)]) ?? null)
 
@@ -397,7 +404,8 @@ const pendingKeys = computed(() => (pending.value && !result.value ? pending.val
 /** Notes of the part that are sounding now: their keys stay lit until the note ends, not just until pressed. */
 const soundingKeys = computed(() => {
   const now = player.time.value
-  return (part.value?.notes ?? []).filter((note) => note.start <= now + 0.02 && now < note.start + note.length - 0.02).map((note) => note.key)
+  const minLength = onPads.value ? PAD_NOTE_MIN_S : 0
+  return fallNotes.value.filter((note) => note.start <= now + 0.02 && now < note.start + Math.max(note.length, minLength) - 0.02).map((note) => note.key)
 })
 const litKeys = computed(() => (result.value ? [] : [...new Set([...pendingKeys.value, ...soundingKeys.value])]))
 
@@ -576,7 +584,7 @@ const hasNextRung = computed(() => (unit.value ? rungIndex.value + 1 < unit.valu
       </section>
 
       <div class="stage" :class="{ 'stage--pads': onPads }">
-        <NoteFall class="stage__fall" :notes="part.notes" :start="windowStart" :get-time="player.currentTime" :pending="pendingKeys" :pad-keys="onPads ? layout!.padKeys : undefined" />
+        <NoteFall class="stage__fall" :notes="fallNotes" :start="windowStart" :get-time="player.currentTime" :pending="pendingKeys" :pad-keys="onPads ? layout!.padKeys : undefined" />
         <template v-if="onPads">
           <PadStrip :labels="padLabels" :lit="litPads" :hit="hitPads" @press="pressPad" />
           <p class="window text-muted">{{ t('songs.padsLayout') }}</p>

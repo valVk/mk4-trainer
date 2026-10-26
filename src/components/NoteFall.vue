@@ -2,6 +2,7 @@
 import { onBeforeUnmount, onMounted, ref } from 'vue'
 
 import { keyboardKeys } from '@/lib/keyboard'
+import { PAD_NOTE_MIN_S } from '@/lib/padLayout'
 import type { SongNote } from '@/lib/song'
 
 // Falling notes above PianoKeyboard: each note falls in its key's lane and reaches the bottom edge
@@ -117,8 +118,10 @@ function draw() {
     const { x, w, outside } = lane(note.key, layout)
     const bottom = height - until * pxPerSecond
     const padIndex = props.padKeys ? props.padKeys.indexOf(note.key) : -1
-    // Pad notes are tall enough to carry their pad number, even for short drum hits.
-    const top = bottom - Math.max(padIndex === -1 ? 6 : 22, note.length * pxPerSecond)
+    // Pad notes last at least PAD_NOTE_MIN_S (their pad stays lit as long) and are tall enough to carry their number.
+    const top = padIndex === -1
+      ? bottom - Math.max(6, note.length * pxPerSecond)
+      : bottom - Math.max(22, Math.max(note.length, PAD_NOTE_MIN_S) * pxPerSecond)
     // Darker: black keys, or pads of the top row.
     const isBlack = props.padKeys ? padIndex >= PAD_ROW : [1, 3, 6, 8, 10].includes(note.key % 12)
     context.globalAlpha = until < 0 ? 0.35 : 1

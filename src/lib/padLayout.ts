@@ -50,6 +50,9 @@ function frequencies(part: Pick<Part, 'notes'>): Map<number, number> {
   return counts
 }
 
+/** Shortest time a pad note is drawn and its pad lit: drum hits are often only a few milliseconds long. */
+export const PAD_NOTE_MIN_S = 0.3
+
 /**
  * The pad layout for a part, or null when it uses more than 8 different notes.
  * Melodic parts: notes from low to high on pads 1-8. Drums: each sound on its usual pad
