@@ -17,8 +17,8 @@ import {
   type AttemptInput,
   type TaskStats,
 } from '@/db/progress'
-import { GLOBAL_PROFILE, createDb, type LevelProgress, type Profile, type SongRecord, type TrainerDb } from '@/db/schema'
-import { addSong, deleteSong as deleteSongRow, getSong, listSongs, type SongSummary } from '@/db/songs'
+import { GLOBAL_PROFILE, createDb, type LevelProgress, type Profile, type SongProgress, type SongRecord, type TrainerDb } from '@/db/schema'
+import { addSong, deleteSong as deleteSongRow, getSong, getSongProgress, listSongs, saveUnitResult, type SongSummary } from '@/db/songs'
 import { i18n } from '@/i18n'
 import { parseInstrument } from '@/lib/instruments'
 import { starsFor } from '@/lib/levels'
@@ -251,6 +251,23 @@ async function removeSong(id: number): Promise<void> {
   })
 }
 
+/** Ladder progress of the current player for one song, as channel -> unit id -> progress. */
+async function loadSongProgress(songId: number): Promise<Record<number, Record<string, SongProgress>>> {
+  const profileId = profile.value?.id
+  if (profileId === undefined) return {}
+  const rows = (await safely((database) => getSongProgress(database, profileId, songId))) ?? []
+  const byChannel: Record<number, Record<string, SongProgress>> = {}
+  for (const row of rows) (byChannel[row.channel] ??= {})[row.unit] = row
+  return byChannel
+}
+
+/** Saves one ladder attempt for the current player (never lowers what was reached before). */
+async function saveSongUnit(result: { songId: number, channel: number, unit: string, passed: number, stars: number, bestAccuracy: number }): Promise<SongProgress | undefined> {
+  const profileId = profile.value?.id
+  if (profileId === undefined) return undefined
+  return safely((database) => saveUnitResult(database, { ...result, profileId }))
+}
+
 async function forgetSetting(key: string): Promise<void> {
   const profileId = profile.value?.id
   if (profileId !== undefined) await safely((database) => deleteSetting(database, profileId, key))
@@ -279,5 +296,7 @@ export function useProgress() {
     importSong,
     loadSong,
     removeSong,
+    loadSongProgress,
+    saveSongUnit,
   }
 }

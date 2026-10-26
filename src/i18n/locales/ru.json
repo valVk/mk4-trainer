@@ -333,22 +333,53 @@
     "partNotFound": "Такой партии нет в песне.",
     "practice": "Разучить",
     "practiceLabel": "Разучить: {name}",
-    "restart": "С начала партии",
     "modeLabel": "Режим",
-    "mode": {
-      "wait": "Ждать меня",
-      "listen": "Слушать"
-    },
     "speed": "Скорость",
     "anyOctave": "Любая октава",
     "partPosition": "Место в партии",
-    "partDone": "Партия сыграна!",
     "waitingFor": "Жду: {notes}",
     "next": "Дальше: {notes}",
     "octave": {
       "down": "Это на октаву выше, чем нужно. Нажми Octave − на MK4.",
       "up": "Это на октаву ниже, чем нужно. Нажми Octave + на MK4."
     },
-    "window": "На экране клавиши {range}"
+    "window": "На экране клавиши {range}",
+    "sections": "Разделы песни",
+    "sectionLabel": "Раздел {n}, с {time}",
+    "nextPart": "Следующая",
+    "role": {
+      "bass": "бас",
+      "chords": "аккорды",
+      "melody": "мелодия",
+      "effects": "эффекты",
+      "drums": "ударные"
+    },
+    "unitsDone": "пройдено {done} из {total}",
+    "guided": "С учителем",
+    "unitsLabel": "Шаги разучивания",
+    "unit": {
+      "phrase": "Фраза {n}",
+      "section": "Раздел {n}",
+      "part": "Вся партия"
+    },
+    "repeats": "×{n}",
+    "again": "Ещё раз",
+    "rungsLabel": "Ступени",
+    "rungOf": "Ступень {n} из {total}",
+    "rungMode": {
+      "listen": "Послушай",
+      "wait": "Ждать меня",
+      "tempo": "В темпе"
+    },
+    "result": {
+      "passed": "Ступень пройдена!",
+      "unitDone": "Шаг пройден на три звезды!",
+      "again": "Почти! Давай ещё раз",
+      "tempo": "Вовремя: {hits} из {total}, нужно {need}.",
+      "wait": "Ошибок: {mistakes}.",
+      "listen": "Теперь сыграй сам.",
+      "nextRung": "Дальше: {rung}",
+      "nextUnit": "Следующий шаг"
+    }
   }
 }

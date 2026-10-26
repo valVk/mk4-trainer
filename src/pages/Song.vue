@@ -7,7 +7,10 @@ import SoundControl from '@/components/SoundControl.vue'
 import { useProgress } from '@/composables/useProgress'
 import { useSongPlayer } from '@/composables/useSongPlayer'
 import { useSynth } from '@/composables/useSynth'
+import type { SongProgress } from '@/db/schema'
 import { findName, groupOf } from '@/lib/instruments'
+import { buildUnits } from '@/lib/ladder'
+import { partPhrases, partRole, songSections, suggestOrder, type PartRole, type Section } from '@/lib/phrases'
 import { barActivity, parseSong, type Part, type Song } from '@/lib/song'
 import { midiName } from '@/lib/theory'
 
@@ -22,6 +25,9 @@ const player = useSongPlayer()
 const record = shallowRef<{ name: string, data: ArrayBuffer, fileName: string } | null>(null)
 const song = shallowRef<Song | null>(null)
 const notFound = shallowRef(false)
+const sections = shallowRef<Section[]>([])
+/** Ladder progress of this player: channel -> unit id -> progress. */
+const partProgress = shallowRef<Record<number, Record<string, SongProgress>>>({})
 /** Channels switched off on the map. */
 const muted = reactive(new Set<number>())
 
@@ -35,6 +41,8 @@ async function open() {
   }
   record.value = found
   song.value = parseSong(found.data, found.fileName)
+  sections.value = songSections(song.value)
+  partProgress.value = await progress.loadSongProgress(id)
 }
 void open()
 
@@ -65,6 +73,12 @@ interface Row {
   part: Part
   label: string
   runs: { start: number, length: number }[]
+  role: PartRole
+  /** Place in the suggested learning order (1-based), 0 for drums. */
+  order: number
+  unitsDone: number
+  unitsTotal: number
+  stars: number
 }
 
 /** Consecutive active bars as runs: a few rectangles per row instead of one per bar. */
@@ -81,17 +95,44 @@ function runsOf(active: boolean[]) {
 
 const barCount = computed(() => Math.max(1, (song.value?.bars.length ?? 1) - 1))
 
+const order = computed(() => (song.value ? suggestOrder(song.value.parts) : []))
+
 const rows = computed<Row[]>(() => {
   const current = song.value
   if (!current) return []
-  return current.parts.map((part) => ({
-    part,
-    label: part.isDrum
-      ? t('songs.drums')
-      : findName({ bank: 0, program: part.program }, synth.presets.value) ?? t(`sound.groups.${groupOf(part.program)}`),
-    runs: runsOf(barActivity(part, current.bars)),
-  }))
+  return current.parts.map((part) => {
+    const units = part.isDrum ? [] : buildUnits(partPhrases(part, current.bars), sections.value)
+    const saved = partProgress.value[part.channel] ?? {}
+    return {
+      part,
+      label: part.isDrum
+        ? t('songs.drums')
+        : findName({ bank: 0, program: part.program }, synth.presets.value) ?? t(`sound.groups.${groupOf(part.program)}`),
+      runs: runsOf(barActivity(part, current.bars)),
+      role: partRole(part),
+      order: order.value.findIndex((item) => item.channel === part.channel) + 1,
+      unitsDone: units.filter((unit) => (saved[unit.id]?.passed ?? 0) >= unit.rungs.length).length,
+      unitsTotal: units.length,
+      stars: saved.all?.stars ?? 0,
+    }
+  })
 })
+
+/** The suggested next part: the first in the learning order that is not finished yet. */
+const nextChannel = computed(() => order.value.find((item) => {
+  const row = rows.value.find((r) => r.part.channel === item.channel)
+  return row && row.unitsDone < row.unitsTotal
+})?.channel ?? null)
+
+const sectionBlocks = computed(() => sections.value.map((section) => ({
+  ...section,
+  left: (section.startBar / barCount.value) * 100,
+  width: ((section.endBar - section.startBar) / barCount.value) * 100,
+})))
+
+function seekTo(seconds: number) {
+  if (player.loaded.value) player.seek(seconds)
+}
 
 const formatTime = (seconds: number) => `${Math.floor(seconds / 60)}:${String(Math.floor(seconds % 60)).padStart(2, '0')}`
 const playheadPercent = computed(() => (song.value ? (player.time.value / song.value.duration) * 100 : 0))
@@ -144,6 +185,24 @@ function togglePlay() {
 
       <p class="hint text-muted">{{ t('songs.layersHint') }}</p>
 
+      <div class="sections-row">
+        <span class="sections-row__label text-muted">{{ t('songs.sections') }}</span>
+        <div class="sections" :aria-label="t('songs.sections')">
+          <button
+            v-for="block in sectionBlocks"
+            :key="block.index"
+            type="button"
+            class="section"
+            :style="{ left: `${block.left}%`, width: `${block.width}%` }"
+            :aria-label="t('songs.sectionLabel', { n: block.index + 1, time: formatTime(block.start) })"
+            @click="seekTo(block.start)"
+          >
+            {{ block.index + 1 }}
+          </button>
+          <span class="playhead" :style="{ left: `${playheadPercent}%` }" aria-hidden="true" />
+        </div>
+      </div>
+
       <ol class="map" :aria-label="t('songs.mapLabel')">
         <li v-for="row in rows" :key="row.part.channel" class="row" :class="{ 'row--off': muted.has(row.part.channel) }">
           <button
@@ -155,7 +214,14 @@ function togglePlay() {
           >
             <UIcon :name="muted.has(row.part.channel) ? 'i-lucide-volume-x' : 'i-lucide-volume-2'" class="size-5 shrink-0" />
             <span class="row__info">
-              <span class="row__name text-highlighted">{{ row.label }}</span>
+              <span class="row__name text-highlighted">
+                {{ row.label }}
+                <UBadge v-if="row.part.channel === nextChannel" :label="t('songs.nextPart')" color="success" variant="solid" size="sm" class="ml-1" />
+              </span>
+              <span class="row__role">
+                <template v-if="row.order">{{ row.order }}. </template>{{ t(`songs.role.${row.role}`) }}<template v-if="row.unitsTotal">, {{ t('songs.unitsDone', { done: row.unitsDone, total: row.unitsTotal }) }}</template>
+                <span v-if="row.stars" class="row__stars" :aria-label="t('train.stars', { n: row.stars })">{{ '★'.repeat(row.stars) }}</span>
+              </span>
               <span class="row__meta text-muted">
                 {{ t('songs.channel', { n: row.part.channel + 1 }) }}<template v-if="!row.part.isDrum">, {{ midiName(row.part.range.low) }}–{{ midiName(row.part.range.high) }}, {{ t('songs.polyphony', { n: row.part.maxPolyphony }, row.part.maxPolyphony) }}</template>
               </span>
@@ -279,6 +345,49 @@ function togglePlay() {
 
 .row__practice {
   min-width: 7.5rem;
+}
+
+.row__role {
+  font-size: 0.8125rem;
+  font-weight: 500;
+  color: var(--ui-text-toned);
+}
+
+.row__stars {
+  margin-left: 0.25rem;
+  color: var(--color-pad-sun);
+}
+
+.sections-row {
+  display: grid;
+  grid-template-columns: minmax(0, 15rem) auto minmax(0, 1fr);
+  gap: 0.75rem;
+  align-items: center;
+  margin-top: 1rem;
+}
+
+.sections-row__label {
+  grid-column: 1 / 3;
+  font-size: 0.875rem;
+}
+
+.sections {
+  position: relative;
+  height: 2rem;
+}
+
+.section {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  padding: 0;
+  border-right: 2px solid var(--ui-bg);
+  border-radius: 0.375rem;
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: var(--ui-text-toned);
+  background: var(--ui-bg-accented);
+  overflow: hidden;
 }
 
 .row__lane {

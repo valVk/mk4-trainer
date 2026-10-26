@@ -14,7 +14,7 @@ import {
   type AttemptInput,
 } from '@/db/progress'
 import { GLOBAL_PROFILE, createDb, type TrainerDb } from '@/db/schema'
-import { addSong, deleteSong, getSong, listSongs } from '@/db/songs'
+import { addSong, deleteSong, getSong, getSongProgress, listSongs, saveUnitResult } from '@/db/songs'
 
 let counter = 0
 const opened: TrainerDb[] = []
@@ -163,5 +163,32 @@ describe('songs', () => {
     opened.push(db)
     expect((await db.profile.toArray()).map((p) => p.name)).toEqual(['Маша'])
     expect(await db.song.count()).toBe(0)
+  })
+})
+
+describe('song progress', () => {
+  const result = (unit: string, passed: number, stars: number, bestAccuracy = 0, profileId = 1, songId = 7, channel = 0) =>
+    ({ profileId, songId, channel, unit, passed, stars, bestAccuracy })
+
+  it('saves per unit and never lowers a result', async () => {
+    const db = freshDb()
+    await saveUnitResult(db, result('p0', 3, 1, 0.5))
+    const lower = await saveUnitResult(db, result('p0', 2, 0, 0.4))
+    expect(lower).toMatchObject({ passed: 3, stars: 1, bestAccuracy: 0.5 })
+    await saveUnitResult(db, result('p0', 5, 3, 0.9))
+    await saveUnitResult(db, result('all', 1, 2, 0.85))
+    const saved = await getSongProgress(db, 1, 7)
+    expect(saved.map((row) => [row.unit, row.passed, row.stars]).sort()).toEqual([['all', 1, 2], ['p0', 5, 3]])
+  })
+
+  it('keeps players and songs apart and is removed with the song', async () => {
+    const db = freshDb()
+    const { id } = await addSong(db, { name: 'S', fileName: 's.mid', data: new ArrayBuffer(4), size: 4, importedAt: 1 })
+    await saveUnitResult(db, result('p0', 1, 0, 0, 1, id))
+    await saveUnitResult(db, result('p0', 2, 0, 0, 2, id))
+    expect(await getSongProgress(db, 1, id)).toHaveLength(1)
+    expect(await getSongProgress(db, 2, id)).toHaveLength(1)
+    await deleteSong(db, id)
+    expect(await db.songProgress.count()).toBe(0)
   })
 })

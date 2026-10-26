@@ -50,6 +50,21 @@ export interface SongRecord {
   importedAt: number
 }
 
+/** Ladder progress of one unit (phrase, section or whole part) of one part of a song. */
+export interface SongProgress {
+  profileId: number
+  songId: number
+  channel: number
+  /** Unit id from lib/ladder: "p3", "s2", "all". */
+  unit: string
+  /** Rungs passed so far. */
+  passed: number
+  stars: number
+  /** Best tempo-mode accuracy, 0-1. */
+  bestAccuracy: number
+  updatedAt: number
+}
+
 export const GLOBAL_PROFILE = 0
 
 export type TrainerDb = Dexie & {
@@ -60,6 +75,8 @@ export type TrainerDb = Dexie & {
   /** Key: [profileId, key] */
   setting: Table<Setting, [number, string]>
   song: EntityTable<SongRecord, 'id'>
+  /** Key: [profileId, songId, channel, unit] */
+  songProgress: Table<SongProgress, [number, number, number, string]>
 }
 
 export function createDb(name = 'chord-trainer'): TrainerDb {
@@ -73,6 +90,10 @@ export function createDb(name = 'chord-trainer'): TrainerDb {
   // Song mode (plan step 10): imported MIDI files.
   db.version(2).stores({
     song: '++id, name, importedAt',
+  })
+  // Song mode (plan step 12): ladder progress per unit.
+  db.version(3).stores({
+    songProgress: '[profileId+songId+channel+unit], [profileId+songId], songId',
   })
   return db
 }
