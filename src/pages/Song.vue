@@ -1,8 +1,9 @@
 <script setup lang="ts">
-import { computed, onBeforeUnmount, reactive, shallowRef, watch } from 'vue'
+import { computed, onBeforeUnmount, reactive, ref, shallowRef, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useRoute } from 'vue-router'
 
+import SongClock from '@/components/SongClock.vue'
 import SoundControl from '@/components/SoundControl.vue'
 import { useProgress } from '@/composables/useProgress'
 import { useSongPlayer } from '@/composables/useSongPlayer'
@@ -135,7 +136,12 @@ function seekTo(seconds: number) {
 }
 
 const formatTime = (seconds: number) => `${Math.floor(seconds / 60)}:${String(Math.floor(seconds % 60)).padStart(2, '0')}`
-const playheadPercent = computed(() => (song.value ? (player.time.value / song.value.duration) * 100 : 0))
+// The playhead moves every frame: set it as a CSS variable on the page instead of re-rendering every row.
+const page = ref<HTMLElement | null>(null)
+watch(() => player.time.value, (time) => {
+  const duration = song.value?.duration
+  page.value?.style.setProperty('--playhead', `${duration ? (time / duration) * 100 : 0}%`)
+})
 
 function seekFromEvent(event: MouseEvent) {
   const current = song.value
@@ -151,7 +157,7 @@ function togglePlay() {
 </script>
 
 <template>
-  <main class="page">
+  <main ref="page" class="page">
     <header class="flex flex-wrap items-center gap-3 -ml-3">
       <UButton to="/songs" icon="i-lucide-arrow-left" color="neutral" variant="ghost" size="xl" :aria-label="t('songs.title')" />
       <h1 class="title text-highlighted">{{ record?.name ?? t('songs.title') }}</h1>
@@ -175,7 +181,7 @@ function togglePlay() {
           :label="player.playing.value ? t('songs.pause') : t('songs.play')"
           @click="togglePlay"
         />
-        <span class="time text-highlighted tabular-nums">{{ formatTime(player.time.value) }} / {{ formatTime(song.duration) }}</span>
+        <SongClock class="time text-highlighted" :duration="song.duration" />
         <span v-if="!player.loaded.value" class="text-muted text-sm">{{ t('songs.needSound') }}</span>
         <div class="ml-auto flex gap-2">
           <UButton color="neutral" variant="soft" size="lg" icon="i-lucide-volume-2" :label="t('songs.allOn')" @click="setAll(true)" />
@@ -199,7 +205,7 @@ function togglePlay() {
           >
             {{ block.index + 1 }}
           </button>
-          <span class="playhead" :style="{ left: `${playheadPercent}%` }" aria-hidden="true" />
+          <span class="playhead" aria-hidden="true" />
         </div>
       </div>
 
@@ -228,7 +234,6 @@ function togglePlay() {
             </span>
           </button>
           <UButton
-            v-if="!row.part.isDrum"
             :to="`/songs/${route.params.id}/${row.part.channel}`"
             icon="i-lucide-graduation-cap"
             color="neutral"
@@ -238,12 +243,11 @@ function togglePlay() {
             :label="t('songs.practice')"
             :aria-label="t('songs.practiceLabel', { name: row.label })"
           />
-          <span v-else class="row__practice" />
           <div class="row__lane" @click="seekFromEvent">
             <svg :viewBox="`0 0 ${barCount} 1`" preserveAspectRatio="none" class="lane" aria-hidden="true">
               <rect v-for="run in row.runs" :key="run.start" :x="run.start" y="0.15" :width="run.length" height="0.7" rx="0.3" class="lane__block" :class="{ 'lane__block--drum': row.part.isDrum }" />
             </svg>
-            <span class="playhead" :style="{ left: `${playheadPercent}%` }" aria-hidden="true" />
+            <span class="playhead" aria-hidden="true" />
           </div>
         </li>
       </ol>
@@ -299,7 +303,8 @@ function togglePlay() {
 
 .row {
   display: grid;
-  grid-template-columns: minmax(0, 15rem) auto minmax(0, 1fr);
+  /* Same columns as .sections-row, so the section band lines up with the lanes */
+  grid-template-columns: minmax(0, 15rem) 8rem minmax(0, 1fr);
   gap: 0.75rem;
   align-items: center;
 }
@@ -344,7 +349,7 @@ function togglePlay() {
 }
 
 .row__practice {
-  min-width: 7.5rem;
+  width: 100%;
 }
 
 .row__role {
@@ -360,7 +365,7 @@ function togglePlay() {
 
 .sections-row {
   display: grid;
-  grid-template-columns: minmax(0, 15rem) auto minmax(0, 1fr);
+  grid-template-columns: minmax(0, 15rem) 8rem minmax(0, 1fr);
   gap: 0.75rem;
   align-items: center;
   margin-top: 1rem;
@@ -422,6 +427,7 @@ function togglePlay() {
   position: absolute;
   top: 0;
   bottom: 0;
+  left: var(--playhead, 0%);
   width: 2px;
   margin-left: -1px;
   background: var(--color-pad-tomato);
@@ -429,9 +435,14 @@ function togglePlay() {
 }
 
 @media (max-width: 720px) {
-  .row {
+  .row,
+  .sections-row {
     grid-template-columns: minmax(0, 1fr);
     gap: 0.25rem;
+  }
+
+  .sections-row__label {
+    grid-column: auto;
   }
 }
 </style>

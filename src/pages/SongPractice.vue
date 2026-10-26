@@ -4,10 +4,12 @@ import { useI18n } from 'vue-i18n'
 import { useRoute } from 'vue-router'
 
 import NoteFall from '@/components/NoteFall.vue'
+import PadStrip from '@/components/PadStrip.vue'
 import PianoKeyboard from '@/components/PianoKeyboard.vue'
 import SoundControl from '@/components/SoundControl.vue'
 import { useNoteNames } from '@/composables/useNoteNames'
 import { useNoteSource } from '@/composables/useNoteSource'
+import { padsPlayMusic, usePadActions } from '@/composables/usePadActions'
 import { useProgress } from '@/composables/useProgress'
 import { LEARNER_CHANNEL, useSongPlayer } from '@/composables/useSongPlayer'
 import { useSynth } from '@/composables/useSynth'
@@ -27,6 +29,7 @@ import {
   type RungMode,
   type Unit,
 } from '@/lib/ladder'
+import { drumKind, padLayout } from '@/lib/padLayout'
 import { partPhrases, songSections, type Phrase } from '@/lib/phrases'
 import { chooseWindow, coversStep, octaveHint, stepIndexAt, upcomingKeys } from '@/lib/practice'
 import { parseSong, type Part, type Song } from '@/lib/song'
@@ -57,7 +60,7 @@ const route = useRoute()
 const progress = useProgress()
 const synth = useSynth()
 const player = useSongPlayer()
-const { heldNotes, onEvent, pressNote, releaseNote } = useNoteSource()
+const { heldNotes, onEvent, pressNote, releaseNote, pressPad } = useNoteSource()
 const { localName, withLocal } = useNoteNames()
 
 const songId = Number(route.params.id)
@@ -76,6 +79,12 @@ const rungIndex = ref(0)
 const freeMode = ref<RungMode>('wait')
 const freeRate = ref<(typeof RATES)[number]>(0.6)
 const anyOctave = ref(false)
+/** Play the part on the keys or on the 8 pads (drums always use pads). */
+const inputMode = ref<'keys' | 'pads'>('keys')
+/** Pads hit just now, for the press animation on screen. */
+const hitPads = ref<number[]>([])
+/** Pad 2 / «Послушать»: play the unit once with the part audible, without scoring or saving. */
+const listenOnce = ref(false)
 
 const windowStart = ref(48)
 const pendingIndex = ref(0)
@@ -89,9 +98,16 @@ let presses: Press[] = []
 const recent = ref<number[]>([])
 
 const passedOf = (unit: Unit) => saved.value[unit.id]?.passed ?? 0
+const layout = computed(() => (part.value ? padLayout(part.value) : null))
+const onPads = computed(() => inputMode.value === 'pads' && layout.value !== null)
+/** Melodic parts with up to 8 notes may switch to pads; drums are always on pads. */
+const canChooseInput = computed(() => Boolean(layout.value) && !part.value?.isDrum)
+watch(onPads, (value) => {
+  padsPlayMusic.value = value
+}, { immediate: true })
 const unit = computed(() => units.value[unitIndex.value] ?? null)
 const rung = computed(() => (unit.value ? unit.value.rungs[Math.min(rungIndex.value, unit.value.rungs.length - 1)]! : null))
-const mode = computed<RungMode>(() => (guided.value && rung.value ? rung.value.mode : freeMode.value))
+const mode = computed<RungMode>(() => (listenOnce.value ? 'listen' : guided.value && rung.value ? rung.value.mode : freeMode.value))
 const rate = computed(() => (guided.value && rung.value ? rung.value.rate : freeRate.value))
 
 /** Opens a unit on its next rung to pass (or the last rung when it is finished). */
@@ -108,7 +124,7 @@ async function open() {
   const found = await progress.loadSong(songId)
   const channel = Number(route.params.channel)
   const parsed = found ? parseSong(found.data, found.fileName) : null
-  const chosen = parsed?.parts.find((item) => item.channel === channel && !item.isDrum)
+  const chosen = parsed?.parts.find((item) => item.channel === channel)
   if (!found || !parsed || !chosen) {
     notFound.value = true
     return
@@ -116,6 +132,7 @@ async function open() {
   record.value = found
   song.value = parsed
   part.value = chosen
+  if (chosen.isDrum) inputMode.value = 'pads'
   phrases.value = partPhrases(chosen, parsed.bars)
   units.value = buildUnits(phrases.value, songSections(parsed))
   saved.value = (await progress.loadSongProgress(songId))[channel] ?? {}
@@ -173,7 +190,7 @@ function startAttempt() {
 watch([() => synth.status.value, part], async ([status, current]) => {
   if (status !== 'ready' || !current || !record.value || player.loaded.value) return
   await player.load(record.value.data, record.value.fileName)
-  synth.setLearnerTarget({ channel: LEARNER_CHANNEL, preset: { bank: 0, program: current.program } })
+  synth.setLearnerTarget({ channel: LEARNER_CHANNEL, preset: { bank: 0, program: current.program }, drums: current.isDrum })
   prepare()
 }, { immediate: true })
 
@@ -191,24 +208,47 @@ function tryAdvance(now: number) {
   }
 }
 
-onEvent((event) => {
-  if (event.type !== 'noteOn' || result.value) return
+/** A key press, or a pad hit standing for its note: counts for waiting and scoring. */
+function handlePress(key: number) {
+  if (result.value) return
   const now = player.currentTime()
-  recent.value = [...recent.value.slice(-5), event.note]
+  recent.value = [...recent.value.slice(-5), key]
   if (mode.value === 'tempo') {
-    presses.push({ key: event.note, time: now })
+    presses.push({ key, time: now })
     return
   }
   if (mode.value !== 'wait') return
   const step = pending.value
-  if (step && (waiting.value || now >= step.time - EARLY_S) && isWrongPress(step, event.note, anyOctave.value)) mistakes++
-  pressed.add(event.note)
+  if (step && (waiting.value || now >= step.time - EARLY_S) && isWrongPress(step, key, anyOctave.value)) mistakes++
+  pressed.add(key)
   tryAdvance(now)
+}
+
+onEvent((event) => {
+  if (onPads.value) {
+    // Pad mode: pads play the part's notes; keys still sound but do not count.
+    if (event.type !== 'pad') return
+    const key = layout.value!.padKeys[event.pad - 1]
+    if (key === null || key === undefined) return
+    synth.playLearnerNote(key, event.velocity)
+    hitPads.value = [...hitPads.value, event.pad]
+    setTimeout(() => {
+      hitPads.value = hitPads.value.filter((pad) => pad !== event.pad)
+    }, 150)
+    handlePress(key)
+    return
+  }
+  if (event.type === 'noteOn') handlePress(event.note)
 })
 
 async function finishAttempt() {
   player.pause()
   waiting.value = false
+  if (listenOnce.value) {
+    listenOnce.value = false
+    prepare()
+    return
+  }
   const total = steps.value.length
   let attempt: AttemptResult
   if (mode.value === 'tempo') {
@@ -265,6 +305,7 @@ onMounted(() => {
 })
 onBeforeUnmount(() => {
   cancelAnimationFrame(frame)
+  padsPlayMusic.value = false
   player.unload()
 })
 
@@ -294,6 +335,45 @@ function nextRung() {
   }
 }
 
+function listen() {
+  listenOnce.value = true
+  startAttempt()
+}
+
+function changeRung(step: number) {
+  const current = unit.value
+  if (!current) return
+  // Only rungs already reached: the next one opens by passing the current one.
+  const highest = Math.min(passedOf(current), current.rungs.length - 1)
+  const next = Math.max(0, Math.min(highest, rungIndex.value + step))
+  if (next === rungIndex.value) return
+  rungIndex.value = next
+  prepare()
+}
+
+function changeFreeRate(step: number) {
+  const index = RATES.indexOf(freeRate.value) + step
+  if (index >= 0 && index < RATES.length) freeRate.value = RATES[index]!
+}
+
+// MK4 pads: practise without touching the screen.
+usePadActions({
+  next: () => {
+    if (result.value) {
+      if (result.value.passed && guided.value) nextRung()
+      else startAttempt()
+    } else if (guided.value) {
+      const following = units.value[unitIndex.value + 1]
+      if (following) selectUnit(unitIndex.value + 1)
+    }
+  },
+  listen,
+  hint: togglePlay,
+  skip: startAttempt,
+  levelDown: () => (guided.value ? changeRung(-1) : changeFreeRate(-1)),
+  levelUp: () => (guided.value ? changeRung(1) : changeFreeRate(1)),
+})
+
 function seekInRange(event: MouseEvent) {
   const box = (event.currentTarget as HTMLElement).getBoundingClientRect()
   const span = endTime.value - startTime.value
@@ -307,6 +387,8 @@ function seekInRange(event: MouseEvent) {
 const partName = computed(() => {
   const current = part.value
   if (!current) return ''
+  // The drum channel's program picks a drum kit, not a GM instrument: name it as drums.
+  if (current.isDrum) return t('songs.drums')
   return findName({ bank: 0, program: current.program }, synth.presets.value) ?? t(`sound.groups.${groupOf(current.program)}`)
 })
 
@@ -319,11 +401,20 @@ const soundingKeys = computed(() => {
 })
 const litKeys = computed(() => (result.value ? [] : [...new Set([...pendingKeys.value, ...soundingKeys.value])]))
 
+/** What a pad plays: the drum sound, or the note with its Russian name. */
+function padLabel(key: number): string {
+  return part.value?.isDrum ? t(`drums.${drumKind(key)}`, { n: key }) : withLocal(midiName(key), localName(key, true))
+}
+const padLabels = computed(() => layout.value?.padKeys.map((key) => (key === null ? null : padLabel(key))) ?? [])
+const litPads = computed(() => litKeys.value.map((key) => layout.value?.padOf.get(key)).filter((pad): pad is number => pad !== undefined))
+
 const prompt = computed(() => {
   const step = pending.value
   if (!step || result.value) return null
-  const chord = step.keys.length >= 3 ? identifyChord(step.keys)[0] : undefined
-  const notes = step.keys.map((key) => withLocal(midiName(key), localName(key, true))).join(', ')
+  const chord = !onPads.value && step.keys.length >= 3 ? identifyChord(step.keys)[0] : undefined
+  const notes = onPads.value
+    ? step.keys.map((key) => t('songs.padNote', { n: layout.value!.padOf.get(key), sound: padLabel(key) })).join(', ')
+    : step.keys.map((key) => withLocal(midiName(key), localName(key, true))).join(', ')
   return {
     notes,
     chord: chord ? t(`lab.type.${chord.type}`, { root: withLocal(noteName(chord.root), localName(chord.root)) }) : null,
@@ -331,7 +422,7 @@ const prompt = computed(() => {
   }
 })
 
-const hint = computed(() => (waiting.value && pending.value && !anyOctave.value ? octaveHint(pending.value, recent.value) : null))
+const hint = computed(() => (waiting.value && pending.value && !anyOctave.value && !onPads.value ? octaveHint(pending.value, recent.value) : null))
 
 const rangeProgress = computed(() => {
   const span = endTime.value - startTime.value
@@ -368,7 +459,7 @@ const hasNextRung = computed(() => (unit.value ? rungIndex.value + 1 < unit.valu
       </div>
       <div class="ml-auto flex flex-wrap items-center gap-3">
         <USwitch v-model="guided" size="lg" :label="t('songs.guided')" />
-        <SoundControl />
+        <SoundControl :fixed-instrument="partName" :fixed-label="onPads ? t('sound.yourPads', { name: partName }) : undefined" />
       </div>
     </header>
 
@@ -400,8 +491,21 @@ const hasNextRung = computed(() => (unit.value ? rungIndex.value + 1 < unit.valu
           :disabled="!player.loaded.value"
           :label="player.playing.value || waiting ? t('songs.pause') : t('songs.play')"
           @click="togglePlay"
-        />
-        <UButton icon="i-lucide-rotate-ccw" color="neutral" variant="soft" size="xl" :disabled="!player.loaded.value" :aria-label="t('songs.again')" @click="startAttempt" />
+        >
+          <template #trailing>
+            <UKbd value="3" size="md" />
+          </template>
+        </UButton>
+        <UButton icon="i-lucide-rotate-ccw" color="neutral" variant="soft" size="xl" :disabled="!player.loaded.value" :label="t('songs.again')" @click="startAttempt">
+          <template #trailing>
+            <UKbd value="4" size="md" />
+          </template>
+        </UButton>
+        <UButton icon="i-lucide-ear" color="neutral" variant="soft" size="xl" :disabled="!player.loaded.value" :label="t('songs.listen')" @click="listen">
+          <template #trailing>
+            <UKbd value="2" size="md" />
+          </template>
+        </UButton>
 
         <template v-if="guided && unit && rung">
           <ol class="rungs" :aria-label="t('songs.rungsLabel')">
@@ -428,8 +532,16 @@ const hasNextRung = computed(() => (unit.value ? rungIndex.value + 1 < unit.valu
           </div>
         </template>
 
-        <USwitch v-model="anyOctave" size="lg" :label="t('songs.anyOctave')" class="ml-auto" />
+        <div v-if="canChooseInput" class="segmented ml-auto" role="radiogroup" :aria-label="t('songs.inputLabel')">
+          <button v-for="item in (['keys', 'pads'] as const)" :key="item" type="button" role="radio" class="segment" :class="{ 'segment--on': inputMode === item }" :aria-checked="inputMode === item" @click="inputMode = item">
+            {{ t(`songs.input.${item}`) }}
+          </button>
+        </div>
+        <USwitch v-if="!onPads" v-model="anyOctave" size="lg" :label="t('songs.anyOctave')" :class="{ 'ml-auto': !canChooseInput }" />
       </div>
+
+      <p class="pads-hint text-dimmed">{{ onPads ? t('songs.padsPlaying') : guided ? t('songs.padsGuided') : t('songs.padsFree') }}</p>
+      <UAlert v-if="part.isDrum && !layout" class="mt-3" color="warning" variant="subtle" icon="i-lucide-drum" :title="t('songs.tooManyForPads')" />
 
       <div class="progress" :aria-label="t('songs.partPosition')" @click="seekInRange">
         <span class="progress__fill" :style="{ width: `${rangeProgress}%` }" />
@@ -446,7 +558,7 @@ const hasNextRung = computed(() => (unit.value ? rungIndex.value + 1 < unit.valu
           :title="result.passed ? (guided && unitFinished && !hasNextRung ? t('songs.result.unitDone') : t('songs.result.passed')) : t('songs.result.again')"
           :description="result.mode === 'tempo'
             ? t('songs.result.tempo', { hits: result.hits, total: result.total, need: Math.ceil(result.total * 0.8) })
-            : result.mode === 'wait' ? t('songs.result.wait', { mistakes: result.mistakes }) : t('songs.result.listen')"
+            : result.mode === 'wait' ? (result.mistakes ? t('songs.result.wait', { mistakes: result.mistakes }) : t('songs.result.waitClean')) : t('songs.result.listen')"
           :actions="result.passed && guided
             ? [
               { label: hasNextRung ? t('songs.result.nextRung', { rung: rungLabel(unit!.rungs[rungIndex + 1]!) }) : t('songs.result.nextUnit'), icon: 'i-lucide-arrow-right', size: 'lg', onClick: nextRung },
@@ -463,10 +575,16 @@ const hasNextRung = computed(() => (unit.value ? rungIndex.value + 1 < unit.valu
         <p v-if="hint" class="status__hint">{{ t(`songs.octave.${hint}`) }}</p>
       </section>
 
-      <div class="stage">
-        <NoteFall class="stage__fall" :notes="part.notes" :start="windowStart" :get-time="player.currentTime" :pending="pendingKeys" />
-        <PianoKeyboard :start="windowStart" :held="heldNotes" :hint="litKeys" @press="pressNote" @release="releaseNote" />
-        <p class="window text-muted">{{ t('songs.window', { range: windowLabel }) }}</p>
+      <div class="stage" :class="{ 'stage--pads': onPads }">
+        <NoteFall class="stage__fall" :notes="part.notes" :start="windowStart" :get-time="player.currentTime" :pending="pendingKeys" :pad-keys="onPads ? layout!.padKeys : undefined" />
+        <template v-if="onPads">
+          <PadStrip :labels="padLabels" :lit="litPads" :hit="hitPads" @press="pressPad" />
+          <p class="window text-muted">{{ t('songs.padsLayout') }}</p>
+        </template>
+        <template v-else>
+          <PianoKeyboard :start="windowStart" :held="heldNotes" :hint="litKeys" @press="pressNote" @release="releaseNote" />
+          <p class="window text-muted">{{ t('songs.window', { range: windowLabel }) }}</p>
+        </template>
       </div>
     </template>
   </main>
@@ -595,6 +713,11 @@ const hasNextRung = computed(() => (unit.value ? rungIndex.value + 1 < unit.valu
   font-weight: 600;
 }
 
+.pads-hint {
+  margin-top: 0.5rem;
+  font-size: 0.8125rem;
+}
+
 .progress {
   position: relative;
   height: 0.5rem;
@@ -649,6 +772,12 @@ const hasNextRung = computed(() => (unit.value ? rungIndex.value + 1 < unit.valu
   display: flex;
   flex-direction: column;
   min-height: 0;
+}
+
+.stage--pads {
+  /* Pad squares stay tablet-sized: the board (and the lanes above it) is at most 8 x 6.5rem wide. */
+  width: min(100%, 52rem);
+  margin-inline: auto;
 }
 
 .stage__fall {

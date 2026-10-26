@@ -1,7 +1,7 @@
 import 'fake-indexeddb/auto'
 import { afterEach, describe, expect, it } from 'vitest'
 
-import { BackupParseError, exportBackup, importBackup, parseBackup } from '@/db/backup'
+import { BackupParseError, base64ToBytes, bytesToBase64, exportBackup, importBackup, parseBackup } from '@/db/backup'
 import {
   CURRENT_PROFILE_KEY,
   addProfile,
@@ -125,6 +125,7 @@ describe('backup', () => {
     expect(code('not json')).toBe('notJson')
     expect(code('{"app":"other","version":1}')).toBe('notBackup')
     expect(code('{"app":"chord-trainer","version":1,"profile":[]}')).toBe('notBackup')
+    expect(code('{"app":"chord-trainer","version":1,"profile":[],"levelProgress":[],"attempt":[],"setting":[],"song":"x"}')).toBe('notBackup')
     expect(code('{"app":"chord-trainer","version":99,"profile":[],"levelProgress":[],"attempt":[],"setting":[]}')).toBe('newerVersion')
   })
 })
@@ -190,5 +191,37 @@ describe('song progress', () => {
     expect(await getSongProgress(db, 2, id)).toHaveLength(1)
     await deleteSong(db, id)
     expect(await db.songProgress.count()).toBe(0)
+  })
+})
+
+describe('backup with songs', () => {
+  it('round-trips bytes through base64, also for large files', () => {
+    const big = new Uint8Array(200_000).map((_, i) => (i * 7) % 256)
+    expect(new Uint8Array(base64ToBytes(bytesToBase64(big.buffer)))).toEqual(big)
+  })
+
+  it('exports and imports songs and their progress', async () => {
+    const source = freshDb()
+    const bytes = new Uint8Array([77, 84, 104, 100, 0, 0, 0, 6]).buffer
+    const { id } = await addSong(source, { name: 'Song', fileName: 'song.mid', data: bytes, size: 8, importedAt: 5 })
+    await saveUnitResult(source, { profileId: 1, songId: id, channel: 1, unit: 'p0', passed: 5, stars: 3, bestAccuracy: 1 })
+    const text = JSON.stringify(await exportBackup(source))
+    expect(text).toContain('"song":[{')
+
+    const target = freshDb()
+    await addSong(target, { name: 'Other', fileName: 'other.mid', data: new ArrayBuffer(2), size: 2, importedAt: 1 })
+    await importBackup(target, parseBackup(text))
+    expect((await listSongs(target)).map((song) => song.name)).toEqual(['Song'])
+    expect(new Uint8Array((await getSong(target, id))!.data)).toEqual(new Uint8Array(bytes))
+    expect(await getSongProgress(target, 1, id)).toHaveLength(1)
+  })
+
+  it('still imports version 1 files (no songs) and clears old songs', async () => {
+    const db = freshDb()
+    await addSong(db, { name: 'Old', fileName: 'old.mid', data: new ArrayBuffer(2), size: 2, importedAt: 1 })
+    const v1 = JSON.stringify({ app: 'chord-trainer', version: 1, exportedAt: '', profile: [{ id: 1, name: 'Маша', createdAt: 1 }], levelProgress: [], attempt: [], setting: [] })
+    await importBackup(db, parseBackup(v1))
+    expect(await listSongs(db)).toEqual([])
+    expect((await db.profile.toArray()).map((p) => p.name)).toEqual(['Маша'])
   })
 })

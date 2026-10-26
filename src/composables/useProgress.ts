@@ -214,6 +214,7 @@ async function importData(text: string): Promise<void> {
     await importBackup(database, backup)
     await loadPadMap(database)
     await loadProfileData(database, await ensureProfile(database, i18n.global.t('progress.defaultName')))
+    songs.value = await listSongs(database)
   })
 }
 

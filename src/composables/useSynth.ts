@@ -62,7 +62,9 @@ let routed = false
  * Song mode: the child's keys play on this channel with this preset instead of PLAY_CHANNEL,
  * so they never clash with the 16 song channels.
  */
-let learnerTarget: { channel: number, preset: Instrument } | null = null
+let learnerTarget: { channel: number, preset: Instrument, drums?: boolean } | null = null
+/** A pad hit has no musical release on the MK4: the note is let go after this long. */
+const PAD_NOTE_MS = 250
 
 /** Reads the SoundFont with download progress; the service worker serves it from cache next time. */
 async function fetchSoundFont(url: string): Promise<ArrayBuffer> {
@@ -234,12 +236,26 @@ function routeNotes(): void {
   })
 }
 
-/** Routes the child's keys to a song-mode channel with its own preset; null returns to the normal channel. */
-function setLearnerTarget(target: { channel: number, preset: Instrument } | null): void {
+/** Routes the child's keys to a song-mode channel with its own preset (a drum kit for drum parts); null returns to normal. */
+function setLearnerTarget(target: { channel: number, preset: Instrument, drums?: boolean } | null): void {
   const instance = synth.value
   if (instance && learnerTarget) instance.stopAll(true)
+  if (instance && learnerTarget && learnerTarget.channel !== target?.channel) {
+    instance.midiChannels[learnerTarget.channel]?.setDrums(false)
+  }
   learnerTarget = target
-  if (instance && target) selectPreset(instance, target.channel, target.preset)
+  if (!instance || !target) return
+  instance.midiChannels[target.channel]?.setDrums(Boolean(target.drums))
+  selectPreset(instance, target.channel, target.preset)
+}
+
+/** Plays one note on the learner channel, for a pad hit that stands for that note. */
+function playLearnerNote(key: number, velocity = 100): void {
+  const instance = synth.value
+  if (!instance || !learnerTarget) return
+  const channel = learnerTarget.channel
+  instance.noteOn(channel, key, velocity)
+  setTimeout(() => instance.noteOff(channel, key), PAD_NOTE_MS)
 }
 
 export function useSynth() {
@@ -259,6 +275,7 @@ export function useSynth() {
     previewInstrument,
     setBank,
     setLearnerTarget,
+    playLearnerNote,
     /** The shared synthesizer once sound is on (for the song sequencer). */
     getSynth: (): WorkletSynthesizer | null => synth.value,
     playChord,
