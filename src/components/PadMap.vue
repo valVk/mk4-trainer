@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, reactive, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
+import { useToast } from '@nuxt/ui/composables'
 
 import { useNoteSource } from '@/composables/useNoteSource'
 import { DEFAULT_PAD_MAP, PAD_COUNT, calibrationPress, padAction } from '@/lib/noteSource'
