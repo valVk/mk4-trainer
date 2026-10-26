@@ -41,12 +41,15 @@ const { profile } = useProgress()
     <nav class="pads" :aria-label="t('home.menu')">
       <AppPad color="tomato" icon="i-lucide-target" :label="t('home.train')" to="/train" />
       <AppPad color="sky" icon="i-lucide-flask-conical" :label="t('home.lab')" to="/lab" />
+      <AppPad color="aqua" icon="i-lucide-music" :label="t('home.songs')" to="/songs" />
       <AppPad color="sun" icon="i-lucide-star" :label="t('home.progress')" to="/progress" />
-      <AppPad color="aqua" icon="i-lucide-cable" :label="t('home.midiTest')" to="/midi-test" />
       <p class="sound-status text-muted">
         <UIcon :name="downloaded ? 'i-lucide-circle-check' : 'i-lucide-download'" class="size-4 shrink-0" />
         {{ downloaded ? t('sound.downloaded') : t('sound.notDownloaded', { size: bankSizeMb() }) }}
-        <ULink to="/licenses" class="ml-auto underline underline-offset-2">{{ t('home.licenses') }}</ULink>
+        <span class="ml-auto flex gap-4">
+          <ULink to="/midi-test" class="underline underline-offset-2">{{ t('home.midiTest') }}</ULink>
+          <ULink to="/licenses" class="underline underline-offset-2">{{ t('home.licenses') }}</ULink>
+        </span>
       </p>
     </nav>
   </main>

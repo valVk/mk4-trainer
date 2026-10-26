@@ -40,6 +40,16 @@ export interface Setting {
   value: unknown
 }
 
+/** A MIDI file imported from the device. Stays in this browser only, never published. */
+export interface SongRecord {
+  id: number
+  name: string
+  fileName: string
+  data: ArrayBuffer
+  size: number
+  importedAt: number
+}
+
 export const GLOBAL_PROFILE = 0
 
 export type TrainerDb = Dexie & {
@@ -49,6 +59,7 @@ export type TrainerDb = Dexie & {
   attempt: EntityTable<Attempt, 'id'>
   /** Key: [profileId, key] */
   setting: Table<Setting, [number, string]>
+  song: EntityTable<SongRecord, 'id'>
 }
 
 export function createDb(name = 'chord-trainer'): TrainerDb {
@@ -58,6 +69,10 @@ export function createDb(name = 'chord-trainer'): TrainerDb {
     levelProgress: '[profileId+level], profileId',
     attempt: '++id, profileId, [profileId+task], createdAt',
     setting: '[profileId+key], profileId',
+  })
+  // Song mode (plan step 10): imported MIDI files.
+  db.version(2).stores({
+    song: '++id, name, importedAt',
   })
   return db
 }

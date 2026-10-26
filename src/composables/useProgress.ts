@@ -17,11 +17,13 @@ import {
   type AttemptInput,
   type TaskStats,
 } from '@/db/progress'
-import { GLOBAL_PROFILE, createDb, type LevelProgress, type Profile, type TrainerDb } from '@/db/schema'
+import { GLOBAL_PROFILE, createDb, type LevelProgress, type Profile, type SongRecord, type TrainerDb } from '@/db/schema'
+import { addSong, deleteSong as deleteSongRow, getSong, listSongs, type SongSummary } from '@/db/songs'
 import { i18n } from '@/i18n'
 import { parseInstrument } from '@/lib/instruments'
 import { starsFor } from '@/lib/levels'
 import { isValidPadMap, type PadMap } from '@/lib/noteSource'
+import { parseSong, songNameFromFile } from '@/lib/song'
 
 // The only door to the database: pages never touch Dexie, so the storage can change later (plan 7).
 
@@ -43,6 +45,7 @@ const profile = shallowRef<Profile | null>(null)
 const profiles = shallowRef<Profile[]>([])
 const levels = ref<Record<number, LevelProgress>>({})
 const declinedLevels = ref<number[]>([])
+const songs = shallowRef<SongSummary[]>([])
 // Applying stored settings must not write them straight back.
 let applying = false
 
@@ -136,6 +139,7 @@ function init(): Promise<void> {
     await safely(async (database) => {
       await loadPadMap(database)
       await loadProfileData(database, await ensureProfile(database, i18n.global.t('progress.defaultName')))
+      songs.value = await listSongs(database)
     })
     watchSettings()
     ready.value = true
@@ -219,6 +223,34 @@ async function weakTasks(limit = 5): Promise<TaskStats[]> {
   return (await safely((database) => weakTasksQuery(database, profileId, limit))) ?? []
 }
 
+/**
+ * Imports a MIDI file from the device. The file is parsed first, so a broken or non-MIDI file
+ * throws before anything is saved. Songs stay in this browser only.
+ */
+async function importSong(file: File): Promise<SongSummary> {
+  const data = await file.arrayBuffer()
+  parseSong(data, file.name)
+  const record = { name: songNameFromFile(file.name), fileName: file.name, data, size: data.byteLength, importedAt: Date.now() }
+  const saved = await safely(async (database) => {
+    const summary = await addSong(database, record)
+    songs.value = await listSongs(database)
+    return summary
+  })
+  if (!saved) throw new Error('storage')
+  return saved
+}
+
+async function loadSong(id: number): Promise<SongRecord | undefined> {
+  return safely((database) => getSong(database, id))
+}
+
+async function removeSong(id: number): Promise<void> {
+  await safely(async (database) => {
+    await deleteSongRow(database, id)
+    songs.value = await listSongs(database)
+  })
+}
+
 async function forgetSetting(key: string): Promise<void> {
   const profileId = profile.value?.id
   if (profileId !== undefined) await safely((database) => deleteSetting(database, profileId, key))
@@ -233,6 +265,7 @@ export function useProgress() {
     profiles: readonly(profiles),
     levels: readonly(levels),
     declinedLevels: readonly(declinedLevels),
+    songs: readonly(songs),
     init,
     record,
     declineLevel,
@@ -243,5 +276,8 @@ export function useProgress() {
     importData,
     weakTasks,
     forgetSetting,
+    importSong,
+    loadSong,
+    removeSong,
   }
 }

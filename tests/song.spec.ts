@@ -4,7 +4,7 @@ import { resolve } from 'node:path'
 import { MIDIBuilder } from 'spessasynth_core'
 import { describe, expect, it } from 'vitest'
 
-import { STEP_WINDOW_S, barTicks, buildSteps, maxPolyphony, parseSong, type SongNote } from '@/lib/song'
+import { STEP_WINDOW_S, barActivity, barTicks, buildSteps, maxPolyphony, parseSong, songNameFromFile, type SongNote } from '@/lib/song'
 
 const TPQ = 480
 
@@ -67,6 +67,28 @@ describe('barTicks', () => {
     const meters = [{ ticks: 0, numerator: 3, denominator: 4 }, { ticks: 1440, numerator: 4, denominator: 4 }]
     // One 3/4 bar (1440 ticks), then 4/4 bars (1920 ticks); the last entry closes the bar holding tick 3000.
     expect(barTicks(meters, TPQ, 3000)).toEqual([0, 1440, 3360])
+  })
+})
+
+describe('barActivity', () => {
+  const bars = [0, 2, 4, 6]
+
+  it('marks bars where notes start or are still held', () => {
+    expect(barActivity({ notes: [note(60, 0.5, 0.5)] }, bars)).toEqual([true, false, false])
+    expect(barActivity({ notes: [note(60, 1, 2)] }, bars)).toEqual([true, true, false])
+    expect(barActivity({ notes: [note(60, 5, 0.2)] }, bars)).toEqual([false, false, true])
+  })
+
+  it('does not count a note that ends exactly on the bar line', () => {
+    expect(barActivity({ notes: [note(60, 0, 2)] }, bars)).toEqual([true, false, false])
+  })
+})
+
+describe('songNameFromFile', () => {
+  it('drops the extension and the download-site suffix', () => {
+    expect(songNameFromFile('happy-birthday-20240118103815-midisite.com.mid')).toBe('Happy Birthday')
+    expect(songNameFromFile('My_Song.MIDI')).toBe('My Song')
+    expect(songNameFromFile('tune.mid')).toBe('Tune')
   })
 })
 

@@ -19,6 +19,16 @@ const router = createRouter({
       component: () => import('@/pages/Lab.vue'),
     },
     {
+      path: '/songs',
+      name: 'songs',
+      component: () => import('@/pages/Songs.vue'),
+    },
+    {
+      path: '/songs/:id',
+      name: 'song',
+      component: () => import('@/pages/Song.vue'),
+    },
+    {
       path: '/progress',
       name: 'progress',
       component: () => import('@/pages/Progress.vue'),

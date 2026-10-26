@@ -14,6 +14,7 @@ import {
   type AttemptInput,
 } from '@/db/progress'
 import { GLOBAL_PROFILE, createDb, type TrainerDb } from '@/db/schema'
+import { addSong, deleteSong, getSong, listSongs } from '@/db/songs'
 
 let counter = 0
 const opened: TrainerDb[] = []
@@ -125,5 +126,42 @@ describe('backup', () => {
     expect(code('{"app":"other","version":1}')).toBe('notBackup')
     expect(code('{"app":"chord-trainer","version":1,"profile":[]}')).toBe('notBackup')
     expect(code('{"app":"chord-trainer","version":99,"profile":[],"levelProgress":[],"attempt":[],"setting":[]}')).toBe('newerVersion')
+  })
+})
+
+describe('songs', () => {
+  const bytes = (n: number) => new Uint8Array(Array.from({ length: n }, (_, i) => i % 256)).buffer
+
+  it('stores songs and lists them newest first without the MIDI bytes', async () => {
+    const db = freshDb()
+    await addSong(db, { name: 'Old', fileName: 'old.mid', data: bytes(10), size: 10, importedAt: 1 })
+    const added = await addSong(db, { name: 'New', fileName: 'new.mid', data: bytes(20), size: 20, importedAt: 2 })
+    expect(added).not.toHaveProperty('data')
+    const list = await listSongs(db)
+    expect(list.map((song) => song.name)).toEqual(['New', 'Old'])
+    expect(list.every((song) => !('data' in song))).toBe(true)
+  })
+
+  it('returns the bytes of one song and deletes it', async () => {
+    const db = freshDb()
+    const { id } = await addSong(db, { name: 'Song', fileName: 'song.mid', data: bytes(16), size: 16, importedAt: 1 })
+    const song = await getSong(db, id)
+    expect(new Uint8Array(song!.data)).toEqual(new Uint8Array(bytes(16)))
+    await deleteSong(db, id)
+    expect(await getSong(db, id)).toBeUndefined()
+    expect(await listSongs(db)).toEqual([])
+  })
+
+  it('keeps existing progress when the database is upgraded to version 2', async () => {
+    const name = `upgrade-${counter++}`
+    const { default: Dexie } = await import('dexie')
+    const old = new Dexie(name)
+    old.version(1).stores({ profile: '++id, name', levelProgress: '[profileId+level], profileId', attempt: '++id, profileId, [profileId+task], createdAt', setting: '[profileId+key], profileId' })
+    await old.table('profile').add({ name: 'Маша', createdAt: 1 })
+    old.close()
+    const db = createDb(name)
+    opened.push(db)
+    expect((await db.profile.toArray()).map((p) => p.name)).toEqual(['Маша'])
+    expect(await db.song.count()).toBe(0)
   })
 })

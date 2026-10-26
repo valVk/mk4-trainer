@@ -176,3 +176,24 @@ export function parseSong(buffer: ArrayBuffer, name = 'song'): Song {
     parts,
   }
 }
+
+/** For each bar, whether the part sounds in it (a note starts in the bar or is still held into it). */
+export function barActivity(part: Pick<Part, 'notes'>, bars: readonly number[]): boolean[] {
+  const active = Array.from({ length: Math.max(0, bars.length - 1) }, () => false)
+  for (const note of part.notes) {
+    const end = note.start + note.length
+    for (let bar = 0; bar < active.length; bar++) {
+      if (bars[bar + 1]! <= note.start) continue
+      if (bars[bar]! >= end) break
+      active[bar] = true
+    }
+  }
+  return active
+}
+
+/** Song name from the file name: no extension, no download-site suffix like "-20240118103815-midisite.com". */
+export function songNameFromFile(fileName: string): string {
+  const base = fileName.replace(/\.(mid|midi|kar|rmi)$/i, '')
+  const cleaned = base.replace(/[-_]\d{8,}.*$/, '').replace(/[-_]+/g, ' ').trim()
+  return cleaned ? cleaned.replace(/(^|\s)\S/g, (first) => first.toUpperCase()) : base
+}
