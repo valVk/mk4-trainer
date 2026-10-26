@@ -16,7 +16,9 @@ void useProgress().init()
 
 // Pads 5 and 6 switch modes from any screen (plan 4.2); the other pads belong to each page.
 const router = useRouter()
-document.title = useI18n().t('app.name')
+const { t } = useI18n()
+document.title = t('app.name')
+const footer = t('app.footer', { year: new Date().getFullYear(), version: __APP_VERSION__ })
 usePadActions({
   train: () => router.push('/train'),
   lab: () => router.push('/lab'),
@@ -25,7 +27,28 @@ usePadActions({
 
 <template>
   <UApp :locale="ru">
-    <RouterView />
+    <div class="shell">
+      <RouterView />
+      <footer class="footer text-dimmed text-xs tabular-nums">{{ footer }}</footer>
+    </div>
     <PwaUpdate />
   </UApp>
 </template>
+
+<style scoped>
+/* Pages grow to fill the screen, so the footer sits at the bottom without a scroll. */
+.shell {
+  display: flex;
+  flex-direction: column;
+  min-height: 100dvh;
+}
+
+.shell > :first-child {
+  flex: 1 0 auto;
+}
+
+.footer {
+  padding: 0.75rem 1rem;
+  text-align: center;
+}
+</style>

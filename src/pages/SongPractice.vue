@@ -602,7 +602,7 @@ const hasNextRung = computed(() => (unit.value ? rungIndex.value + 1 < unit.valu
 .practice {
   display: flex;
   flex-direction: column;
-  min-height: 100dvh;
+  flex: 1 0 auto;
   max-width: 80rem;
   margin: 0 auto;
   padding: clamp(1rem, 2.5vw, 2rem);

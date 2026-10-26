@@ -148,7 +148,7 @@ const rangeLabel = computed(() => `${midiName(start.value)} – ${midiName(start
 .lab {
   display: flex;
   flex-direction: column;
-  min-height: 100dvh;
+  flex: 1 0 auto;
   max-width: 76rem;
   margin: 0 auto;
   padding: clamp(1rem, 3vw, 2.5rem);

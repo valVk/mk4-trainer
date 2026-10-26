@@ -15,7 +15,6 @@ const { t } = useI18n()
 const toast = useToast()
 const { localName, withLocal } = useNoteNames()
 const progress = useProgress()
-const version = __APP_VERSION__
 const { profile, profiles, levels, available, persisted } = progress
 
 // --- Sound bank -----------------------------------------------------------
@@ -260,7 +259,6 @@ async function confirmImport() {
           </li>
         </ol>
         <p class="mt-6 text-dimmed text-sm flex gap-4">
-          {{ t('progress.version', { version }) }}
           <ULink to="/licenses" class="underline underline-offset-2">{{ t('home.licenses') }}</ULink>
         </p>
       </section>

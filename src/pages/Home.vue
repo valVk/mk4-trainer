@@ -62,7 +62,7 @@ const { profile } = useProgress()
   grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
   gap: clamp(2rem, 5vw, 5rem);
   align-items: center;
-  min-height: 100dvh;
+  flex: 1 0 auto;
   max-width: 72rem;
   margin: 0 auto;
   padding: clamp(1.5rem, 4vw, 3.5rem);
