@@ -161,6 +161,18 @@ function togglePlay() {
               </span>
             </span>
           </button>
+          <UButton
+            v-if="!row.part.isDrum"
+            :to="`/songs/${route.params.id}/${row.part.channel}`"
+            icon="i-lucide-graduation-cap"
+            color="neutral"
+            variant="soft"
+            size="lg"
+            class="row__practice"
+            :label="t('songs.practice')"
+            :aria-label="t('songs.practiceLabel', { name: row.label })"
+          />
+          <span v-else class="row__practice" />
           <div class="row__lane" @click="seekFromEvent">
             <svg :viewBox="`0 0 ${barCount} 1`" preserveAspectRatio="none" class="lane" aria-hidden="true">
               <rect v-for="run in row.runs" :key="run.start" :x="run.start" y="0.15" :width="run.length" height="0.7" rx="0.3" class="lane__block" :class="{ 'lane__block--drum': row.part.isDrum }" />
@@ -221,7 +233,7 @@ function togglePlay() {
 
 .row {
   display: grid;
-  grid-template-columns: minmax(0, 15rem) minmax(0, 1fr);
+  grid-template-columns: minmax(0, 15rem) auto minmax(0, 1fr);
   gap: 0.75rem;
   align-items: center;
 }
@@ -263,6 +275,10 @@ function togglePlay() {
 
 .row--off .row__toggle {
   opacity: 0.55;
+}
+
+.row__practice {
+  min-width: 7.5rem;
 }
 
 .row__lane {

@@ -328,6 +328,27 @@
     "channel": "канал {n}",
     "polyphony": "до {n} ноты | до {n} нот | до {n} нот",
     "turnOn": "Включить: {name}",
-    "turnOff": "Выключить: {name}"
+    "turnOff": "Выключить: {name}",
+    "backToMap": "К карте песни",
+    "partNotFound": "Такой партии нет в песне.",
+    "practice": "Разучить",
+    "practiceLabel": "Разучить: {name}",
+    "restart": "С начала партии",
+    "modeLabel": "Режим",
+    "mode": {
+      "wait": "Ждать меня",
+      "listen": "Слушать"
+    },
+    "speed": "Скорость",
+    "anyOctave": "Любая октава",
+    "partPosition": "Место в партии",
+    "partDone": "Партия сыграна!",
+    "waitingFor": "Жду: {notes}",
+    "next": "Дальше: {notes}",
+    "octave": {
+      "down": "Это на октаву выше, чем нужно. Нажми Octave − на MK4.",
+      "up": "Это на октаву ниже, чем нужно. Нажми Octave + на MK4."
+    },
+    "window": "На экране клавиши {range}"
   }
 }
