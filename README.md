@@ -25,16 +25,21 @@ See [Vite Configuration Reference](https://vite.dev/config/).
 
 ## Sound
 
-Notes play through `spessasynth_lib` (Apache-2.0) with the `MuseScore_General.sf3` SoundFont (MIT).
-The SoundFont is not stored in git; download it once with `npm run soundfont`. It loads when the
-user taps "Включить звук" and is cached by the service worker for offline use.
+Notes play through `spessasynth_lib` (Apache-2.0). Two SoundFonts can be chosen on the Progress page:
+`MuseScore_General.sf3` (MIT, default, 40 MB) and `A320U.sf2` (GNU GPL v2 or later, 10 MB, from the Denemo project).
+They are not stored in git; download them once with `npm run soundfont`. A bank loads when the user taps
+"Включить звук" and is cached by the service worker for offline use.
 
 ## Licenses
 
+See `NOTICE` and the in-app page "Лицензии" (`/licenses`).
+
 - App code: written from scratch; ideas inspired by Chord Nebula (Behnam Khanbeigi).
 - `spessasynth_lib`: Apache-2.0.
-- `MuseScore_General.sf3`: MIT, S. Christian Collins, based on FluidR3Mono and FluidR3. See `NOTICE`
-  and `public/soundfonts/MuseScore_General_License.md`.
+- `MuseScore_General.sf3`: MIT, S. Christian Collins, based on FluidR3Mono and FluidR3
+  (`public/soundfonts/MuseScore_General_License.md`).
+- `A320U.sf2`: GNU GPL v2 or later (per the file's metadata), Milton Paredes (`public/soundfonts/A320U-license.txt`, full text in
+  `public/soundfonts/GPL-2.0.txt`).
 
 ## Releases and GitHub Pages
 

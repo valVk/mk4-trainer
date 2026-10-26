@@ -24,6 +24,11 @@ const router = createRouter({
       component: () => import('@/pages/Progress.vue'),
     },
     {
+      path: '/licenses',
+      name: 'licenses',
+      component: () => import('@/pages/Licenses.vue'),
+    },
+    {
       path: '/pads',
       name: 'pads',
       component: () => import('@/pages/Pads.vue'),

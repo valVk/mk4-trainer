@@ -10,7 +10,7 @@ import { buildChord } from '@/lib/theory'
 const { t } = useI18n()
 
 const cMajor = buildChord(60, 'maj')
-const { downloaded } = useSynth()
+const { downloaded, bankSizeMb } = useSynth()
 const { profile } = useProgress()
 </script>
 
@@ -45,7 +45,8 @@ const { profile } = useProgress()
       <AppPad color="aqua" icon="i-lucide-cable" :label="t('home.midiTest')" to="/midi-test" />
       <p class="sound-status text-muted">
         <UIcon :name="downloaded ? 'i-lucide-circle-check' : 'i-lucide-download'" class="size-4 shrink-0" />
-        {{ downloaded ? t('sound.downloaded') : t('sound.notDownloaded') }}
+        {{ downloaded ? t('sound.downloaded') : t('sound.notDownloaded', { size: bankSizeMb() }) }}
+        <ULink to="/licenses" class="ml-auto underline underline-offset-2">{{ t('home.licenses') }}</ULink>
       </p>
     </nav>
   </main>

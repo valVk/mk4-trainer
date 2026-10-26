@@ -5,6 +5,7 @@ import { useToast } from '@nuxt/ui/composables'
 
 import { useNoteNames } from '@/composables/useNoteNames'
 import { useProgress } from '@/composables/useProgress'
+import { BANKS, useSynth, type BankId } from '@/composables/useSynth'
 import { BackupParseError, parseBackup } from '@/db/backup'
 import type { TaskStats } from '@/db/progress'
 import { LEVELS, STAR_THRESHOLDS } from '@/lib/levels'
@@ -16,6 +17,19 @@ const { localName, withLocal } = useNoteNames()
 const progress = useProgress()
 const version = __APP_VERSION__
 const { profile, profiles, levels, available, persisted } = progress
+
+// --- Sound bank -----------------------------------------------------------
+
+const synth = useSynth()
+const bankItems = computed(() => BANKS.map((item) => ({
+  value: item.id,
+  label: t(`sound.banks.${item.id}.name`),
+  description: t(`sound.banks.${item.id}.description`),
+})))
+const selectedBank = computed({
+  get: () => synth.bank.value,
+  set: (id: BankId) => synth.setBank(id),
+})
 
 // --- Profiles -------------------------------------------------------------
 
@@ -165,6 +179,19 @@ async function confirmImport() {
 
         <UCard variant="subtle">
           <template #header>
+            <h2 class="subtitle text-highlighted">{{ t('sound.bankTitle') }}</h2>
+          </template>
+          <div class="flex flex-col gap-4">
+            <URadioGroup v-model="selectedBank" :items="bankItems" variant="card" size="lg" :aria-label="t('sound.bankTitle')" />
+            <p class="text-muted text-sm leading-relaxed">
+              {{ t('sound.bankHint') }}
+              <ULink to="/licenses" class="underline underline-offset-2">{{ t('home.licenses') }}</ULink>
+            </p>
+          </div>
+        </UCard>
+
+        <UCard variant="subtle">
+          <template #header>
             <h2 class="subtitle text-highlighted">{{ t('progress.weak') }}</h2>
           </template>
           <p v-if="weak.length === 0" class="text-muted">{{ t('progress.weakEmpty') }}</p>
@@ -232,7 +259,10 @@ async function confirmImport() {
             </p>
           </li>
         </ol>
-        <p class="mt-6 text-dimmed text-sm">{{ t('progress.version', { version }) }}</p>
+        <p class="mt-6 text-dimmed text-sm flex gap-4">
+          {{ t('progress.version', { version }) }}
+          <ULink to="/licenses" class="underline underline-offset-2">{{ t('home.licenses') }}</ULink>
+        </p>
       </section>
     </div>
   </main>

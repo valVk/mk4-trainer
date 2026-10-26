@@ -1,7 +1,7 @@
 import { readonly, ref, shallowRef, watch } from 'vue'
 
 import { useNoteSource } from '@/composables/useNoteSource'
-import { INSTRUMENTS, useSynth, type InstrumentId } from '@/composables/useSynth'
+import { BANKS, INSTRUMENTS, useSynth, type BankId, type InstrumentId } from '@/composables/useSynth'
 import { exportBackup, importBackup, parseBackup, type Backup } from '@/db/backup'
 import {
   CURRENT_PROFILE_KEY,
@@ -26,6 +26,7 @@ import { isValidPadMap, type PadMap } from '@/lib/noteSource'
 
 const PAD_MAP_KEY = 'padMap'
 const INSTRUMENT_KEY = 'instrument'
+const BANK_KEY = 'soundBank'
 const DECLINED_KEY = 'declinedLevels'
 /** Where step 5 kept the pad map before the database existed. */
 const LEGACY_PAD_MAP_KEY = 'chord-trainer:padMap'
@@ -95,8 +96,10 @@ async function loadProfileData(database: TrainerDb, current: Profile): Promise<v
   levels.value = await getLevels(database, current.id)
   declinedLevels.value = (await getSetting<number[]>(database, current.id, DECLINED_KEY)) ?? []
   const instrument = await getSetting<InstrumentId>(database, current.id, INSTRUMENT_KEY)
+  const bank = await getSetting<BankId>(database, current.id, BANK_KEY)
   applying = true
   useSynth().setInstrument(INSTRUMENTS.some((item) => item.id === instrument) ? instrument! : 'piano')
+  useSynth().setBank(BANKS.some((item) => item.id === bank) ? bank! : 'musescore')
   applying = false
 }
 
@@ -110,6 +113,11 @@ function watchSettings(): void {
     if (applying || !profile.value) return
     const profileId = profile.value.id
     void safely((database) => setSetting(database, profileId, INSTRUMENT_KEY, id))
+  })
+  watch(useSynth().bank, (id) => {
+    if (applying || !profile.value) return
+    const profileId = profile.value.id
+    void safely((database) => setSetting(database, profileId, BANK_KEY, id))
   })
 }
 

@@ -29,15 +29,18 @@ jobs:
       - name: Install dependencies
         run: npx -y npm@11 ci
 
-      # The SoundFont (MIT, 40 MB) is not in git: reuse a cached copy, download only when missing.
-      - name: Restore SoundFont
+      # SoundFonts are not in git (MuseScore_General 40 MB, A320U 10 MB): reuse cached copies,
+      # download only when missing. Changing the fetch script changes the key.
+      - name: Restore SoundFonts
         uses: actions/cache@v4
         with:
-          path: public/soundfonts/MuseScore_General.sf3
-          key: soundfont-${{ hashFiles('scripts/fetch-soundfont.sh') }}
+          path: |
+            public/soundfonts/MuseScore_General.sf3
+            public/soundfonts/A320U.sf2
+          key: soundfonts-${{ hashFiles('scripts/fetch-soundfont.sh') }}
 
-      - name: Download SoundFont
-        run: test -f public/soundfonts/MuseScore_General.sf3 || npm run soundfont
+      - name: Download SoundFonts
+        run: test -f public/soundfonts/MuseScore_General.sf3 -a -f public/soundfonts/A320U.sf2 || npm run soundfont
 
       - name: Configure Pages
         id: pages

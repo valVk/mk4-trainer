@@ -1,17 +1,35 @@
 Chord trainer
 Code written from scratch. Ideas inspired by Chord Nebula (Behnam Khanbeigi).
+The same list is shown in the app on the "Лицензии" page (/licenses).
 
-Third-party components
-----------------------
+Sound banks
+-----------
+Shipped as separate files in public/soundfonts/ and loaded at runtime; they are not
+compiled into the app. Not stored in git: run `npm run soundfont` to download them.
 
-spessasynth_lib (SoundFont synthesizer)
-  License: Apache-2.0
-  Source: https://github.com/spessasus/spessasynth_lib
-
-MuseScore_General.sf3 (default SoundFont, public/soundfonts/)
+MuseScore_General.sf3 (default bank)
   License: MIT
   Adaptation by S. Christian Collins, based on FluidR3Mono (Michael Cowgill)
   and FluidR3 (Frank Wen). Full notices and license text:
   public/soundfonts/MuseScore_General_License.md
   Source: https://ftp.osuosl.org/pub/musescore/soundfont/MuseScore_General/
-  Not stored in git: run `npm run soundfont` to download it.
+
+A320U.sf2 (optional bank, from the Denemo project)
+  License: GNU General Public License, version 2 or (at your option) any later version,
+  as stated in the file's own metadata (INFO/ICMT); the author's notice says "GNU GPL v2".
+  Copyright 2005 by Milton Paredes (notice: public/soundfonts/A320U-license.txt).
+  Made as "Soundfont GM para Musix GNU+Linux", an update of Airfont 320.
+  Full license text: public/soundfonts/GPL-2.0.txt
+  Source: https://github.com/denemo/denemo/tree/276d17350e3a625dd4df19ecb7ff7421c070290d/soundfonts
+  The file is distributed unmodified; the source above is the preferred form for modification.
+
+Libraries, fonts, icons
+-----------------------
+spessasynth_lib, spessasynth_core   Apache-2.0   https://github.com/spessasus/spessasynth_lib
+Vue, Vue Router, Vue I18n           MIT
+Nuxt UI                             MIT
+Tailwind CSS                        MIT
+Dexie.js                            Apache-2.0
+Workbox                             MIT
+Lucide icons                        ISC
+Unbounded, Golos Text               SIL Open Font License 1.1
