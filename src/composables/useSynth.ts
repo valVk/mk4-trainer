@@ -3,6 +3,7 @@ import { WorkletSynthesizer } from 'spessasynth_lib'
 import processorUrl from 'spessasynth_lib/dist/spessasynth_processor.min.js?url'
 
 import { useNoteSource } from '@/composables/useNoteSource'
+import { DEFAULT_INSTRUMENT, resolveInstrument, type Instrument, type PresetInfo } from '@/lib/instruments'
 
 // SoundFonts live in public/soundfonts (not in git, see NOTICE); the parent picks one on the Progress page.
 export const BANKS = [
@@ -18,17 +19,6 @@ const SOUNDFONT_CACHE = 'soundfonts'
 const bankInfo = (id: BankId) => BANKS.find((item) => item.id === id) ?? BANKS[0]
 const bankUrl = (id: BankId) => `${import.meta.env.BASE_URL}soundfonts/${bankInfo(id).file}`
 
-// General MIDI programs offered in the instrument picker.
-export const INSTRUMENTS = [
-  { id: 'piano', program: 0 },
-  { id: 'epiano', program: 4 },
-  { id: 'organ', program: 19 },
-  { id: 'strings', program: 48 },
-  { id: 'pad', program: 88 },
-  { id: 'bass', program: 33 },
-] as const
-
-export type InstrumentId = (typeof INSTRUMENTS)[number]['id']
 export type SynthStatus = 'off' | 'loading' | 'ready' | 'error'
 
 // The child's notes and the reference chords use separate channels,
@@ -47,6 +37,8 @@ const CUES = {
   levelDone: [84, 88, 91, 96],
 } as const
 const CUE_GAP_MS = 90
+const BANK_SELECT = 0
+const PREVIEW_NOTES = [60, 64, 67]
 const CUE_LENGTH_MS = 400
 
 export type CueKind = keyof typeof CUES
@@ -54,7 +46,9 @@ export type CueKind = keyof typeof CUES
 const status = ref<SynthStatus>('off')
 const progress = ref(0)
 const error = ref('')
-const instrument = ref<InstrumentId>('piano')
+const instrument = ref<Instrument>(DEFAULT_INSTRUMENT)
+/** Melodic and drum presets of the loaded bank, as the synth reports them. */
+const presets = shallowRef<PresetInfo[]>([])
 const bank = ref<BankId>('musescore')
 /** Whether the chosen bank is already in the offline cache. */
 const downloaded = ref(false)
@@ -98,10 +92,26 @@ async function checkDownloaded(): Promise<void> {
   }
 }
 
+/** Bank select, then program: a variant lives in another bank of the same program. */
+function selectPreset(instance: WorkletSynthesizer, channel: number, preset: Instrument): void {
+  instance.controllerChange(channel, BANK_SELECT as never, preset.bank)
+  instance.programChange(channel, preset.program)
+}
+
 function applyInstrument(): void {
-  const program = INSTRUMENTS.find((item) => item.id === instrument.value)?.program ?? 0
-  synth.value?.programChange(PLAY_CHANNEL, program)
-  synth.value?.programChange(REFERENCE_CHANNEL, program)
+  const instance = synth.value
+  if (!instance) return
+  // A variant the loaded bank lacks falls back to the same GM program.
+  const preset = presets.value.length ? resolveInstrument(instrument.value, presets.value) : instrument.value
+  selectPreset(instance, PLAY_CHANNEL, preset)
+  selectPreset(instance, REFERENCE_CHANNEL, preset)
+}
+
+function watchPresets(instance: WorkletSynthesizer): void {
+  instance.eventHandler.addEvent('presetListChange', 'trainer-presets', (list) => {
+    presets.value = list.map((item) => ({ bank: item.bankMSB, program: item.program, name: item.name, isDrum: item.isDrum }))
+    applyInstrument()
+  })
 }
 
 /**
@@ -115,8 +125,9 @@ async function loadBank(instance: WorkletSynthesizer): Promise<void> {
   await instance.soundBankManager.addSoundBank(buffer, 'main')
   loadedBank = id
   // Programs bind to presets of the loaded bank: set them again.
+  synth.value = instance
   applyInstrument()
-  instance.programChange(CUE_CHANNEL, CUE_PROGRAM)
+  selectPreset(instance, CUE_CHANNEL, { bank: 0, program: CUE_PROGRAM })
   void checkDownloaded()
   if (bank.value !== id) await loadBank(instance)
 }
@@ -150,11 +161,12 @@ function start(): Promise<void> {
       await context.audioWorklet.addModule(processorUrl)
       const instance = new WorkletSynthesizer(context)
       instance.connect(context.destination)
+      watchPresets(instance)
       await loadBank(instance)
       await instance.isReady
       synth.value = instance
       applyInstrument()
-      instance.programChange(CUE_CHANNEL, CUE_PROGRAM)
+      selectPreset(instance, CUE_CHANNEL, { bank: 0, program: CUE_PROGRAM })
     } catch (e) {
       context = null
       throw e
@@ -170,9 +182,14 @@ function setBank(id: BankId): void {
   if (instance && loadedBank !== bank.value && !starting) void runLoading(() => loadBank(instance))
 }
 
-function setInstrument(id: InstrumentId): void {
-  instrument.value = id
+function setInstrument(next: Instrument): void {
+  instrument.value = { bank: next.bank, program: next.program }
   applyInstrument()
+}
+
+/** A short chord in the current instrument, so a choice in the picker is heard right away. */
+function previewInstrument(): void {
+  playChord(PREVIEW_NOTES, 700)
 }
 
 /** Plays notes together, like a reference chord, then releases them. */
@@ -218,11 +235,13 @@ export function useSynth() {
     progress: readonly(progress),
     error: readonly(error),
     instrument: readonly(instrument),
+    presets: readonly(presets),
     bank: readonly(bank),
     bankSizeMb: () => bankInfo(bank.value).sizeMb,
     downloaded: readonly(downloaded),
     start,
     setInstrument,
+    previewInstrument,
     setBank,
     playChord,
     playCue,

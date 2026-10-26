@@ -1,7 +1,7 @@
 import { readonly, ref, shallowRef, watch } from 'vue'
 
 import { useNoteSource } from '@/composables/useNoteSource'
-import { BANKS, INSTRUMENTS, useSynth, type BankId, type InstrumentId } from '@/composables/useSynth'
+import { BANKS, useSynth, type BankId } from '@/composables/useSynth'
 import { exportBackup, importBackup, parseBackup, type Backup } from '@/db/backup'
 import {
   CURRENT_PROFILE_KEY,
@@ -19,6 +19,7 @@ import {
 } from '@/db/progress'
 import { GLOBAL_PROFILE, createDb, type LevelProgress, type Profile, type TrainerDb } from '@/db/schema'
 import { i18n } from '@/i18n'
+import { parseInstrument } from '@/lib/instruments'
 import { starsFor } from '@/lib/levels'
 import { isValidPadMap, type PadMap } from '@/lib/noteSource'
 
@@ -95,10 +96,11 @@ async function loadProfileData(database: TrainerDb, current: Profile): Promise<v
   profiles.value = await database.profile.orderBy('id').toArray()
   levels.value = await getLevels(database, current.id)
   declinedLevels.value = (await getSetting<number[]>(database, current.id, DECLINED_KEY)) ?? []
-  const instrument = await getSetting<InstrumentId>(database, current.id, INSTRUMENT_KEY)
+  const instrument = await getSetting<unknown>(database, current.id, INSTRUMENT_KEY)
   const bank = await getSetting<BankId>(database, current.id, BANK_KEY)
   applying = true
-  useSynth().setInstrument(INSTRUMENTS.some((item) => item.id === instrument) ? instrument! : 'piano')
+  // Also converts the old short list ("piano", "organ"...) to bank and program.
+  useSynth().setInstrument(parseInstrument(instrument))
   useSynth().setBank(BANKS.some((item) => item.id === bank) ? bank! : 'musescore')
   applying = false
 }
@@ -109,10 +111,10 @@ function watchSettings(): void {
     if (applying) return
     void safely((database) => setSetting(database, GLOBAL_PROFILE, PAD_MAP_KEY, { channel: map.channel, notes: [...map.notes] }))
   })
-  watch(useSynth().instrument, (id) => {
+  watch(useSynth().instrument, (value) => {
     if (applying || !profile.value) return
     const profileId = profile.value.id
-    void safely((database) => setSetting(database, profileId, INSTRUMENT_KEY, id))
+    void safely((database) => setSetting(database, profileId, INSTRUMENT_KEY, { bank: value.bank, program: value.program }))
   })
   watch(useSynth().bank, (id) => {
     if (applying || !profile.value) return
