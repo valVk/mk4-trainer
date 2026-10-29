@@ -48,3 +48,7 @@ components.d.ts
 
 # Playwright MCP screenshots
 .playwright-mcp
+
+# Playwright
+/test-results/
+/playwright-report/

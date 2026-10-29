@@ -1,0 +1,21 @@
+import { expect, test } from '@playwright/test'
+
+import { open } from './helpers'
+
+test('keeps the chord name while the chord is lifted key by key', async ({ page }) => {
+  await open(page, '/lab')
+  const reading = page.locator('main.lab .chord')
+  // C major on the virtual MK4: C (a), E (d), G (g).
+  for (const key of ['a', 'd', 'g']) await page.keyboard.down(key)
+  await expect(reading).toHaveText('C')
+
+  await page.keyboard.up('g')
+  await page.waitForTimeout(60)
+  await expect(reading).toHaveText('C')
+  await page.keyboard.up('d')
+  await page.waitForTimeout(60)
+  await expect(reading).toHaveText('C')
+
+  await page.keyboard.up('a')
+  await expect(reading).toHaveCount(0, { timeout: 1000 })
+})
