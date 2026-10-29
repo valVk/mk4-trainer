@@ -112,11 +112,17 @@ watch([solved, () => heldNotes.value.length, levelDone], ([isSolved, count, done
   nextTimer = setTimeout(nextTask, NEXT_DELAY_MS)
 })
 
-watch(level, () => {
+watch(level, (value) => {
   levelDone.value = null
   streak.value = 0
   nextTask()
+  void progress.setTrainLevel(value)
 })
+
+// Back on the level the child was on (after a reload, or when another profile is chosen).
+watch(progress.trainLevel, (saved) => {
+  if (saved !== null && saved !== level.value && LEVELS.some((item) => item.id === saved)) level.value = saved
+}, { immediate: true })
 
 function goNextLevel() {
   if (hasNextLevel.value) level.value++
@@ -265,22 +271,20 @@ const levelItems = computed(() => LEVELS.map((item) => ({ label: String(item.id)
       </div>
     </div>
 
-    <UAlert
-      v-if="levelDone !== null"
-      color="success"
-      variant="subtle"
-      icon="i-lucide-trophy"
-      class="level-done"
-      :title="t('train.levelDone', { n: levelDone })"
-      :description="hasNextLevel ? t('train.levelDoneHint') : t('train.allDone')"
-      :actions="hasNextLevel
-        ? [
-          { label: t('train.nextLevel'), icon: 'i-lucide-arrow-right', size: 'xl', onClick: goNextLevel },
-          { label: t('train.stay'), color: 'neutral', variant: 'soft', size: 'xl', onClick: stayOnLevel },
-        ]
-        : [{ label: t('train.stay'), color: 'neutral', variant: 'soft', size: 'xl', onClick: stayOnLevel }]"
-      :ui="{ title: 'text-lg font-semibold', description: 'text-base' }"
-    />
+    <!-- Takes the task's place while open, centred in it, so the keyboard stays on screen. -->
+    <section v-if="levelDone !== null" class="task level-done" role="status">
+      <div class="level-done__card">
+        <UIcon name="i-lucide-trophy" class="level-done__icon" />
+        <div class="level-done__body">
+          <p class="level-done__title text-highlighted">{{ t('train.levelDone', { n: levelDone }) }}</p>
+          <p class="text-toned">{{ hasNextLevel ? t('train.levelDoneHint') : t('train.allDone') }}</p>
+          <div class="level-done__actions">
+            <UButton v-if="hasNextLevel" icon="i-lucide-arrow-right" size="xl" :label="t('train.nextLevel')" @click="goNextLevel" />
+            <UButton color="neutral" variant="soft" size="xl" :label="t('train.stay')" @click="stayOnLevel" />
+          </div>
+        </div>
+      </div>
+    </section>
 
     <section v-if="levelDone === null" class="task" :class="{ 'task--solved': solved }" aria-live="polite">
       <p :key="`${task.kind}-${task.root}-${'type' in task ? task.type : ''}`" class="prompt text-highlighted">{{ prompt }}</p>
@@ -372,11 +376,48 @@ const levelItems = computed(() => LEVELS.map((item) => ({ label: String(item.id)
 <style scoped>
 /* Takes the task's place while open, so the keyboard stays on screen */
 .level-done {
-  flex: 1;
-  align-self: center;
-  margin-block: auto;
-  max-height: fit-content;
+  align-items: center;
+}
+
+.level-done__card {
+  display: flex;
+  align-items: center;
+  gap: clamp(1rem, 3vw, 2rem);
+  max-width: 48rem;
+  padding: 1.25rem clamp(1.25rem, 3vw, 2rem);
+  border-radius: 1.5rem;
+  background: color-mix(in oklab, var(--color-pad-aqua) 12%, var(--ui-bg-elevated));
+  box-shadow: 0 0 0 1px color-mix(in oklab, var(--color-pad-aqua) 40%, transparent) inset;
   animation: pop 240ms var(--ease-out);
+}
+
+.level-done__icon {
+  flex: none;
+  width: clamp(3.5rem, 10vh, 5rem);
+  height: clamp(3.5rem, 10vh, 5rem);
+  color: var(--color-pad-sun);
+}
+
+.level-done__body {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  min-width: 0;
+}
+
+.level-done__title {
+  font-family: var(--font-display);
+  font-size: clamp(1.375rem, 2.6vw, 1.875rem);
+  font-weight: 800;
+  line-height: 1.15;
+  text-wrap: balance;
+}
+
+.level-done__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  margin-top: 0.25rem;
 }
 
 .levels {
@@ -511,7 +552,8 @@ const levelItems = computed(() => LEVELS.map((item) => ({ label: String(item.id)
 
 @media (prefers-reduced-motion: reduce) {
   .prompt,
-  .feedback--success {
+  .feedback--success,
+  .level-done__card {
     animation-name: fade;
   }
 

@@ -172,3 +172,13 @@ export function taskId(task: Task, name: (pc: PitchClass) => string): string {
   if (task.kind === 'progression') return `${root}:${task.progression}`
   return task.inversion === undefined ? `${root}:${task.type}` : `${root}:${task.type}:inv${task.inversion}`
 }
+
+/**
+ * The level «Тренировка» opens on: the one the child chose last time, or, when nothing was
+ * saved yet, the first level without all stars (the last level when every one is done).
+ */
+export function startLevel(saved: unknown, correctIn: (level: number) => number): number {
+  if (typeof saved === 'number' && LEVELS.some((item) => item.id === saved)) return saved
+  const open = LEVELS.find((item) => starsFor(correctIn(item.id)) < STAR_THRESHOLDS.length)
+  return (open ?? LEVELS[LEVELS.length - 1]!).id
+}

@@ -10,6 +10,7 @@ import {
   getLevel,
   hintStage,
   progressionTask,
+  startLevel,
   starsFor,
   taskId,
   taskNotes,
@@ -219,5 +220,23 @@ describe('levels 5-8', () => {
     expect(taskId(progressionTask(7, 'pop'), noteName)).toBe('G:pop')
     expect(taskId({ kind: 'chord', root: 1, type: 'min', inversion: 2 }, noteName)).toBe('C#:min:inv2')
     expect(taskId({ kind: 'chord', root: 2, type: 'sus4' }, noteName)).toBe('D:sus4')
+  })
+})
+
+describe('startLevel', () => {
+  const none = () => 0
+  it('opens the level chosen last time', () => {
+    expect(startLevel(2, none)).toBe(2)
+  })
+
+  it('without a saved level, opens the first level that still lacks stars', () => {
+    const correct: Record<number, number> = { 1: 20, 2: 7 }
+    expect(startLevel(undefined, (id) => correct[id] ?? 0)).toBe(2)
+    expect(startLevel(undefined, none)).toBe(1)
+  })
+
+  it('ignores a saved level that does not exist and stays on the last level when all are done', () => {
+    expect(startLevel(42, none)).toBe(1)
+    expect(startLevel('x', () => 20)).toBe(LEVELS[LEVELS.length - 1]!.id)
   })
 })
