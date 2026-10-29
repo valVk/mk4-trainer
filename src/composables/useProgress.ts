@@ -19,7 +19,7 @@ import {
   type TaskStats,
 } from '@/db/progress'
 import { GLOBAL_PROFILE, createDb, type LevelProgress, type Profile, type SongProgress, type SongRecord, type TrainerDb } from '@/db/schema'
-import { addSong, deleteSong as deleteSongRow, getSong, getSongProgress, listSongs, resetUnits, saveUnitResult, type SongSummary } from '@/db/songs'
+import { addSong, deleteSong as deleteSongRow, getSong, getSongProgress, listSongs, resetUnits, saveUnitResult, setSongMix, type SongSummary } from '@/db/songs'
 import { i18n } from '@/i18n'
 import { parseInstrument } from '@/lib/instruments'
 import { parseLatencyHistories, parseMetronomeSettings } from '@/lib/metronome'
@@ -279,6 +279,11 @@ async function loadSong(id: number): Promise<SongRecord | undefined> {
   return safely((database) => getSong(database, id))
 }
 
+/** Part volumes belong to the song, not to a player: the balance is the same for everyone. */
+async function saveSongMix(id: number, mix: Record<number, number>): Promise<void> {
+  await safely((database) => setSongMix(database, id, { ...mix }))
+}
+
 async function removeSong(id: number): Promise<void> {
   await safely(async (database) => {
     await deleteSongRow(database, id)
@@ -339,6 +344,7 @@ export function useProgress() {
     forgetSetting,
     importSong,
     loadSong,
+    saveSongMix,
     removeSong,
     loadSongProgress,
     saveSongUnit,

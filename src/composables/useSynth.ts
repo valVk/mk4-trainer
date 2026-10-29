@@ -186,6 +186,17 @@ function audioContext(): AudioContext {
   return context
 }
 
+/**
+ * A safety limiter before the speakers. Songs mixed loud (all parts at full level) sum above full
+ * scale on the big hits and clip into a harsh crackle; this catches those peaks and leaves quiet
+ * passages alone.
+ */
+function createLimiter(audio: AudioContext): AudioNode {
+  const limiter = new DynamicsCompressorNode(audio, { threshold: -3, knee: 0, ratio: 20, attack: 0.003, release: 0.25 })
+  limiter.connect(audio.destination)
+  return limiter
+}
+
 /** Must run from a tap or click: browsers only start audio after a user gesture. */
 function start(): Promise<void> {
   if (context && synth.value && status.value === 'ready') return context.resume()
@@ -197,7 +208,7 @@ function start(): Promise<void> {
     await resumed
     await audio.audioWorklet.addModule(processorUrl)
     const instance = new WorkletSynthesizer(audio)
-    instance.connect(audio.destination)
+    instance.connect(createLimiter(audio))
     watchPresets(instance)
     await loadBank(instance)
     await instance.isReady

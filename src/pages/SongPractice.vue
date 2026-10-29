@@ -36,6 +36,7 @@ import {
   type Unit,
   type WaitPress,
 } from '@/lib/ladder'
+import { parseMix } from '@/lib/mix'
 import { drumKind, PAD_NOTE_MIN_S, padLayout } from '@/lib/padLayout'
 import { partPhrases, songSections, type Phrase } from '@/lib/phrases'
 import { chooseWindow, coversStep, followWindow, octaveHint, stepIndexAt, upcomingKeys } from '@/lib/practice'
@@ -132,6 +133,8 @@ async function open() {
   record.value = found
   song.value = parsed
   part.value = chosen
+  // The accompaniment keeps the balance set on the song map.
+  player.setMix(parseMix(found.mix))
   if (chosen.isDrum) inputMode.value = 'pads'
   phrases.value = partPhrases(chosen, parsed.bars)
   units.value = buildUnits(phrases.value, songSections(parsed))

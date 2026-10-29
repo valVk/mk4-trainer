@@ -2,6 +2,7 @@ import { readonly, ref, shallowRef, watch } from 'vue'
 import { Sequencer } from 'spessasynth_lib'
 
 import { useSynth } from '@/composables/useSynth'
+import { gainOf, type SongMix } from '@/lib/mix'
 
 // Song playback on the shared synthesizer: the accompaniment plays from the MIDI file,
 // the learned channel is muted, and the child's keys sound on an extra channel.
@@ -24,6 +25,8 @@ let frame = 0
  * is kept here and applied again once playback runs.
  */
 let pausedTarget: number | null = null
+/** Volume per part of the open song (set on the song map); applied whenever the song is loaded. */
+let mix: SongMix = {}
 
 function requireSynth() {
   const synth = useSynth().getSynth()
@@ -46,6 +49,13 @@ function setChannelGain(channel: number, gain: number): void {
   requireSynth().midiChannels[channel]?.setSystemParameter('gain', gain)
 }
 
+/** The song's part volumes: kept for the next load, applied at once when a song is already loaded. */
+function setMix(next: SongMix): void {
+  mix = next
+  if (!loaded.value) return
+  for (let channel = 0; channel < SONG_CHANNELS; channel++) setChannelGain(channel, gainOf(mix, channel))
+}
+
 /** Opens the song paused at the start, with every channel audible. */
 async function load(binary: ArrayBuffer, fileName: string): Promise<void> {
   const synth = requireSynth()
@@ -62,7 +72,7 @@ async function load(binary: ArrayBuffer, fileName: string): Promise<void> {
   current.currentTime = 0
   for (let channel = 0; channel < SONG_CHANNELS; channel++) {
     setChannelMuted(channel, false)
-    setChannelGain(channel, 1)
+    setChannelGain(channel, gainOf(mix, channel))
   }
   duration.value = current.duration
   time.value = 0
@@ -124,6 +134,7 @@ function unload(): void {
     synth.stopAll(true)
   }
   useSynth().setLearnerTarget(null)
+  mix = {}
   loaded.value = false
 }
 
@@ -162,7 +173,7 @@ export function useSongPlayer() {
     seek,
     setRate,
     setChannelMuted,
-    setChannelGain,
+    setMix,
     unload,
     /** Current position straight from the sequencer, for the wait-mode loop. */
     currentTime: (): number => pausedTarget ?? sequencer.value?.currentHighResolutionTime ?? 0,

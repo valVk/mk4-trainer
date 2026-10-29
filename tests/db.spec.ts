@@ -14,7 +14,7 @@ import {
   type AttemptInput,
 } from '@/db/progress'
 import { GLOBAL_PROFILE, createDb, type TrainerDb } from '@/db/schema'
-import { addSong, deleteSong, getSong, getSongProgress, listSongs, resetUnits, saveUnitResult } from '@/db/songs'
+import { addSong, deleteSong, getSong, getSongProgress, listSongs, resetUnits, saveUnitResult, setSongMix } from '@/db/songs'
 
 let counter = 0
 const opened: TrainerDb[] = []
@@ -151,6 +151,14 @@ describe('songs', () => {
     await deleteSong(db, id)
     expect(await getSong(db, id)).toBeUndefined()
     expect(await listSongs(db)).toEqual([])
+  })
+
+  it('keeps the part volumes with the song', async () => {
+    const db = freshDb()
+    const { id } = await addSong(db, { name: 'Song', fileName: 'song.mid', data: bytes(16), size: 16, importedAt: 1 })
+    expect((await getSong(db, id))!.mix).toBeUndefined()
+    await setSongMix(db, id, { 0: 1.3, 2: 0.4 })
+    expect((await getSong(db, id))!.mix).toEqual({ 0: 1.3, 2: 0.4 })
   })
 
   it('keeps existing progress when the database is upgraded to version 2', async () => {

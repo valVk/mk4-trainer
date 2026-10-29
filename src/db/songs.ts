@@ -24,6 +24,10 @@ export async function getSong(db: TrainerDb, id: number): Promise<SongRecord | u
   return db.song.get(id)
 }
 
+export async function setSongMix(db: TrainerDb, id: number, mix: Record<number, number>): Promise<void> {
+  await db.song.update(id, { mix })
+}
+
 export async function deleteSong(db: TrainerDb, id: number): Promise<void> {
   await db.transaction('rw', ['song', 'songProgress'], async () => {
     await db.song.delete(id)

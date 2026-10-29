@@ -12,6 +12,7 @@ import { useSynth } from '@/composables/useSynth'
 import type { SongProgress } from '@/db/schema'
 import { findName, groupOf } from '@/lib/instruments'
 import { buildUnits } from '@/lib/ladder'
+import { MIX_MAX, MIX_MIN, MIX_STEP, gainOf, parseMix, withGain, type SongMix } from '@/lib/mix'
 import { partPhrases, partRole, songSections, suggestOrder, type PartRole, type Section } from '@/lib/phrases'
 import { barActivity, parseSong, type Part, type Song } from '@/lib/song'
 import { midiName } from '@/lib/theory'
@@ -32,6 +33,8 @@ const sections = shallowRef<Section[]>([])
 const partProgress = shallowRef<Record<number, Record<string, SongProgress>>>({})
 /** Channels switched off on the map. */
 const muted = reactive(new Set<number>())
+/** Volume per part, saved with the song. */
+const mix = shallowRef<SongMix>({})
 
 async function open() {
   const id = Number(route.params.id)
@@ -42,6 +45,8 @@ async function open() {
     return
   }
   record.value = found
+  mix.value = parseMix(found.mix)
+  player.setMix(mix.value)
   song.value = parseSong(found.data, found.fileName)
   sections.value = songSections(song.value)
   partProgress.value = await progress.loadSongProgress(id)
@@ -62,6 +67,24 @@ function toggle(channel: number) {
   else muted.add(channel)
   if (player.loaded.value) player.setChannelMuted(channel, muted.has(channel))
 }
+
+/** Moving a level is heard at once; it is saved when the finger lets go. */
+function setLevel(channel: number, percent: number | undefined) {
+  if (percent === undefined) return
+  mix.value = withGain(mix.value, channel, percent / 100)
+  player.setMix(mix.value)
+}
+
+function saveMix() {
+  void progress.saveSongMix(Number(route.params.id), { ...mix.value })
+}
+
+function resetLevel(channel: number) {
+  setLevel(channel, 100)
+  saveMix()
+}
+
+const percentOf = (channel: number) => Math.round(gainOf(mix.value, channel) * 100)
 
 function setAll(audible: boolean) {
   for (const part of song.value?.parts ?? []) {
@@ -230,6 +253,28 @@ async function togglePlay() {
               </span>
             </span>
           </button>
+          <div class="row__level">
+            <USlider
+              :model-value="percentOf(row.part.channel)"
+              :min="MIX_MIN * 100"
+              :max="MIX_MAX * 100"
+              :step="MIX_STEP * 100"
+              size="md"
+              :aria-label="t('songs.levelLabel', { name: row.label })"
+              @update:model-value="(value) => setLevel(row.part.channel, value as number)"
+              @change="saveMix"
+            />
+            <!-- The number shows the level; a tap puts the part back to the file's own level. -->
+            <button
+              type="button"
+              class="row__percent tabular-nums"
+              :class="{ 'row__percent--changed': percentOf(row.part.channel) !== 100 }"
+              :aria-label="t('songs.levelReset', { name: row.label })"
+              @click="resetLevel(row.part.channel)"
+            >
+              {{ percentOf(row.part.channel) }}%
+            </button>
+          </div>
           <UButton
             :to="`/songs/${route.params.id}/${row.part.channel}`"
             icon="i-lucide-graduation-cap"
@@ -287,9 +332,29 @@ async function togglePlay() {
 .row {
   display: grid;
   /* Same columns as .sections-row, so the section band lines up with the lanes */
-  grid-template-columns: minmax(0, 15rem) 8rem minmax(0, 1fr);
+  grid-template-columns: minmax(0, 15rem) 9rem 8rem minmax(0, 1fr);
   gap: 0.75rem;
   align-items: center;
+}
+
+.row__level {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.row__percent {
+  flex: none;
+  width: 2.75rem;
+  min-height: 2.75rem;
+  border-radius: 0.5rem;
+  font-size: 0.8125rem;
+  color: var(--ui-text-muted);
+}
+
+.row__percent--changed {
+  font-weight: 600;
+  color: var(--color-pad-sky);
 }
 
 .row__toggle {
@@ -348,14 +413,14 @@ async function togglePlay() {
 
 .sections-row {
   display: grid;
-  grid-template-columns: minmax(0, 15rem) 8rem minmax(0, 1fr);
+  grid-template-columns: minmax(0, 15rem) 9rem 8rem minmax(0, 1fr);
   gap: 0.75rem;
   align-items: center;
   margin-top: 1rem;
 }
 
 .sections-row__label {
-  grid-column: 1 / 3;
+  grid-column: 1 / 4;
   font-size: 0.875rem;
 }
 

@@ -48,6 +48,8 @@ export interface SongRecord {
   data: ArrayBuffer
   size: number
   importedAt: number
+  /** Volume per part set on the song map (lib/mix); missing until a part is changed. */
+  mix?: Record<number, number>
 }
 
 /** Ladder progress of one unit (phrase, section or whole part) of one part of a song. */
