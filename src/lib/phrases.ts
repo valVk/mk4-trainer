@@ -199,3 +199,18 @@ export function suggestOrder(parts: readonly Part[]): { channel: number, role: P
     .sort((a, b) => ROLE_ORDER[a.role] - ROLE_ORDER[b.role] || a.steps - b.steps || a.channel - b.channel)
     .map(({ channel, role }) => ({ channel, role }))
 }
+
+/** Seconds into a section after which «back» returns to its start instead of the section before, like a music player. */
+export const BACK_GRACE_S = 1
+
+/** Where «previous section» goes from `time`: the start of the current section, or of the one before it near its start. */
+export function previousSectionStart(sections: readonly Pick<Section, 'start'>[], time: number): number {
+  let target = 0
+  for (const section of sections) if (section.start < time - BACK_GRACE_S) target = section.start
+  return target
+}
+
+/** Where «next section» goes from `time`; null in the last section. */
+export function nextSectionStart(sections: readonly Pick<Section, 'start'>[], time: number): number | null {
+  return sections.find((section) => section.start > time + 0.01)?.start ?? null
+}

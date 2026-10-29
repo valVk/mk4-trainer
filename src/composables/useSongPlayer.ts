@@ -25,6 +25,8 @@ let frame = 0
  * is kept here and applied again once playback runs.
  */
 let pausedTarget: number | null = null
+/** A place chosen before the song was loaded (sound still off): playback starts there. */
+let startAt = 0
 /** Volume per part of the open song (set on the song map); applied whenever the song is loaded. */
 let mix: SongMix = {}
 
@@ -75,7 +77,13 @@ async function load(binary: ArrayBuffer, fileName: string): Promise<void> {
     setChannelGain(channel, gainOf(mix, channel))
   }
   duration.value = current.duration
-  time.value = 0
+  const start = Math.min(startAt, current.duration)
+  startAt = 0
+  if (start > 0) {
+    current.currentTime = start
+    pausedTarget = start
+  }
+  time.value = start
   loaded.value = true
   playing.value = false
 }
@@ -110,7 +118,12 @@ function pause(): void {
  */
 function seek(seconds: number, atNote = false): void {
   const current = sequencer.value
-  if (!current) return
+  if (!current || !loaded.value) {
+    // Not loaded yet: keep the place for the first play.
+    startAt = Math.max(0, seconds)
+    time.value = startAt
+    return
+  }
   const target = Math.max(0, Math.min(seconds, current.duration))
   current.currentTime = target
   pausedTarget = playing.value || atNote ? null : target
@@ -135,6 +148,8 @@ function unload(): void {
   }
   useSynth().setLearnerTarget(null)
   mix = {}
+  startAt = 0
+  time.value = 0
   loaded.value = false
 }
 

@@ -13,7 +13,7 @@ import type { SongProgress } from '@/db/schema'
 import { findName, groupOf } from '@/lib/instruments'
 import { buildUnits } from '@/lib/ladder'
 import { MIX_MAX, MIX_MIN, MIX_STEP, gainOf, parseMix, withGain, type SongMix } from '@/lib/mix'
-import { partPhrases, partRole, songSections, suggestOrder, type PartRole, type Section } from '@/lib/phrases'
+import { nextSectionStart, partPhrases, partRole, previousSectionStart, songSections, suggestOrder, type PartRole, type Section } from '@/lib/phrases'
 import { barActivity, parseSong, type Part, type Song } from '@/lib/song'
 import { midiName } from '@/lib/theory'
 
@@ -155,8 +155,26 @@ const sectionBlocks = computed(() => sections.value.map((section) => ({
   width: ((section.endBar - section.startBar) / barCount.value) * 100,
 })))
 
+/** Works before the sound is on too: playback then starts from there. */
 function seekTo(seconds: number) {
-  if (player.loaded.value) player.seek(seconds)
+  player.seek(seconds)
+}
+
+/** Rewind and fast forward by a few seconds. */
+const SKIP_S = 10
+
+function skip(seconds: number) {
+  const duration = song.value?.duration ?? 0
+  seekTo(Math.min(duration, Math.max(0, player.time.value + seconds)))
+}
+
+function previousSection() {
+  seekTo(previousSectionStart(sections.value, player.time.value))
+}
+
+function nextSection() {
+  const start = nextSectionStart(sections.value, player.time.value)
+  if (start !== null) seekTo(start)
 }
 
 const formatTime = (seconds: number) => `${Math.floor(seconds / 60)}:${String(Math.floor(seconds % 60)).padStart(2, '0')}`
@@ -169,9 +187,9 @@ watch(() => player.time.value, (time) => {
 
 function seekFromEvent(event: MouseEvent) {
   const current = song.value
-  if (!current || !player.loaded.value) return
+  if (!current) return
   const box = (event.currentTarget as HTMLElement).getBoundingClientRect()
-  player.seek(((event.clientX - box.left) / box.width) * current.duration)
+  seekTo(((event.clientX - box.left) / box.width) * current.duration)
 }
 
 /** The first tap also turns the sound on, then plays once the song is loaded. */
@@ -202,6 +220,12 @@ async function togglePlay() {
           :label="player.playing.value ? t('songs.pause') : t('songs.play')"
           @click="togglePlay"
         />
+        <div class="seek" role="group" :aria-label="t('songs.seekGroup')">
+          <UButton icon="i-lucide-skip-back" color="neutral" variant="soft" size="lg" :aria-label="t('songs.previousSection')" @click="previousSection" />
+          <UButton icon="i-lucide-rewind" color="neutral" variant="soft" size="lg" :aria-label="t('songs.rewind', { n: SKIP_S })" @click="skip(-SKIP_S)" />
+          <UButton icon="i-lucide-fast-forward" color="neutral" variant="soft" size="lg" :aria-label="t('songs.forward', { n: SKIP_S })" @click="skip(SKIP_S)" />
+          <UButton icon="i-lucide-skip-forward" color="neutral" variant="soft" size="lg" :aria-label="t('songs.nextSection')" @click="nextSection" />
+        </div>
         <SongClock class="time text-highlighted" :duration="song.duration" />
         <div class="ml-auto flex gap-2">
           <UButton color="neutral" variant="soft" size="lg" icon="i-lucide-volume-2" :label="t('songs.allOn')" @click="setAll(true)" />
@@ -309,6 +333,11 @@ async function togglePlay() {
   align-items: center;
   gap: 1rem;
   margin-top: 1.5rem;
+}
+
+.seek {
+  display: flex;
+  gap: 0.375rem;
 }
 
 .time {

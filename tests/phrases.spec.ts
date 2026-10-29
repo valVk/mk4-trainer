@@ -3,7 +3,7 @@ import { resolve } from 'node:path'
 
 import { describe, expect, it } from 'vitest'
 
-import { activeRuns, partPhrases, partRole, phraseSignature, songSections, suggestOrder } from '@/lib/phrases'
+import { activeRuns, nextSectionStart, partPhrases, partRole, phraseSignature, previousSectionStart, songSections, suggestOrder } from '@/lib/phrases'
 import { buildSteps, parseSong, type Part, type SongNote } from '@/lib/song'
 
 /** 2 s per bar (120 BPM, 4/4). */
@@ -138,5 +138,21 @@ describe.skipIf(!existsSync(LOCAL_SONG))('local song (local file)', () => {
     expect(sections.length).toBeGreaterThan(3)
     expect(sections.every((s) => s.endBar - s.startBar >= 4 || s.index === sections.length - 1)).toBe(true)
     expect(suggestOrder(song!.parts)[0]!.role).toBe('bass')
+  })
+})
+
+describe('moving by sections', () => {
+  const sections = [{ start: 0 }, { start: 10 }, { start: 25 }]
+
+  it('goes back to the start of the current section, or the one before near its start', () => {
+    expect(previousSectionStart(sections, 18)).toBe(10)
+    expect(previousSectionStart(sections, 10.5)).toBe(0)
+    expect(previousSectionStart(sections, 0.5)).toBe(0)
+  })
+
+  it('goes on to the next section, none after the last', () => {
+    expect(nextSectionStart(sections, 0)).toBe(10)
+    expect(nextSectionStart(sections, 10)).toBe(25)
+    expect(nextSectionStart(sections, 30)).toBeNull()
   })
 })
