@@ -285,7 +285,7 @@ async function togglePlay() {
               :step="MIX_STEP * 100"
               size="md"
               :aria-label="t('songs.levelLabel', { name: row.label })"
-              @update:model-value="(value) => setLevel(row.part.channel, value as number)"
+              @update:model-value="setLevel(row.part.channel, $event)"
               @change="saveMix"
             />
             <!-- The number shows the level; a tap puts the part back to the file's own level. -->
