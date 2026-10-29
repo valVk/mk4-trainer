@@ -36,7 +36,7 @@ defineProps<{
   align-items: flex-start;
   gap: 0.5rem;
   min-height: 10rem;
-  padding: 1.25rem;
+  padding: var(--pad-padding, 1.25rem);
   border-radius: 1.25rem;
   text-align: left;
   color: #fff;
@@ -95,15 +95,16 @@ defineProps<{
 }
 
 .pad__icon {
-  width: 2.25rem;
-  height: 2.25rem;
+  /* The page sets these when pads grow with the screen, so every pad keeps the same proportions. */
+  width: var(--pad-icon, 2.25rem);
+  height: var(--pad-icon, 2.25rem);
   margin-bottom: auto;
 }
 
 .pad__label {
   max-width: 100%;
   font-family: var(--font-display);
-  font-size: clamp(1rem, 2.4vw, 1.25rem);
+  font-size: var(--pad-label, clamp(1rem, 2.4vw, 1.25rem));
   hyphens: auto;
   overflow-wrap: anywhere;
   font-weight: 600;

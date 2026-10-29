@@ -115,6 +115,11 @@ const { profile } = useProgress()
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 1.25rem;
+  /* Pads grow with the screen: icon, label and padding grow with the pad grid, the same on all five. */
+  container-type: inline-size;
+  --pad-icon: clamp(2.25rem, 9cqi, 5rem);
+  --pad-label: clamp(1.125rem, 4cqi, 2rem);
+  --pad-padding: clamp(1.25rem, 4cqi, 2rem);
 }
 
 /* Tablet landscape (Galaxy Tab S10+ is 1400 x ~800 CSS px): the pads fill the screen height. */
@@ -130,6 +135,9 @@ const { profile } = useProgress()
 
   .pads {
     grid-template-rows: 1fr 1fr minmax(6rem, 0.6fr) auto;
+    /* On a tall desktop window the pads would grow taller than wide: stop at about square. Tablets never reach this. */
+    height: min(100%, 56rem);
+    align-self: center;
   }
 
   .example {
