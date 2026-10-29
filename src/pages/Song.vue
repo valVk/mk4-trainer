@@ -3,6 +3,7 @@ import { computed, onBeforeUnmount, reactive, ref, shallowRef, watch } from 'vue
 import { useI18n } from 'vue-i18n'
 import { useRoute } from 'vue-router'
 
+import PageHeader from '@/components/PageHeader.vue'
 import SongClock from '@/components/SongClock.vue'
 import SoundControl from '@/components/SoundControl.vue'
 import { useProgress } from '@/composables/useProgress'
@@ -150,21 +151,18 @@ function seekFromEvent(event: MouseEvent) {
   player.seek(((event.clientX - box.left) / box.width) * current.duration)
 }
 
-function togglePlay() {
+/** The first tap also turns the sound on, then plays once the song is loaded. */
+async function togglePlay() {
   if (player.playing.value) player.pause()
-  else player.play()
+  else if (await player.ensureLoaded()) player.play()
 }
 </script>
 
 <template>
   <main ref="page" class="page">
-    <header class="flex flex-wrap items-center gap-3 -ml-3">
-      <UButton to="/songs" icon="i-lucide-arrow-left" color="neutral" variant="ghost" size="xl" :aria-label="t('songs.title')" />
-      <h1 class="title text-highlighted">{{ record?.name ?? t('songs.title') }}</h1>
-      <div class="ml-auto">
-        <SoundControl />
-      </div>
-    </header>
+    <PageHeader :title="record?.name ?? t('songs.title')" back="/songs" :back-label="t('songs.title')">
+      <SoundControl />
+    </PageHeader>
 
     <UAlert v-if="notFound" class="mt-6" color="warning" variant="subtle" icon="i-lucide-circle-help" :title="t('songs.notFound')" />
 
@@ -177,12 +175,11 @@ function togglePlay() {
         <UButton
           :icon="player.playing.value ? 'i-lucide-pause' : 'i-lucide-play'"
           size="xl"
-          :disabled="!player.loaded.value"
+          :loading="synth.status.value === 'loading'"
           :label="player.playing.value ? t('songs.pause') : t('songs.play')"
           @click="togglePlay"
         />
         <SongClock class="time text-highlighted" :duration="song.duration" />
-        <span v-if="!player.loaded.value" class="text-muted text-sm">{{ t('songs.needSound') }}</span>
         <div class="ml-auto flex gap-2">
           <UButton color="neutral" variant="soft" size="lg" icon="i-lucide-volume-2" :label="t('songs.allOn')" @click="setAll(true)" />
           <UButton color="neutral" variant="ghost" size="lg" icon="i-lucide-volume-x" :label="t('songs.allOff')" @click="setAll(false)" />
@@ -243,12 +240,12 @@ function togglePlay() {
             :label="t('songs.practice')"
             :aria-label="t('songs.practiceLabel', { name: row.label })"
           />
-          <div class="row__lane" @click="seekFromEvent">
+          <button type="button" class="row__lane" :aria-label="t('songs.seekLabel', { name: row.label })" @click="seekFromEvent">
             <svg :viewBox="`0 0 ${barCount} 1`" preserveAspectRatio="none" class="lane" aria-hidden="true">
               <rect v-for="run in row.runs" :key="run.start" :x="run.start" y="0.15" :width="run.length" height="0.7" rx="0.3" class="lane__block" :class="{ 'lane__block--drum': row.part.isDrum }" />
             </svg>
             <span class="playhead" aria-hidden="true" />
-          </div>
+          </button>
         </li>
       </ol>
     </template>
@@ -256,20 +253,6 @@ function togglePlay() {
 </template>
 
 <style scoped>
-.page {
-  max-width: 80rem;
-  margin: 0 auto;
-  padding: clamp(1rem, 3vw, 2.5rem);
-}
-
-.title {
-  font-family: var(--font-display);
-  font-size: clamp(1.5rem, 3vw, 2.25rem);
-  font-weight: 700;
-  min-width: 0;
-  overflow-wrap: anywhere;
-}
-
 .meta {
   margin-top: 0.5rem;
   font-size: 1.0625rem;
@@ -397,6 +380,8 @@ function togglePlay() {
 
 .row__lane {
   position: relative;
+  display: block;
+  width: 100%;
   height: 2.25rem;
   border-radius: 0.5rem;
   background: var(--ui-bg-muted);

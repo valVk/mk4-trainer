@@ -181,7 +181,8 @@ onBeforeUnmount(() => {
 .keys {
   position: relative;
   display: flex;
-  height: clamp(9rem, 32vh, 15rem);
+  /* Pages can set --keys-height: the song screen keeps the keys low to give the falling notes room. */
+  height: var(--keys-height, clamp(9rem, 36vh, 19rem));
   touch-action: none;
   -webkit-touch-callout: none;
 }
@@ -277,6 +278,13 @@ onBeforeUnmount(() => {
   .key,
   .key--held {
     transform: none;
+  }
+}
+
+/* Short landscape screens (Galaxy Tab S10 FE: 1152 x ~650 CSS px) */
+@media (orientation: landscape) and (max-height: 700px) {
+  .keys {
+    height: var(--keys-height, clamp(8rem, 30vh, 15rem));
   }
 }
 </style>

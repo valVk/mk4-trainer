@@ -152,7 +152,7 @@ export class VirtualSource implements NoteSource {
   pressNote(note: number, velocity = VIRTUAL_VELOCITY): void {
     if (this.pressedTaps.has(note)) return
     this.pressedTaps.add(note)
-    this.emitter.emit({ type: 'noteOn', note, velocity, channel: VIRTUAL_CHANNEL, source: 'virtual' })
+    this.emitter.emit({ type: 'noteOn', note, velocity, channel: VIRTUAL_CHANNEL, source: 'virtual', onScreen: true })
   }
 
   releaseNote(note: number): void {
@@ -160,8 +160,8 @@ export class VirtualSource implements NoteSource {
     this.emitter.emit({ type: 'noteOff', note, channel: VIRTUAL_CHANNEL, source: 'virtual' })
   }
 
-  pressPad(pad: number, velocity = VIRTUAL_VELOCITY): void {
-    this.emitter.emit({ type: 'pad', pad, velocity, source: 'virtual' })
+  pressPad(pad: number, velocity = VIRTUAL_VELOCITY, onScreen = true): void {
+    this.emitter.emit({ type: 'pad', pad, velocity, source: 'virtual', onScreen })
   }
 
   shiftOctave(octaves: number): void {
@@ -187,7 +187,7 @@ export class VirtualSource implements NoteSource {
     }
     const pad = virtualPadForCode(event.code)
     if (pad !== null) {
-      this.pressPad(pad)
+      this.pressPad(pad, VIRTUAL_VELOCITY, false)
       event.preventDefault()
     }
   }

@@ -16,17 +16,18 @@ export function rangeStartFor(note: number): number {
   return Math.min(LAST_START - pitchClass(LAST_START), Math.max(0, note - pitchClass(note)))
 }
 
+/** Whether every key is inside the 25-key window that starts at `start`. */
+export function fitsWindow(keys: readonly number[], start: number): boolean {
+  return keys.every((key) => key >= start && key < start + KEYBOARD_KEYS)
+}
+
 /**
  * Where the keyboard should start now. It stays put while every held note fits,
  * so it does not jump around on each release; it moves only when a note falls outside.
  */
 export function followRange(currentStart: number, held: readonly number[]): number {
   if (held.length === 0) return currentStart
-  const lowest = Math.min(...held)
-  const highest = Math.max(...held)
-  const end = currentStart + KEYBOARD_KEYS - 1
-  if (lowest >= currentStart && highest <= end) return currentStart
-  return rangeStartFor(lowest)
+  return fitsWindow(held, currentStart) ? currentStart : rangeStartFor(Math.min(...held))
 }
 
 export interface KeyboardKey {

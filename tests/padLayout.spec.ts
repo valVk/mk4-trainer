@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 
-import { drumKind, padLayout, padSteps } from '@/lib/padLayout'
-import { buildSteps, type SongNote } from '@/lib/song'
+import { drumKind, padLayout } from '@/lib/padLayout'
+import type { SongNote } from '@/lib/song'
 
 const note = (key: number, start: number): SongNote => ({ key, start, length: 0.2, velocity: 100 })
 const notesOf = (spec: Record<number, number>) =>
@@ -34,14 +34,8 @@ describe('padLayout', () => {
   })
 })
 
-describe('drumKind and padSteps', () => {
+describe('drumKind', () => {
   it('names common GM drums', () => {
     expect([36, 38, 42, 46, 49, 51, 45, 99].map(drumKind)).toEqual(['kick', 'snare', 'hihatClosed', 'hihatOpen', 'crash', 'ride', 'tom', 'other'])
-  })
-
-  it('turns steps into pads hit together', () => {
-    const layout = padLayout({ isDrum: true, notes: notesOf({ 35: 2, 42: 2 }) })!
-    const steps = buildSteps([note(35, 0), note(42, 0), note(42, 0.5)])
-    expect(padSteps(steps, layout)).toEqual([{ time: 0, pads: [1, 3] }, { time: 0.5, pads: [3] }])
   })
 })

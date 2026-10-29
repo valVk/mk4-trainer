@@ -3,6 +3,7 @@ import { computed, onMounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useToast } from '@nuxt/ui/composables'
 
+import PageHeader from '@/components/PageHeader.vue'
 import { useNoteNames } from '@/composables/useNoteNames'
 import { useProgress } from '@/composables/useProgress'
 import { BANKS, useSynth, type BankId } from '@/composables/useSynth'
@@ -138,10 +139,9 @@ async function confirmImport() {
 
 <template>
   <main class="page">
-    <header class="flex items-center gap-3 -ml-3">
-      <UButton to="/" icon="i-lucide-arrow-left" color="neutral" variant="ghost" size="xl" :aria-label="t('nav.home')" />
-      <h1 class="title text-highlighted">{{ t('progress.title') }}</h1>
-    </header>
+    <PageHeader :title="t('progress.title')">
+      <ULink to="/licenses" class="text-dimmed text-sm underline underline-offset-2">{{ t('home.licenses') }}</ULink>
+    </PageHeader>
 
     <UAlert
       v-if="!available"
@@ -154,7 +154,7 @@ async function confirmImport() {
     />
 
     <div class="layout">
-      <section class="flex flex-col gap-6">
+      <section class="cards flex flex-col gap-6">
         <UCard variant="subtle">
           <template #header>
             <h2 class="subtitle text-highlighted">{{ t('progress.player') }}</h2>
@@ -254,31 +254,17 @@ async function confirmImport() {
               />
             </div>
             <p class="level__stats text-muted tabular-nums">
-              {{ t('progress.levelStats', { correct: levels[item.id]?.correct ?? 0, streak: levels[item.id]?.bestStreak ?? 0 }) }}
+              <span class="stats-long">{{ t('progress.levelStats', { correct: levels[item.id]?.correct ?? 0, streak: levels[item.id]?.bestStreak ?? 0 }) }}</span>
+              <span class="stats-short">{{ t('progress.levelStatsShort', { correct: levels[item.id]?.correct ?? 0, streak: levels[item.id]?.bestStreak ?? 0 }) }}</span>
             </p>
           </li>
         </ol>
-        <p class="mt-6 text-dimmed text-sm flex gap-4">
-          <ULink to="/licenses" class="underline underline-offset-2">{{ t('home.licenses') }}</ULink>
-        </p>
       </section>
     </div>
   </main>
 </template>
 
 <style scoped>
-.page {
-  max-width: 76rem;
-  margin: 0 auto;
-  padding: clamp(1rem, 3vw, 2.5rem);
-}
-
-.title {
-  font-family: var(--font-display);
-  font-size: clamp(1.75rem, 3vw, 2.25rem);
-  font-weight: 700;
-}
-
 .layout {
   display: grid;
   grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
@@ -320,6 +306,10 @@ async function confirmImport() {
   font-size: 0.875rem;
 }
 
+.stats-short {
+  display: none;
+}
+
 .star {
   color: var(--star-off);
 }
@@ -330,6 +320,54 @@ async function confirmImport() {
 
 .star--on :deep(path) {
   fill: currentColor;
+}
+
+/* Tablet landscape (Galaxy Tab S10+ is 1400 x ~800 CSS px): cards in two balanced columns, levels as a 2 x 4 grid, no scroll. */
+@media (min-width: 1100px) and (orientation: landscape) {
+  .layout {
+    grid-template-columns: minmax(0, 2fr) minmax(0, 1.2fr);
+    margin-top: 1rem;
+  }
+
+  .cards {
+    display: block;
+    columns: 2;
+    column-gap: 1.5rem;
+  }
+
+  .cards > * {
+    break-inside: avoid;
+    margin-bottom: 1.25rem;
+  }
+
+  .cards :deep([data-slot="header"]),
+  .cards :deep([data-slot="body"]) {
+    padding: 0.875rem 1.25rem;
+  }
+
+  .levels {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 0.625rem;
+  }
+
+  .level {
+    align-content: start;
+    padding: 0.75rem 0.875rem;
+  }
+
+  .level :deep(svg) {
+    width: 1.125rem;
+    height: 1.125rem;
+  }
+
+  .stats-long {
+    display: none;
+  }
+
+  .stats-short {
+    display: inline;
+  }
 }
 
 @media (max-width: 860px) {

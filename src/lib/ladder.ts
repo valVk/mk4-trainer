@@ -2,7 +2,6 @@
 // whole part), the rungs of each unit, pass rules and scoring. Pure code, no Vue, no UI text.
 
 import type { Phrase, Section } from './phrases'
-import { coversStep } from './practice'
 import type { Step } from './song'
 import { pitchClass } from './theory'
 
@@ -28,15 +27,16 @@ export interface Unit {
   rungs: Rung[]
 }
 
+// After listening, the speed only goes up: first with the song waiting for the child, then in time.
 const PHRASE_RUNGS: Rung[] = [
   { mode: 'listen', rate: 1 },
   { mode: 'wait', rate: 0.6 },
-  { mode: 'wait', rate: 1 },
-  { mode: 'tempo', rate: 0.7 },
+  { mode: 'tempo', rate: 0.6 },
+  { mode: 'tempo', rate: 0.8 },
   { mode: 'tempo', rate: 1 },
 ]
 const SECTION_RUNGS: Rung[] = [
-  { mode: 'wait', rate: 1 },
+  { mode: 'wait', rate: 0.8 },
   { mode: 'tempo', rate: 0.8 },
   { mode: 'tempo', rate: 1 },
 ]
@@ -93,6 +93,11 @@ export function buildUnits(phrases: readonly Phrase[], sections: readonly Sectio
   return units
 }
 
+/** Rungs the child may open: the ones passed and the next one; later rungs open by passing. */
+export function openRungs(unit: Pick<Unit, 'rungs'>, passedRungs: number): number {
+  return Math.min(unit.rungs.length, passedRungs + 1)
+}
+
 /** Stars from passed rungs: the last three rungs of a unit give one star each. */
 export function starsFor(unit: Pick<Unit, 'rungs'>, passedRungs: number): number {
   return Math.max(0, Math.min(3, passedRungs - (unit.rungs.length - 3)))
@@ -108,38 +113,146 @@ export function isWrongPress(step: Step, key: number, anyOctave: boolean): boole
   return anyOctave ? !step.keys.some((k) => pitchClass(k) === pitchClass(key)) : !step.keys.includes(key)
 }
 
+/** Wrong presses allowed: a share of the steps, at least one. */
+export function allowedMistakes(steps: number): number {
+  return Math.max(1, Math.floor(steps * WAIT_MISTAKE_SHARE))
+}
+
 export function waitPasses(steps: number, mistakes: number): boolean {
-  return mistakes <= Math.max(1, Math.floor(steps * WAIT_MISTAKE_SHARE))
+  return mistakes <= allowedMistakes(steps)
 }
 
 export interface Press {
   key: number
-  /** Song time of the press, in seconds. */
+  /** Song time of the press, in seconds, already moved back to the moment the child heard. */
   time: number
+}
+
+/**
+ * A finger on a 25-key mini keyboard often brushes the next key together with the right one.
+ * A wrong key this close (semitones) to a right press and this close in real time is not a mistake.
+ */
+export const GRAZE_SEMITONES = 2
+export const GRAZE_REAL_S = 0.08
+
+/** Whether a wrong press is only a neighbour brushed together with one of the right presses. */
+export function isGraze(press: Press, rightPresses: readonly Press[], rate: number): boolean {
+  const window = GRAZE_REAL_S * rate
+  return rightPresses.some((right) => Math.abs(right.key - press.key) <= GRAZE_SEMITONES && Math.abs(right.time - press.time) <= window)
+}
+
+export interface WaitPress extends Press {
+  /** Whether the press was wrong for the step the song waited on. */
+  wrong: boolean
+}
+
+/** Wait mode: wrong presses, not counting neighbours brushed together with a right key. */
+export function countMistakes(presses: readonly WaitPress[], rate: number): number {
+  const right = presses.filter((press) => !press.wrong)
+  return presses.filter((press) => press.wrong && !isGraze(press, right, rate)).length
 }
 
 export interface TempoScore {
   hits: number
   total: number
   accuracy: number
+  /** Presses that belong to no step (not counting brushed neighbours and doubled notes). */
+  extra: number
   /** Per step: hit in time, or missed. */
   results: ('hit' | 'miss')[]
 }
 
+const sameNote = (a: number, b: number, anyOctave: boolean) => (anyOctave ? pitchClass(a) === pitchClass(b) : a === b)
+
 /**
- * Tempo mode: a step is hit when all its keys were pressed within the window around its time.
- * The window is TEMPO_WINDOW_REAL_S of real time, so it is narrower in song time at lower speeds.
+ * Tempo mode, graded like a teacher listens: a step is hit when each of its keys has its own press
+ * within the window around the step. A press counts once, for the step it is closest to, so one
+ * press cannot cover two repeated notes. The window is TEMPO_WINDOW_REAL_S of real time, so it is
+ * narrower in song time at lower speeds. Presses that belong to nothing count as extra, so pressing
+ * every key does not pass.
  */
 export function scoreTempo(steps: readonly Step[], presses: readonly Press[], rate: number, anyOctave: boolean): TempoScore {
   const window = TEMPO_WINDOW_REAL_S * rate
-  const results = steps.map((step) => {
-    const near = presses.filter((press) => Math.abs(press.time - step.time) <= window).map((press) => press.key)
-    return coversStep(step, near, anyOctave) ? 'hit' as const : 'miss' as const
+  const used = new Set<number>()
+  // The step a press belongs to for one of its keys: the closest step holding that note.
+  const closestStep = (press: Press) => {
+    let best = -1
+    steps.forEach((step, index) => {
+      if (!step.keys.some((key) => sameNote(key, press.key, anyOctave))) return
+      if (best === -1 || Math.abs(step.time - press.time) < Math.abs(steps[best]!.time - press.time)) best = index
+    })
+    return best
+  }
+  const owner = presses.map(closestStep)
+  const results = steps.map((step, index) => {
+    const picks: number[] = []
+    for (const key of step.keys) {
+      let pick = -1
+      presses.forEach((press, i) => {
+        if (used.has(i) || picks.includes(i) || owner[i] !== index || !sameNote(key, press.key, anyOctave)) return
+        if (Math.abs(press.time - step.time) > window) return
+        if (pick === -1 || Math.abs(press.time - step.time) < Math.abs(presses[pick]!.time - step.time)) pick = i
+      })
+      if (pick === -1) return 'miss' as const
+      picks.push(pick)
+    }
+    picks.forEach((i) => used.add(i))
+    return 'hit' as const
   })
+  const first = (steps[0]?.time ?? 0) - window
+  const last = (steps[steps.length - 1]?.time ?? 0) + window
+  const matched = presses.filter((_, i) => used.has(i))
+  const extra = presses.filter((press, i) => {
+    if (used.has(i) || press.time < first || press.time > last) return false
+    // The same note doubled in another octave, or struck twice, next to a step that has it.
+    const doubled = steps.some((step) => Math.abs(step.time - press.time) <= window && step.keys.some((key) => pitchClass(key) === pitchClass(press.key)))
+    return !doubled && !isGraze(press, matched, rate)
+  }).length
   const hits = results.filter((result) => result === 'hit').length
-  return { hits, total: steps.length, accuracy: steps.length ? hits / steps.length : 0, results }
+  return { hits, total: steps.length, accuracy: steps.length ? hits / steps.length : 0, extra, results }
 }
 
 export function tempoPasses(score: TempoScore): boolean {
-  return score.accuracy >= TEMPO_PASS_ACCURACY
+  return score.accuracy >= TEMPO_PASS_ACCURACY && score.extra <= allowedMistakes(score.total)
+}
+
+export interface AttemptScore {
+  passed: boolean
+  mode: RungMode
+  /** Steps hit in time (tempo) or played (wait). */
+  hits: number
+  /** Wait mode: wrong presses, not counting brushed neighbours. */
+  mistakes: number
+  /** Tempo mode: presses that belong to no step. */
+  extra: number
+  total: number
+  /** Tempo mode: share of steps hit; 0 otherwise. */
+  accuracy: number
+}
+
+export interface Attempt {
+  mode: RungMode
+  steps: readonly Step[]
+  /** Tempo mode: every press. */
+  presses: readonly Press[]
+  /** Wait mode: every press while a step was due. */
+  waitPresses: readonly WaitPress[]
+  /** Wait mode: steps played before the attempt ended. */
+  played: number
+  rate: number
+  anyOctave: boolean
+}
+
+/** The verdict on one attempt at a unit, by the rules of its mode. */
+export function scoreAttempt(attempt: Attempt): AttemptScore {
+  const total = attempt.steps.length
+  if (attempt.mode === 'tempo') {
+    const score = scoreTempo(attempt.steps, attempt.presses, attempt.rate, attempt.anyOctave)
+    return { passed: tempoPasses(score), mode: 'tempo', hits: score.hits, mistakes: 0, extra: score.extra, total, accuracy: score.accuracy }
+  }
+  if (attempt.mode === 'wait') {
+    const mistakes = countMistakes(attempt.waitPresses, attempt.rate)
+    return { passed: attempt.played >= total && waitPasses(total, mistakes), mode: 'wait', hits: attempt.played, mistakes, extra: 0, total, accuracy: 0 }
+  }
+  return { passed: true, mode: 'listen', hits: 0, mistakes: 0, extra: 0, total, accuracy: 0 }
 }

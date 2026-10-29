@@ -54,3 +54,12 @@ export async function saveUnitResult(db: TrainerDb, result: UnitResult): Promise
     return next
   })
 }
+
+/** Forgets ladder progress of one part: the given units, or every unit of the part. */
+export async function resetUnits(db: TrainerDb, profileId: number, songId: number, channel: number, units?: readonly string[]): Promise<void> {
+  await db.songProgress
+    .where('[profileId+songId]')
+    .equals([profileId, songId])
+    .filter((row) => row.channel === channel && (!units || units.includes(row.unit)))
+    .delete()
+}

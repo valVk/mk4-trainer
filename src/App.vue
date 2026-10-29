@@ -4,6 +4,7 @@ import { useI18n } from 'vue-i18n'
 import { useRouter } from 'vue-router'
 
 import PwaUpdate from '@/components/PwaUpdate.vue'
+import SoundGate from '@/components/SoundGate.vue'
 import { useNoteSource } from '@/composables/useNoteSource'
 import { usePadActions } from '@/composables/usePadActions'
 import { useProgress } from '@/composables/useProgress'
@@ -32,6 +33,13 @@ usePadActions({
       <footer class="footer text-dimmed text-xs tabular-nums">{{ footer }}</footer>
     </div>
     <PwaUpdate />
+    <SoundGate />
+    <!-- Portable devices are landscape only: the installed app is locked by the manifest, a browser tab gets this cover. -->
+    <div class="rotate" role="alert">
+      <UIcon name="i-lucide-rotate-ccw-square" class="rotate__icon" />
+      <p class="rotate__title">{{ t('app.rotateTitle') }}</p>
+      <p class="rotate__hint">{{ t('app.rotateHint') }}</p>
+    </div>
   </UApp>
 </template>
 
@@ -43,8 +51,50 @@ usePadActions({
   min-height: 100dvh;
 }
 
-.shell > :first-child {
+/* :where keeps this weak, so a page can set its own flex (the song screen does in landscape). */
+:where(.shell) > :where(:first-child) {
   flex: 1 0 auto;
+  /* Pages centre themselves with auto margins; without this they shrink to their content. */
+  width: 100%;
+}
+
+.rotate {
+  display: none;
+}
+
+@media (orientation: portrait) and (pointer: coarse) {
+  .rotate {
+    position: fixed;
+    inset: 0;
+    z-index: 100;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 1rem;
+    padding: 2rem;
+    text-align: center;
+    background: var(--ui-bg);
+  }
+}
+
+.rotate__icon {
+  width: 5rem;
+  height: 5rem;
+  color: var(--color-pad-sky);
+}
+
+.rotate__title {
+  font-family: var(--font-display);
+  font-size: 2rem;
+  font-weight: 800;
+  color: var(--ui-text-highlighted);
+}
+
+.rotate__hint {
+  max-width: 28ch;
+  font-size: 1.125rem;
+  color: var(--ui-text-muted);
 }
 
 .footer {

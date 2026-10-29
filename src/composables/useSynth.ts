@@ -66,9 +66,27 @@ let learnerTarget: { channel: number, preset: Instrument, drums?: boolean } | nu
 /** A pad hit has no musical release on the MK4: the note is let go after this long. */
 const PAD_NOTE_MS = 250
 
-/** Reads the SoundFont with download progress; the service worker serves it from cache next time. */
+async function openBankCache(): Promise<Cache | null> {
+  try {
+    return 'caches' in window ? await caches.open(SOUNDFONT_CACHE) : null
+  } catch {
+    return null
+  }
+}
+
+/**
+ * The bank comes from the network once and is kept in the browser's cache storage, then read
+ * from there on every later start, with or without the service worker (it is off in development).
+ */
 async function fetchSoundFont(url: string): Promise<ArrayBuffer> {
   progress.value = 0
+  const cache = await openBankCache()
+  const cached = await cache?.match(url).catch(() => undefined)
+  if (cached) {
+    const buffer = await cached.arrayBuffer()
+    progress.value = 1
+    return buffer
+  }
   const response = await fetch(url)
   if (!response.ok || !response.body) throw new Error(`SoundFont: HTTP ${response.status}`)
   const total = Number(response.headers.get('content-length')) || 0
@@ -89,6 +107,8 @@ async function fetchSoundFont(url: string): Promise<ArrayBuffer> {
     offset += chunk.length
   }
   progress.value = 1
+  // A Blob copies the bytes, so the buffer handed to the synth stays usable.
+  await cache?.put(url, new Response(new Blob([buffer]), { headers: { 'Content-Type': 'application/octet-stream' } })).catch(() => undefined)
   return buffer.buffer
 }
 
@@ -157,28 +177,33 @@ function runLoading(task: () => Promise<void>): Promise<void> {
   return starting
 }
 
+/**
+ * One audio clock for the synth, the song and the metronome, so clicks and notes line up.
+ * Created on first use; that first use must come from a tap or click.
+ */
+function audioContext(): AudioContext {
+  context ??= new AudioContext({ latencyHint: 'interactive' })
+  return context
+}
+
 /** Must run from a tap or click: browsers only start audio after a user gesture. */
 function start(): Promise<void> {
   if (context && synth.value && status.value === 'ready') return context.resume()
   if (synth.value) return runLoading(() => loadBank(synth.value!))
+  const audio = audioContext()
+  // Resume right away, still inside the gesture, before the long download.
+  const resumed = audio.resume()
   return runLoading(async () => {
-    try {
-      context = new AudioContext({ latencyHint: 'interactive' })
-      // Resume right away, still inside the gesture, before the long download.
-      await context.resume()
-      await context.audioWorklet.addModule(processorUrl)
-      const instance = new WorkletSynthesizer(context)
-      instance.connect(context.destination)
-      watchPresets(instance)
-      await loadBank(instance)
-      await instance.isReady
-      synth.value = instance
-      applyInstrument()
-      selectPreset(instance, CUE_CHANNEL, { bank: 0, program: CUE_PROGRAM })
-    } catch (e) {
-      context = null
-      throw e
-    }
+    await resumed
+    await audio.audioWorklet.addModule(processorUrl)
+    const instance = new WorkletSynthesizer(audio)
+    instance.connect(audio.destination)
+    watchPresets(instance)
+    await loadBank(instance)
+    await instance.isReady
+    synth.value = instance
+    applyInstrument()
+    selectPreset(instance, CUE_CHANNEL, { bank: 0, program: CUE_PROGRAM })
   })
 }
 
@@ -276,6 +301,8 @@ export function useSynth() {
     setBank,
     setLearnerTarget,
     playLearnerNote,
+    /** The shared audio clock; works before the bank is loaded (the metronome needs no bank). */
+    audioContext,
     /** The shared synthesizer once sound is on (for the song sequencer). */
     getSynth: (): WorkletSynthesizer | null => synth.value,
     playChord,

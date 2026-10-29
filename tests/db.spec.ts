@@ -14,7 +14,7 @@ import {
   type AttemptInput,
 } from '@/db/progress'
 import { GLOBAL_PROFILE, createDb, type TrainerDb } from '@/db/schema'
-import { addSong, deleteSong, getSong, getSongProgress, listSongs, saveUnitResult } from '@/db/songs'
+import { addSong, deleteSong, getSong, getSongProgress, listSongs, resetUnits, saveUnitResult } from '@/db/songs'
 
 let counter = 0
 const opened: TrainerDb[] = []
@@ -191,6 +191,18 @@ describe('song progress', () => {
     expect(await getSongProgress(db, 2, id)).toHaveLength(1)
     await deleteSong(db, id)
     expect(await db.songProgress.count()).toBe(0)
+  })
+  it('resets one unit or a whole part, and nothing else', async () => {
+    const db = freshDb()
+    await saveUnitResult(db, result('p0', 5, 3))
+    await saveUnitResult(db, result('p1', 2, 0))
+    await saveUnitResult(db, result('p0', 4, 2, 0, 1, 7, 3))
+    await saveUnitResult(db, result('p0', 3, 1, 0, 2))
+    await resetUnits(db, 1, 7, 0, ['p0'])
+    expect((await getSongProgress(db, 1, 7)).map((row) => `${row.channel}:${row.unit}`).sort()).toEqual(['0:p1', '3:p0'])
+    await resetUnits(db, 1, 7, 0)
+    expect((await getSongProgress(db, 1, 7)).map((row) => `${row.channel}:${row.unit}`)).toEqual(['3:p0'])
+    expect(await getSongProgress(db, 2, 7)).toHaveLength(1)
   })
 })
 

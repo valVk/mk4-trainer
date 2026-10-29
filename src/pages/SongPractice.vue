@@ -5,8 +5,13 @@ import { useRoute } from 'vue-router'
 
 import NoteFall from '@/components/NoteFall.vue'
 import PadStrip from '@/components/PadStrip.vue'
+import PageHeader from '@/components/PageHeader.vue'
 import PianoKeyboard from '@/components/PianoKeyboard.vue'
+import ResultCard from '@/components/ResultCard.vue'
+import RungLadder from '@/components/RungLadder.vue'
 import SoundControl from '@/components/SoundControl.vue'
+import UnitList from '@/components/UnitList.vue'
+import { useMetronome } from '@/composables/useMetronome'
 import { useNoteNames } from '@/composables/useNoteNames'
 import { useNoteSource } from '@/composables/useNoteSource'
 import { padsPlayMusic, usePadActions } from '@/composables/usePadActions'
@@ -17,42 +22,34 @@ import { useWakeLock } from '@/composables/useWakeLock'
 import type { SongProgress } from '@/db/schema'
 import { findName, groupOf } from '@/lib/instruments'
 import { rangeStartFor } from '@/lib/keyboard'
+import { songBeats, tapInputOf, type TapInput } from '@/lib/metronome'
 import {
   buildUnits,
   isWrongPress,
   nextUnit,
-  scoreTempo,
+  openRungs,
+  scoreAttempt,
   starsFor,
-  tempoPasses,
-  waitPasses,
+  type AttemptScore,
   type Press,
   type RungMode,
   type Unit,
+  type WaitPress,
 } from '@/lib/ladder'
 import { drumKind, PAD_NOTE_MIN_S, padLayout } from '@/lib/padLayout'
 import { partPhrases, songSections, type Phrase } from '@/lib/phrases'
-import { chooseWindow, coversStep, octaveHint, stepIndexAt, upcomingKeys } from '@/lib/practice'
+import { chooseWindow, coversStep, followWindow, octaveHint, stepIndexAt, upcomingKeys } from '@/lib/practice'
 import { parseSong, type Part, type Song } from '@/lib/song'
 import { chordSymbol, identifyChord, midiName, noteName } from '@/lib/theory'
 
 /** A press up to this long before a step counts for it, so playing a hair early does not stop the song. */
 const EARLY_S = 0.35
 /** Lead-in before a unit (bars) and before the whole part in free mode. */
-const UNIT_LEAD_IN_BARS = 1
+const UNIT_LEAD_IN_BARS = 2
 const FREE_LEAD_IN_BARS = 2
 /** The attempt ends this long after the unit's last bar, so the last notes ring out. */
 const END_TAIL_S = 0.4
 const RATES = [0.5, 0.6, 0.7, 0.8, 1] as const
-
-interface AttemptResult {
-  passed: boolean
-  mode: RungMode
-  /** Tempo mode: steps hit; wait mode: wrong presses. */
-  hits: number
-  mistakes: number
-  total: number
-  accuracy: number
-}
 
 const { t } = useI18n()
 useWakeLock()
@@ -78,6 +75,8 @@ const unitIndex = ref(0)
 const rungIndex = ref(0)
 const freeMode = ref<RungMode>('wait')
 const freeRate = ref<(typeof RATES)[number]>(0.6)
+/** Free mode starts where the teacher's unit was when the switch was turned off (null: the part's start). */
+const freeFrom = ref<number | null>(null)
 const anyOctave = ref(false)
 /** Play the part on the keys or on the 8 pads (drums always use pads). */
 const inputMode = ref<'keys' | 'pads'>('keys')
@@ -89,11 +88,12 @@ const listenOnce = ref(false)
 const windowStart = ref(48)
 const pendingIndex = ref(0)
 const waiting = ref(false)
-const result = shallowRef<AttemptResult | null>(null)
+const result = shallowRef<AttemptScore | null>(null)
 /** Keys pressed since the current step became the one to play. */
 let pressed = new Set<number>()
-let mistakes = 0
 let presses: Press[] = []
+/** Wait mode: every press while a step was due, right or wrong. */
+let waitPresses: WaitPress[] = []
 /** Recent presses, for the octave hint. */
 const recent = ref<number[]>([])
 
@@ -144,7 +144,7 @@ void open()
 const barLength = computed(() => (song.value ? (song.value.bars[1] ?? 2) - (song.value.bars[0] ?? 0) : 2))
 const steps = computed(() => (guided.value ? unit.value?.steps : part.value?.steps) ?? [])
 const startTime = computed(() => {
-  const first = guided.value ? (unit.value?.start ?? 0) : (steps.value[0]?.time ?? 0)
+  const first = guided.value ? (unit.value?.start ?? 0) : (freeFrom.value ?? steps.value[0]?.time ?? 0)
   return Math.max(0, first - barLength.value * (guided.value ? UNIT_LEAD_IN_BARS : FREE_LEAD_IN_BARS))
 })
 // Guided mode shows and plays only the unit's notes; a long last note may ring past the unit's bar line.
@@ -179,8 +179,8 @@ function resetTo(time: number) {
 function prepare() {
   player.pause()
   result.value = null
-  mistakes = 0
   presses = []
+  waitPresses = []
   recent.value = []
   applyMode()
   if (player.loaded.value) resetTo(startTime.value)
@@ -188,7 +188,9 @@ function prepare() {
   if (first) windowStart.value = chooseWindow(rangeStartFor(first.keys[0]!), upcomingKeys(steps.value, first.time))
 }
 
+/** A fresh attempt in the current mode; ends a «Послушать» that was paused halfway. */
 function startAttempt() {
+  listenOnce.value = false
   prepare()
   player.play()
 }
@@ -201,7 +203,20 @@ watch([() => synth.status.value, part], async ([status, current]) => {
   prepare()
 }, { immediate: true })
 
-watch([guided, freeMode, freeRate], () => prepare())
+// Turning the teacher off keeps the mode, the speed and the place; the song then plays on to the end.
+watch(guided, (on) => {
+  const current = unit.value
+  const step = rung.value
+  if (!on && current && step) {
+    freeMode.value = step.mode === 'listen' ? 'wait' : step.mode
+    freeRate.value = RATES.find((item) => item === step.rate) ?? freeRate.value
+    freeFrom.value = current.start
+  }
+  prepare()
+})
+watch(freeMode, () => prepare())
+// A new speed applies right away, without starting over.
+watch(freeRate, () => applyMode())
 
 /** Advances past every step the presses already cover; resumes the song if it was waiting. */
 function tryAdvance(now: number) {
@@ -216,9 +231,10 @@ function tryAdvance(now: number) {
 }
 
 /** A key press, or a pad hit standing for its note: counts for waiting and scoring. */
-function handlePress(key: number) {
+function handlePress(key: number, input: TapInput) {
   if (result.value) return
-  const now = player.currentTime()
+  // The song time the child was hearing when pressing: sound and press are both a little late.
+  const now = player.currentTime() - metronome.pressDelay(input) * rate.value
   recent.value = [...recent.value.slice(-5), key]
   if (mode.value === 'tempo') {
     presses.push({ key, time: now })
@@ -226,7 +242,7 @@ function handlePress(key: number) {
   }
   if (mode.value !== 'wait') return
   const step = pending.value
-  if (step && (waiting.value || now >= step.time - EARLY_S) && isWrongPress(step, key, anyOctave.value)) mistakes++
+  if (step && (waiting.value || now >= step.time - EARLY_S)) waitPresses.push({ key, time: now, wrong: isWrongPress(step, key, anyOctave.value) })
   pressed.add(key)
   tryAdvance(now)
 }
@@ -242,10 +258,10 @@ onEvent((event) => {
     setTimeout(() => {
       hitPads.value = hitPads.value.filter((pad) => pad !== event.pad)
     }, 150)
-    handlePress(key)
+    handlePress(key, tapInputOf(event))
     return
   }
-  if (event.type === 'noteOn') handlePress(event.note)
+  if (event.type === 'noteOn') handlePress(event.note, tapInputOf(event))
 })
 
 async function finishAttempt() {
@@ -256,17 +272,15 @@ async function finishAttempt() {
     prepare()
     return
   }
-  const total = steps.value.length
-  let attempt: AttemptResult
-  if (mode.value === 'tempo') {
-    const score = scoreTempo(steps.value, presses, rate.value, anyOctave.value)
-    attempt = { passed: tempoPasses(score), mode: 'tempo', hits: score.hits, mistakes: 0, total, accuracy: score.accuracy }
-  } else if (mode.value === 'wait') {
-    const finished = pendingIndex.value >= total
-    attempt = { passed: finished && waitPasses(total, mistakes), mode: 'wait', hits: pendingIndex.value, mistakes, total, accuracy: 0 }
-  } else {
-    attempt = { passed: true, mode: 'listen', hits: 0, mistakes: 0, total, accuracy: 0 }
-  }
+  const attempt = scoreAttempt({
+    mode: mode.value,
+    steps: steps.value,
+    presses,
+    waitPresses,
+    played: pendingIndex.value,
+    rate: rate.value,
+    anyOctave: anyOctave.value,
+  })
   result.value = attempt
   const current = unit.value
   if (!guided.value || !current || !attempt.passed) return
@@ -290,7 +304,8 @@ function loop() {
   const current = part.value
   if (!current || !player.loaded.value || result.value) return
   const now = player.currentTime()
-  const next = chooseWindow(windowStart.value, upcomingKeys(current.steps, now))
+  // Guided: only the unit's notes move the window, not the phrases after it.
+  const next = followWindow(windowStart.value, steps.value, now)
   if (next !== windowStart.value) windowStart.value = next
   if (!player.playing.value) return
   if (now >= endTime.value + END_TAIL_S) {
@@ -302,7 +317,7 @@ function loop() {
   const step = pending.value
   if (step && now >= step.time) {
     player.pause()
-    player.seek(step.time)
+    player.seek(step.time, true)
     waiting.value = true
     recent.value = []
   }
@@ -310,11 +325,38 @@ function loop() {
 onMounted(() => {
   frame = requestAnimationFrame(loop)
 })
+// The metronome clicks on the song's own beats, at its speed, and stays quiet while the song waits.
+const metronome = useMetronome()
+const metronomeOn = ref(false)
+function toggleMetronome() {
+  const current = song.value
+  metronomeOn.value = !metronomeOn.value && Boolean(current)
+  if (!metronomeOn.value || !current) {
+    metronome.followSong(null)
+    return
+  }
+  metronome.followSong({
+    beats: songBeats(current.bars, current.timeSignature.numerator),
+    position: player.currentTime,
+    rate: () => player.rate.value,
+    playing: () => player.playing.value,
+  })
+}
+
 onBeforeUnmount(() => {
+  metronome.followSong(null)
   cancelAnimationFrame(frame)
   padsPlayMusic.value = false
   player.unload()
 })
+
+/**
+ * The first tap on a play button also turns the sound on (browsers only start audio from a tap),
+ * then runs the button once the song is loaded. No separate «turn the sound on» step.
+ */
+async function withSound(action: () => void) {
+  if (await player.ensureLoaded()) action()
+}
 
 function togglePlay() {
   if (player.playing.value || waiting.value) {
@@ -344,17 +386,38 @@ function nextRung() {
 
 function listen() {
   listenOnce.value = true
-  startAttempt()
+  prepare()
+  player.play()
 }
 
 function changeRung(step: number) {
   const current = unit.value
   if (!current) return
-  // Only rungs already reached: the next one opens by passing the current one.
-  const highest = Math.min(passedOf(current), current.rungs.length - 1)
-  const next = Math.max(0, Math.min(highest, rungIndex.value + step))
+  chooseRung(rungIndex.value + step)
+}
+
+/** Opens a rung: any passed one, or the next to pass; later rungs open by passing. */
+function chooseRung(index: number) {
+  const current = unit.value
+  if (!current) return
+  const next = Math.max(0, Math.min(openRungs(current, passedOf(current)) - 1, index))
   if (next === rungIndex.value) return
   rungIndex.value = next
+  prepare()
+}
+
+/** Asks first: a reset forgets stars and passed rungs of the unit, or of every unit of the part. */
+const resetAsk = ref<'unit' | 'part' | null>(null)
+async function confirmReset() {
+  const current = unit.value
+  const kind = resetAsk.value
+  if (!current || !kind || !part.value) return
+  const ids = kind === 'unit' ? [current.id] : undefined
+  await progress.resetSongUnits(songId, part.value.channel, ids)
+  saved.value = ids ? Object.fromEntries(Object.entries(saved.value).filter(([id]) => id !== current.id)) : {}
+  resetAsk.value = null
+  if (kind === 'part') unitIndex.value = 0
+  rungIndex.value = 0
   prepare()
 }
 
@@ -374,9 +437,9 @@ usePadActions({
       if (following) selectUnit(unitIndex.value + 1)
     }
   },
-  listen,
-  hint: togglePlay,
-  skip: startAttempt,
+  listen: () => withSound(listen),
+  hint: () => withSound(togglePlay),
+  skip: () => withSound(startAttempt),
   levelDown: () => (guided.value ? changeRung(-1) : changeFreeRate(-1)),
   levelUp: () => (guided.value ? changeRung(1) : changeFreeRate(1)),
 })
@@ -452,147 +515,152 @@ function unitLabel(item: Unit): string {
 }
 
 const rungLabel = (item: { mode: RungMode, rate: number }) => `${t(`songs.rungMode.${item.mode}`)}, ${Math.round(item.rate * 100)}%`
-const suggestedId = computed(() => nextUnit(units.value, Object.fromEntries(Object.entries(saved.value).map(([id, row]) => [id, row.passed])))?.id ?? null)
+const passedMap = computed<Record<string, number>>(() => Object.fromEntries(Object.entries(saved.value).map(([id, row]) => [id, row.passed])))
+const suggestedId = computed(() => nextUnit(units.value, passedMap.value)?.id ?? null)
 const unitFinished = computed(() => (unit.value ? passedOf(unit.value) >= unit.value.rungs.length : false))
 const hasNextRung = computed(() => (unit.value ? rungIndex.value + 1 < unit.value.rungs.length : false))
+const nextUnitName = computed(() => {
+  const following = units.value.find((item) => item.id === suggestedId.value)
+  return following ? unitLabel(following) : ''
+})
+const nextLabel = computed(() => {
+  if (hasNextRung.value && unit.value) return t('songs.result.nextRung', { rung: rungLabel(unit.value.rungs[rungIndex.value + 1]!) })
+  return nextUnitName.value ? t('songs.result.nextUnitNamed', { name: nextUnitName.value }) : t('songs.result.nextUnit')
+})
 </script>
 
 <template>
-  <main class="practice">
-    <header class="flex flex-wrap items-center gap-3 -ml-3">
-      <UButton :to="`/songs/${route.params.id}`" icon="i-lucide-arrow-left" color="neutral" variant="ghost" size="xl" :aria-label="t('songs.backToMap')" />
-      <div class="min-w-0">
-        <h1 class="title text-highlighted">{{ partName || t('songs.title') }}</h1>
+  <main class="page page--fill practice">
+    <PageHeader :title="partName || t('songs.title')" :back="`/songs/${route.params.id}`" :back-label="t('songs.backToMap')">
+      <template #subtitle>
         <p v-if="record" class="text-muted text-sm">{{ record.name }}<template v-if="part">, {{ t('songs.channel', { n: part.channel + 1 }) }}</template></p>
-      </div>
-      <div class="ml-auto flex flex-wrap items-center gap-3">
+      </template>
         <USwitch v-model="guided" size="lg" :label="t('songs.guided')" />
+        <USwitch v-if="!onPads" v-model="anyOctave" size="lg" :label="t('songs.anyOctave')" />
+        <!-- Tips open on tap: tooltips never show on a touch screen. -->
+        <UPopover :content="{ side: 'bottom', align: 'end' }">
+          <UButton icon="i-lucide-circle-help" color="neutral" variant="ghost" size="lg" :aria-label="t('songs.tips')" />
+          <template #content>
+            <div class="tips">
+              <p v-if="guided && unit">{{ t(`songs.ladderHint.${unit.kind}`) }}</p>
+              <p class="text-muted">{{ onPads ? t('songs.padsPlaying') : guided ? t('songs.padsGuided') : t('songs.padsFree') }}</p>
+            </div>
+          </template>
+        </UPopover>
         <SoundControl :fixed-instrument="partName" :fixed-label="onPads ? t('sound.yourPads', { name: partName }) : undefined" />
-      </div>
-    </header>
+    </PageHeader>
 
     <UAlert v-if="notFound" class="mt-6" color="warning" variant="subtle" icon="i-lucide-circle-help" :title="t('songs.partNotFound')" />
 
     <template v-if="part">
-      <nav v-if="guided" class="units" :aria-label="t('songs.unitsLabel')">
-        <button
-          v-for="(item, index) in units"
-          :key="item.id"
-          type="button"
-          class="unit"
-          :class="{ 'unit--current': index === unitIndex, 'unit--done': passedOf(item) >= item.rungs.length, 'unit--next': item.id === suggestedId && index !== unitIndex }"
-          :aria-current="index === unitIndex"
-          @click="selectUnit(index)"
-        >
-          <span class="unit__name">{{ unitLabel(item) }}</span>
-          <span class="unit__meta">
-            <span class="unit__stars" :aria-label="t('train.stars', { n: starsFor(item, passedOf(item)) })">{{ '★'.repeat(starsFor(item, passedOf(item))) }}{{ '☆'.repeat(3 - starsFor(item, passedOf(item))) }}</span>
-            <template v-if="repeatsOf(item) > 1"> {{ t('songs.repeats', { n: repeatsOf(item) }) }}</template>
-          </span>
-        </button>
-      </nav>
+      <div class="workspace">
+        <aside class="side">
+          <UnitList
+            v-if="guided"
+            :units="units"
+            :current="unitIndex"
+            :passed="passedMap"
+            :suggested-id="suggestedId"
+            :label="unitLabel"
+            :repeats="repeatsOf"
+            @select="selectUnit"
+          />
 
-      <div class="controls">
-        <UButton
-          :icon="player.playing.value || waiting ? 'i-lucide-pause' : 'i-lucide-play'"
-          size="xl"
-          :disabled="!player.loaded.value"
-          :label="player.playing.value || waiting ? t('songs.pause') : t('songs.play')"
-          @click="togglePlay"
-        >
-          <template #trailing>
-            <UKbd value="3" size="md" />
-          </template>
-        </UButton>
-        <UButton icon="i-lucide-rotate-ccw" color="neutral" variant="soft" size="xl" :disabled="!player.loaded.value" :label="t('songs.again')" @click="startAttempt">
-          <template #trailing>
-            <UKbd value="4" size="md" />
-          </template>
-        </UButton>
-        <UButton icon="i-lucide-ear" color="neutral" variant="soft" size="xl" :disabled="!player.loaded.value" :label="t('songs.listen')" @click="listen">
-          <template #trailing>
-            <UKbd value="2" size="md" />
-          </template>
-        </UButton>
+          <div v-if="guided && unit" class="reset">
+            <template v-if="resetAsk">
+              <p class="text-sm text-toned">{{ resetAsk === 'unit' ? t('songs.resetUnitAsk', { name: unitLabel(unit) }) : t('songs.resetPartAsk') }}</p>
+              <div class="flex flex-wrap gap-2">
+                <UButton color="error" variant="soft" size="md" :label="t('songs.resetYes')" @click="confirmReset" />
+                <UButton color="neutral" variant="ghost" size="md" :label="t('songs.resetNo')" @click="resetAsk = null" />
+              </div>
+            </template>
+            <div v-else class="flex flex-wrap gap-x-3 gap-y-1">
+              <UButton icon="i-lucide-rotate-ccw" color="neutral" variant="ghost" size="sm" :disabled="passedOf(unit) === 0" :label="t('songs.resetUnit', { name: unitLabel(unit) })" @click="resetAsk = 'unit'" />
+              <UButton color="neutral" variant="ghost" size="sm" :disabled="Object.keys(saved).length === 0" :label="t('songs.resetPart')" @click="resetAsk = 'part'" />
+            </div>
+          </div>
 
-        <template v-if="guided && unit && rung">
-          <ol class="rungs" :aria-label="t('songs.rungsLabel')">
-            <li
-              v-for="(item, index) in unit.rungs"
-              :key="index"
-              class="rung"
-              :class="{ 'rung--done': index < passedOf(unit), 'rung--current': index === rungIndex }"
-              :title="rungLabel(item)"
+          <section class="status" aria-live="polite" :data-step-time="pending?.time ?? ''" :data-time="player.time.value" :data-waiting="waiting" :data-result="result ? (result.passed ? 'passed' : 'failed') : ''">
+            <template v-if="prompt && !result">
+              <p v-if="prompt.symbol" class="status__chord text-highlighted">{{ prompt.symbol }} <span class="text-muted">{{ prompt.chord }}</span></p>
+              <p class="status__notes" :class="{ 'status__notes--waiting': waiting }">
+                {{ waiting ? t('songs.waitingFor', { notes: prompt.notes }) : t('songs.next', { notes: prompt.notes }) }}
+              </p>
+            </template>
+          </section>
+        </aside>
+        <div class="main-col">
+          <div class="controls">
+            <UButton
+              :icon="player.playing.value || waiting ? 'i-lucide-pause' : 'i-lucide-play'"
+              size="lg"
+              :loading="synth.status.value === 'loading'"
+              :label="player.playing.value || waiting ? t('songs.pause') : t('songs.play')"
+              @click="withSound(togglePlay)"
             />
-          </ol>
-          <span class="rung-label text-highlighted">{{ t('songs.rungOf', { n: rungIndex + 1, total: unit.rungs.length }) }}: {{ rungLabel(rung) }}</span>
-        </template>
-        <template v-else>
-          <div class="segmented" role="radiogroup" :aria-label="t('songs.modeLabel')">
-            <button v-for="item in (['wait', 'tempo', 'listen'] as const)" :key="item" type="button" role="radio" class="segment" :class="{ 'segment--on': freeMode === item }" :aria-checked="freeMode === item" @click="freeMode = item">
-              {{ t(`songs.rungMode.${item}`) }}
-            </button>
-          </div>
-          <div class="segmented" role="radiogroup" :aria-label="t('songs.speed')">
-            <button v-for="item in RATES" :key="item" type="button" role="radio" class="segment tabular-nums" :class="{ 'segment--on': freeRate === item }" :aria-checked="freeRate === item" @click="freeRate = item">
-              {{ Math.round(item * 100) }}%
-            </button>
-          </div>
-        </template>
+            <UButton icon="i-lucide-rotate-ccw" color="neutral" variant="soft" size="lg" :label="t('songs.again')" @click="withSound(startAttempt)" />
+            <UButton icon="i-lucide-ear" color="neutral" variant="soft" size="lg" :label="t('songs.listen')" @click="withSound(listen)" />
+            <UButton
+              icon="i-lucide-timer"
+              :color="metronomeOn ? 'primary' : 'neutral'"
+              :variant="metronomeOn ? 'solid' : 'soft'"
+              size="lg"
+              :aria-pressed="metronomeOn"
+              :aria-label="t('songs.metronome')"
+              :title="t('songs.metronome')"
+              @click="toggleMetronome"
+            />
 
-        <div v-if="canChooseInput" class="segmented ml-auto" role="radiogroup" :aria-label="t('songs.inputLabel')">
-          <button v-for="item in (['keys', 'pads'] as const)" :key="item" type="button" role="radio" class="segment" :class="{ 'segment--on': inputMode === item }" :aria-checked="inputMode === item" @click="inputMode = item">
-            {{ t(`songs.input.${item}`) }}
+            <span class="controls__divider" aria-hidden="true" />
+
+            <RungLadder v-if="guided && unit" :unit="unit" :passed="passedOf(unit)" :current="rungIndex" @choose="chooseRung" />
+            <template v-else-if="!guided">
+              <div class="segmented" role="radiogroup" :aria-label="t('songs.modeLabel')">
+                <button v-for="item in (['wait', 'tempo', 'listen'] as const)" :key="item" type="button" role="radio" class="segment" :class="{ 'segment--on': freeMode === item }" :aria-checked="freeMode === item" @click="freeMode = item">
+                  {{ t(`songs.rungMode.${item}`) }}
+                </button>
+              </div>
+              <div class="segmented" role="radiogroup" :aria-label="t('songs.speed')">
+                <button v-for="item in RATES" :key="item" type="button" role="radio" class="segment tabular-nums" :class="{ 'segment--on': freeRate === item }" :aria-checked="freeRate === item" @click="freeRate = item">
+                  {{ Math.round(item * 100) }}%
+                </button>
+              </div>
+            </template>
+
+            <div v-if="canChooseInput" class="segmented" role="radiogroup" :aria-label="t('songs.inputLabel')">
+              <button v-for="item in (['keys', 'pads'] as const)" :key="item" type="button" role="radio" class="segment" :class="{ 'segment--on': inputMode === item }" :aria-checked="inputMode === item" @click="inputMode = item">
+                {{ t(`songs.input.${item}`) }}
+              </button>
+            </div>
+
+          </div>
+          <UAlert v-if="part.isDrum && !layout" class="drums-alert mt-3" color="warning" variant="subtle" icon="i-lucide-drum" :title="t('songs.tooManyForPads')" />
+
+          <!-- The bar is thin, the tap area is finger-sized. -->
+          <button type="button" class="progress" :aria-label="t('songs.partPosition')" @click="seekInRange">
+            <span class="progress__track">
+              <span class="progress__fill" :style="{ width: `${rangeProgress}%` }" />
+            </span>
           </button>
+
+          <div class="stage" :class="{ 'stage--pads': onPads }">
+            <!-- The octave hint is about the keys, so it shows right above them. -->
+            <p v-if="hint && !result && !onPads" class="octave-hint" role="status">
+              <UIcon :name="hint === 'up' ? 'i-lucide-arrow-up' : 'i-lucide-arrow-down'" class="size-4 shrink-0" />
+              {{ t(`songs.octave.${hint}`) }}
+            </p>
+            <ResultCard v-if="result" :result="result" :guided="guided" :unit-done="unitFinished && !hasNextRung" :next-label="nextLabel" @next="nextRung" @again="startAttempt" />
+            <NoteFall class="stage__fall" :notes="fallNotes" :start="windowStart" :get-time="player.currentTime" :pending="pendingKeys" :pad-keys="onPads ? layout!.padKeys : undefined" />
+            <template v-if="onPads">
+              <PadStrip :labels="padLabels" :lit="litPads" :hit="hitPads" @press="pressPad" />
+              <p class="window text-muted">{{ t('songs.padsLayout') }}</p>
+            </template>
+            <template v-else>
+              <PianoKeyboard :start="windowStart" :held="heldNotes" :hint="litKeys" @press="pressNote" @release="releaseNote" />
+              <p class="window text-muted">{{ t('songs.window', { range: windowLabel }) }}</p>
+            </template>
+          </div>
         </div>
-        <USwitch v-if="!onPads" v-model="anyOctave" size="lg" :label="t('songs.anyOctave')" :class="{ 'ml-auto': !canChooseInput }" />
-      </div>
-
-      <p class="pads-hint text-dimmed">{{ onPads ? t('songs.padsPlaying') : guided ? t('songs.padsGuided') : t('songs.padsFree') }}</p>
-      <UAlert v-if="part.isDrum && !layout" class="mt-3" color="warning" variant="subtle" icon="i-lucide-drum" :title="t('songs.tooManyForPads')" />
-
-      <div class="progress" :aria-label="t('songs.partPosition')" @click="seekInRange">
-        <span class="progress__fill" :style="{ width: `${rangeProgress}%` }" />
-      </div>
-
-      <section class="status" aria-live="polite" :data-step-time="pending?.time ?? ''" :data-time="player.time.value" :data-waiting="waiting" :data-result="result ? (result.passed ? 'passed' : 'failed') : ''">
-        <p v-if="!player.loaded.value" class="text-muted">{{ t('songs.needSound') }}</p>
-        <UAlert
-          v-else-if="result"
-          :color="result.passed ? 'success' : 'warning'"
-          variant="subtle"
-          :icon="result.passed ? 'i-lucide-circle-check' : 'i-lucide-rotate-ccw'"
-          class="result"
-          :title="result.passed ? (guided && unitFinished && !hasNextRung ? t('songs.result.unitDone') : t('songs.result.passed')) : t('songs.result.again')"
-          :description="result.mode === 'tempo'
-            ? t('songs.result.tempo', { hits: result.hits, total: result.total, need: Math.ceil(result.total * 0.8) })
-            : result.mode === 'wait' ? (result.mistakes ? t('songs.result.wait', { mistakes: result.mistakes }) : t('songs.result.waitClean')) : t('songs.result.listen')"
-          :actions="result.passed && guided
-            ? [
-              { label: hasNextRung ? t('songs.result.nextRung', { rung: rungLabel(unit!.rungs[rungIndex + 1]!) }) : t('songs.result.nextUnit'), icon: 'i-lucide-arrow-right', size: 'lg', onClick: nextRung },
-              { label: t('songs.again'), color: 'neutral', variant: 'soft', size: 'lg', onClick: startAttempt },
-            ]
-            : [{ label: t('songs.again'), icon: 'i-lucide-rotate-ccw', size: 'lg', onClick: startAttempt }]"
-        />
-        <template v-else-if="prompt">
-          <p v-if="prompt.symbol" class="status__chord text-highlighted">{{ prompt.symbol }} <span class="text-muted">{{ prompt.chord }}</span></p>
-          <p class="status__notes" :class="{ 'status__notes--waiting': waiting }">
-            {{ waiting ? t('songs.waitingFor', { notes: prompt.notes }) : t('songs.next', { notes: prompt.notes }) }}
-          </p>
-        </template>
-        <p v-if="hint" class="status__hint">{{ t(`songs.octave.${hint}`) }}</p>
-      </section>
-
-      <div class="stage" :class="{ 'stage--pads': onPads }">
-        <NoteFall class="stage__fall" :notes="fallNotes" :start="windowStart" :get-time="player.currentTime" :pending="pendingKeys" :pad-keys="onPads ? layout!.padKeys : undefined" />
-        <template v-if="onPads">
-          <PadStrip :labels="padLabels" :lit="litPads" :hit="hitPads" @press="pressPad" />
-          <p class="window text-muted">{{ t('songs.padsLayout') }}</p>
-        </template>
-        <template v-else>
-          <PianoKeyboard :start="windowStart" :held="heldNotes" :hint="litKeys" @press="pressNote" @release="releaseNote" />
-          <p class="window text-muted">{{ t('songs.window', { range: windowLabel }) }}</p>
-        </template>
       </div>
     </template>
   </main>
@@ -600,25 +668,14 @@ const hasNextRung = computed(() => (unit.value ? rungIndex.value + 1 < unit.valu
 
 <style scoped>
 .practice {
-  display: flex;
-  flex-direction: column;
-  flex: 1 0 auto;
-  max-width: 80rem;
-  margin: 0 auto;
-  padding: clamp(1rem, 2.5vw, 2rem);
-}
-
-.title {
-  font-family: var(--font-display);
-  font-size: clamp(1.5rem, 3vw, 2rem);
-  font-weight: 700;
+  padding: clamp(0.75rem, 3vh, 2rem) clamp(1rem, 2.5vw, 2rem);
 }
 
 .controls {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: 0.75rem;
+  gap: 0.5rem;
   margin-top: 1rem;
 }
 
@@ -636,7 +693,12 @@ const hasNextRung = computed(() => (unit.value ? rungIndex.value + 1 < unit.valu
   border-radius: 0.5rem;
   font-weight: 500;
   color: var(--ui-text-toned);
-  transition: background-color 120ms ease, color 120ms ease;
+  transition: background-color 120ms ease, color 120ms ease, transform 100ms ease-out;
+}
+
+/* Press feedback on finger down, not on release. */
+.segment:active {
+  transform: scale(0.96);
 }
 
 .segment--on {
@@ -654,85 +716,43 @@ const hasNextRung = computed(() => (unit.value ? rungIndex.value + 1 < unit.valu
   scrollbar-width: thin;
 }
 
-.unit {
-  flex: none;
+.controls__divider {
+  width: 1px;
+  height: 2rem;
+  background: var(--ui-border);
+}
+
+.tips {
   display: flex;
   flex-direction: column;
-  align-items: flex-start;
-  gap: 0.125rem;
-  min-width: 7rem;
-  padding: 0.5rem 0.75rem;
-  border-radius: 0.75rem;
-  text-align: left;
-  background: var(--ui-bg-elevated);
-  box-shadow: 0 0 0 1px var(--ui-border) inset;
-  transition: background-color 120ms ease;
+  gap: 0.625rem;
+  max-width: 24rem;
+  padding: 0.875rem 1rem;
+  font-size: 0.875rem;
+  line-height: 1.45;
 }
 
-.unit__name {
-  font-weight: 600;
-  color: var(--ui-text-highlighted);
-}
-
-.unit__meta {
-  font-size: 0.8125rem;
-  color: var(--ui-text-muted);
-}
-
-.unit__stars {
-  color: var(--color-pad-sun);
-}
-
-.unit--current {
-  box-shadow: 0 0 0 2px var(--color-pad-sky) inset;
-}
-
-.unit--next {
-  box-shadow: 0 0 0 2px var(--color-pad-aqua) inset;
-}
-
-.unit--done .unit__name {
-  color: var(--ui-text-toned);
-}
-
-.rungs {
+.reset {
   display: flex;
-  gap: 0.375rem;
-}
-
-.rung {
-  width: 0.875rem;
-  height: 0.875rem;
-  border-radius: 50%;
-  background: var(--ui-bg-accented);
-  box-shadow: 0 0 0 1px var(--ui-border-accented) inset;
-}
-
-.rung--done {
-  background: var(--color-pad-aqua);
-  box-shadow: none;
-}
-
-.rung--current {
-  box-shadow: 0 0 0 3px var(--color-pad-sky);
-}
-
-.rung-label {
-  font-weight: 600;
-}
-
-.pads-hint {
-  margin-top: 0.5rem;
-  font-size: 0.8125rem;
+  flex-direction: column;
+  gap: 0.5rem;
+  margin-top: 0.75rem;
 }
 
 .progress {
+  display: block;
+  width: 100%;
+  margin-top: 0.375rem;
+  padding-block: 0.625rem;
+  cursor: pointer;
+}
+
+.progress__track {
   position: relative;
+  display: block;
   height: 0.5rem;
-  margin-top: 1rem;
   border-radius: 999px;
   background: var(--ui-bg-accented);
-  cursor: pointer;
   overflow: hidden;
 }
 
@@ -743,7 +763,6 @@ const hasNextRung = computed(() => (unit.value ? rungIndex.value + 1 < unit.valu
 }
 
 .status {
-  min-height: 5.5rem;
   padding-block: 0.75rem;
 }
 
@@ -769,13 +788,106 @@ const hasNextRung = computed(() => (unit.value ? rungIndex.value + 1 < unit.valu
   color: var(--color-pad-aqua);
 }
 
-.status__hint {
-  margin-top: 0.25rem;
-  font-weight: 500;
-  color: color-mix(in oklab, var(--color-pad-tomato) 85%, var(--ui-text));
+.octave-hint {
+  position: absolute;
+  z-index: 2;
+  /* Above the keys and the range line under them */
+  bottom: calc(var(--keys-height) + 2.5rem);
+  left: 50%;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  width: max-content;
+  max-width: calc(100% - 2rem);
+  padding: 0.5rem 1rem;
+  border-radius: 999px;
+  font-weight: 600;
+  color: #fff;
+  background: color-mix(in oklab, var(--color-pad-tomato) 88%, #000);
+  box-shadow: 0 8px 24px -10px rgb(0 0 0 / 0.5);
+  transform: translateX(-50%);
+}
+
+/*
+ * Portrait and phones: the wrappers step aside and the blocks stack in reading order.
+ * Tablet landscape: phrases and status move to a right column, the notes get the height.
+ */
+.workspace {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+
+.side,
+.main-col {
+  display: contents;
+}
+
+.units { order: 1; }
+.controls { order: 2; }
+.drums-alert { order: 4; }
+.progress { order: 5; }
+.status { order: 6; }
+.stage { order: 7; }
+.reset { order: 8; }
+
+@media (min-width: 961px) and (orientation: landscape) {
+  /* Exactly the screen height above the footer: the phrase list scrolls inside its column. */
+  .practice {
+    flex: 1 1 0;
+    min-height: 0;
+  }
+
+  .workspace {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) clamp(15rem, 21vw, 20rem);
+    grid-template-rows: minmax(0, 1fr);
+    gap: 1.5rem;
+  }
+
+  .main-col {
+    grid-column: 1;
+    grid-row: 1;
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+  }
+
+  .side {
+    grid-column: 2;
+    grid-row: 1;
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+    padding-top: 1rem;
+  }
+
+  .units {
+    order: 2;
+    flex: 1;
+    flex-direction: column;
+    min-height: 0;
+    margin-top: 0.5rem;
+    padding: 0 0.25rem 0.25rem 0;
+    overflow-x: hidden;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+  }
+
+  .reset {
+    order: 3;
+  }
+
+  .status {
+    order: 1;
+    padding-block: 0 0.75rem;
+  }
 }
 
 .stage {
+  position: relative;
+  --keys-height: clamp(8rem, 24vh, 12rem);
   flex: 1;
   display: flex;
   flex-direction: column;

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
-import { chooseWindow, coversStep, octaveHint, stepIndexAt, upcomingKeys } from '@/lib/practice'
+import { chooseWindow, coversStep, followWindow, octaveHint, stepIndexAt, upcomingKeys } from '@/lib/practice'
 import type { Step } from '@/lib/song'
 
 const step = (time: number, ...keys: number[]): Step => ({ time, keys })
@@ -44,6 +44,20 @@ describe('steps in time', () => {
 
   it('collects keys within the lookahead', () => {
     expect(upcomingKeys(steps, 1.5, 1.5)).toEqual([62, 64, 67])
+  })
+})
+
+describe('followWindow', () => {
+  // A piano phrase: C5-G#5 from 32 s, then the next phrase goes down to C4 at 40 s.
+  const steps = [step(32, 77), step(33, 80), step(34.5, 72), step(36, 79), step(38, 75), step(40, 60), step(41, 63)]
+
+  it('keeps the window while the next notes fit, even when later ones do not', () => {
+    expect(followWindow(72, steps, 34.5)).toBe(72)
+    expect(followWindow(72, steps, 38)).toBe(72)
+  })
+
+  it('moves when a note that is about to come does not fit', () => {
+    expect(followWindow(72, steps, 39)).toBe(60)
   })
 })
 

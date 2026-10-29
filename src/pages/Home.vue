@@ -15,7 +15,7 @@ const { profile } = useProgress()
 </script>
 
 <template>
-  <main class="home">
+  <main class="page home">
     <div class="top-bar">
       <UButton
         v-if="profile"
@@ -42,7 +42,8 @@ const { profile } = useProgress()
       <AppPad color="tomato" icon="i-lucide-target" :label="t('home.train')" to="/train" />
       <AppPad color="sky" icon="i-lucide-flask-conical" :label="t('home.lab')" to="/lab" />
       <AppPad color="aqua" icon="i-lucide-music" :label="t('home.songs')" to="/songs" />
-      <AppPad color="sun" icon="i-lucide-star" :label="t('home.progress')" to="/progress" />
+      <AppPad color="sun" icon="i-lucide-drum" :label="t('home.rhythm')" to="/rhythm" />
+      <AppPad color="sky" icon="i-lucide-star" :label="t('home.progress')" to="/progress" class="pad-wide" />
       <p class="sound-status text-muted">
         <UIcon :name="downloaded ? 'i-lucide-circle-check' : 'i-lucide-download'" class="size-4 shrink-0" />
         {{ downloaded ? t('sound.downloaded') : t('sound.notDownloaded', { size: bankSizeMb() }) }}
@@ -63,8 +64,6 @@ const { profile } = useProgress()
   gap: clamp(2rem, 5vw, 5rem);
   align-items: center;
   flex: 1 0 auto;
-  max-width: 72rem;
-  margin: 0 auto;
   padding: clamp(1.5rem, 4vw, 3.5rem);
 }
 
@@ -106,10 +105,51 @@ const { profile } = useProgress()
   font-size: 0.9375rem;
 }
 
+/* Five pads: the last one takes the whole row. */
+.pad-wide {
+  grid-column: 1 / -1;
+  min-height: 6rem;
+}
+
 .pads {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 1.25rem;
+}
+
+/* Tablet landscape (Galaxy Tab S10+ is 1400 x ~800 CSS px): the pads fill the screen height. */
+@media (min-width: 961px) and (orientation: landscape) {
+  .home {
+    align-items: stretch;
+    padding-block: 4.5rem 1.5rem;
+  }
+
+  .home > section {
+    align-self: center;
+  }
+
+  .pads {
+    grid-template-rows: 1fr 1fr minmax(6rem, 0.6fr) auto;
+  }
+
+  .example {
+    max-width: 30rem;
+  }
+}
+
+@media (min-width: 961px) and (orientation: landscape) and (max-height: 700px) {
+  .home {
+    padding-block: 4rem 1rem;
+  }
+
+  .title {
+    font-size: clamp(2.25rem, 4.5vw, 3.5rem);
+  }
+
+  .example {
+    max-width: 24rem;
+    margin-top: 1.5rem;
+  }
 }
 
 /* Tablet portrait and narrower: text above, pads full width below */

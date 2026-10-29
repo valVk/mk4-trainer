@@ -129,10 +129,6 @@ export function taskNotes(task: Task, rangeStart: number, step = 0): number[] {
   return Math.max(...notes) > top && Math.min(...notes) - 12 >= rangeStart ? notes.map((note) => note - 12) : notes
 }
 
-export function fitsKeyboard(notes: readonly number[], rangeStart: number): boolean {
-  return notes.every((note) => note >= rangeStart && note < rangeStart + KEYBOARD_KEYS)
-}
-
 export interface TaskCheck {
   status: ChordCheckStatus
   missing: PitchClass[]

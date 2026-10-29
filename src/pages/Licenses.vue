@@ -1,6 +1,8 @@
 <script setup lang="ts">
 import { useI18n } from 'vue-i18n'
 
+import PageHeader from '@/components/PageHeader.vue'
+
 const { t } = useI18n()
 
 /** Files published next to the app, under the same base path. */
@@ -47,10 +49,7 @@ const software = [
 
 <template>
   <main class="page">
-    <header class="flex items-center gap-3 -ml-3">
-      <UButton to="/" icon="i-lucide-arrow-left" color="neutral" variant="ghost" size="xl" :aria-label="t('nav.home')" />
-      <h1 class="title text-highlighted">{{ t('licenses.title') }}</h1>
-    </header>
+    <PageHeader :title="t('licenses.title')" />
 
     <p class="lead text-muted">{{ t('licenses.lead') }}</p>
 
@@ -93,18 +92,6 @@ const software = [
 </template>
 
 <style scoped>
-.page {
-  max-width: 56rem;
-  margin: 0 auto;
-  padding: clamp(1rem, 3vw, 2.5rem);
-}
-
-.title {
-  font-family: var(--font-display);
-  font-size: clamp(1.75rem, 3vw, 2.25rem);
-  font-weight: 700;
-}
-
 .lead {
   max-width: 60ch;
   margin-top: 1rem;

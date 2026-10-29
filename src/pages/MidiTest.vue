@@ -3,6 +3,7 @@ import { onBeforeUnmount, ref, shallowRef } from 'vue'
 import { useI18n } from 'vue-i18n'
 
 import HeldNotesPanel from '@/components/HeldNotesPanel.vue'
+import PageHeader from '@/components/PageHeader.vue'
 import StatusLed from '@/components/StatusLed.vue'
 import { useNoteSource } from '@/composables/useNoteSource'
 import { midiName } from '@/lib/theory'
@@ -111,11 +112,9 @@ onBeforeUnmount(() => {
 
 <template>
   <main class="page">
-    <header class="flex flex-wrap items-center gap-3 -ml-3">
-      <UButton to="/" icon="i-lucide-arrow-left" color="neutral" variant="ghost" size="xl" :aria-label="t('nav.home')" />
-      <h1 class="title text-highlighted">{{ t('midiTest.title') }}</h1>
-      <UButton to="/pads" icon="i-lucide-grid-2x2" color="neutral" variant="soft" size="lg" class="ml-auto" :label="t('midiTest.pads')" />
-    </header>
+    <PageHeader :title="t('midiTest.title')">
+      <UButton to="/pads" icon="i-lucide-grid-2x2" color="neutral" variant="soft" size="lg" :label="t('midiTest.pads')" />
+    </PageHeader>
 
     <div class="layout">
       <section class="flex flex-col gap-7">
@@ -210,18 +209,6 @@ onBeforeUnmount(() => {
 </template>
 
 <style scoped>
-.page {
-  max-width: 72rem;
-  margin: 0 auto;
-  padding: clamp(1rem, 3vw, 2.5rem);
-}
-
-.title {
-  font-family: var(--font-display);
-  font-size: clamp(1.75rem, 3vw, 2.25rem);
-  font-weight: 700;
-}
-
 .layout {
   display: grid;
   grid-template-columns: minmax(0, 20rem) minmax(0, 1fr);

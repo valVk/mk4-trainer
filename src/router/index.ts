@@ -1,5 +1,6 @@
 import { createRouter, createWebHistory } from 'vue-router'
 
+// meta.sound: the screen plays sound, so SoundGate asks to turn it on.
 const router = createRouter({
   history: createWebHistory(import.meta.env.BASE_URL),
   routes: [
@@ -11,11 +12,13 @@ const router = createRouter({
     {
       path: '/train',
       name: 'train',
+      meta: { sound: true },
       component: () => import('@/pages/Train.vue'),
     },
     {
       path: '/lab',
       name: 'lab',
+      meta: { sound: true },
       component: () => import('@/pages/Lab.vue'),
     },
     {
@@ -26,12 +29,19 @@ const router = createRouter({
     {
       path: '/songs/:id',
       name: 'song',
+      meta: { sound: true },
       component: () => import('@/pages/Song.vue'),
     },
     {
       path: '/songs/:id/:channel',
       name: 'song-practice',
+      meta: { sound: true },
       component: () => import('@/pages/SongPractice.vue'),
+    },
+    {
+      path: '/rhythm',
+      name: 'rhythm',
+      component: () => import('@/pages/Rhythm.vue'),
     },
     {
       path: '/progress',

@@ -6,7 +6,6 @@ import {
   STAR_THRESHOLDS,
   STREAK_TO_FADE,
   checkTask,
-  fitsKeyboard,
   generateTask,
   getLevel,
   hintStage,
@@ -17,6 +16,7 @@ import {
   type ProgressionId,
   type Task,
 } from '@/lib/levels'
+import { fitsWindow } from '@/lib/keyboard'
 import { CHORD_FORMULAS, identifyChord, noteName } from '@/lib/theory'
 
 /** Deterministic random source for repeatable tests. */
@@ -107,7 +107,7 @@ describe('taskNotes', () => {
       const steps = task.kind === 'progression' ? task.steps.length : 1
       for (let start = 0; start <= 96; start += 12) {
         for (let step = 0; step < steps; step++) {
-          if (!fitsKeyboard(taskNotes(task, start, step), start)) misfits.push(`${taskId(task, noteName)}@${start}`)
+          if (!fitsWindow(taskNotes(task, start, step), start)) misfits.push(`${taskId(task, noteName)}@${start}`)
         }
       }
     }

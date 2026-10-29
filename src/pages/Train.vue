@@ -2,16 +2,18 @@
 import { computed, onBeforeUnmount, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 
+import MidiStatus from '@/components/MidiStatus.vue'
+import PageHeader from '@/components/PageHeader.vue'
 import PianoKeyboard from '@/components/PianoKeyboard.vue'
 import SoundControl from '@/components/SoundControl.vue'
-import StatusLed from '@/components/StatusLed.vue'
+import { useKeyboardWindow } from '@/composables/useKeyboardWindow'
 import { useNoteNames } from '@/composables/useNoteNames'
 import { useNoteSource } from '@/composables/useNoteSource'
 import { usePadActions } from '@/composables/usePadActions'
 import { useProgress } from '@/composables/useProgress'
+import { SETTLE_MS, useSettled } from '@/composables/useSettled'
 import { useSynth } from '@/composables/useSynth'
 import { useWakeLock } from '@/composables/useWakeLock'
-import { followRange, rangeStartFor } from '@/lib/keyboard'
 import { LEVELS, STAR_THRESHOLDS, checkTask, generateTask, hintStage, starsFor, taskId, taskNotes, type Task } from '@/lib/levels'
 import { midiName, noteName, pitchClass } from '@/lib/theory'
 
@@ -19,7 +21,7 @@ const NEXT_DELAY_MS = 700
 
 const { t } = useI18n()
 useWakeLock()
-const { heldNotes, baseNote, midiStatus, connectMidi, pressNote, releaseNote } = useNoteSource()
+const { heldNotes, pressNote, releaseNote } = useNoteSource()
 const { status: soundStatus, playChord, playCue } = useSynth()
 const { localName, withLocal } = useNoteNames()
 const progress = useProgress()
@@ -43,15 +45,13 @@ const levelDone = ref<number | null>(null)
 let shownAt = performance.now()
 const hasNextLevel = computed(() => LEVELS.some((item) => item.id === level.value + 1))
 
-const start = ref(rangeStartFor(baseNote.value))
-watch(baseNote, (base) => {
-  start.value = rangeStartFor(base)
-})
-watch(heldNotes, (held) => {
-  start.value = followRange(start.value, held)
-})
+const start = useKeyboardWindow()
 
 const check = computed(() => checkTask(task.value, heldNotes.value, step.value))
+// Praise comes at once; «not yet» and «wrong» wait until the fingers have landed, so a chord
+// placed key by key does not flash warnings on the way.
+const settledHeld = useSettled(heldNotes, (next) => (next.length === 0 ? 0 : SETTLE_MS))
+const settledCheck = computed(() => checkTask(task.value, settledHeld.value, step.value))
 const stage = computed(() => hintStage(level.value, streak.value))
 const target = computed(() => taskNotes(task.value, start.value, step.value))
 const progression = computed(() => (task.value.kind === 'progression' ? task.value : null))
@@ -211,10 +211,10 @@ const feedback = computed(() => {
   if (stepDoneWith.value !== null && stepDoneWith.value === heldKey.value) {
     return { tone: 'success' as const, text: t('train.stepDone') }
   }
-  const { status, missing, extra } = check.value
-  if (status === 'empty') return null
+  const { status, missing, extra } = settledCheck.value
+  if (status === 'empty' || status === 'correct') return null
   if (task.value.kind === 'note') {
-    const played = heldNotes.value.find((note) => pitchClass(note) !== task.value.root)
+    const played = settledHeld.value.find((note) => pitchClass(note) !== task.value.root)
     if (status === 'wrong' && played !== undefined) {
       return {
         tone: 'warning' as const,
@@ -236,25 +236,11 @@ const levelItems = computed(() => LEVELS.map((item) => ({ label: String(item.id)
 </script>
 
 <template>
-  <main class="train">
-    <header class="flex flex-wrap items-center gap-3 -ml-3">
-      <UButton to="/" icon="i-lucide-arrow-left" color="neutral" variant="ghost" size="xl" :aria-label="t('nav.home')" />
-      <h1 class="title text-highlighted">{{ t('train.title') }}</h1>
-      <div class="ml-auto flex flex-wrap items-center gap-4">
-        <SoundControl />
-        <StatusLed v-if="midiStatus === 'connected'" on :label="t('lab.mk4Connected')" />
-        <UButton
-          v-else-if="midiStatus !== 'unsupported'"
-          icon="i-lucide-plug"
-          color="neutral"
-          variant="soft"
-          size="lg"
-          :loading="midiStatus === 'connecting'"
-          :label="t('midiTest.connect')"
-          @click="connectMidi"
-        />
-      </div>
-    </header>
+  <main class="page page--fill train">
+    <PageHeader :title="t('train.title')">
+      <SoundControl />
+      <MidiStatus />
+    </PageHeader>
 
     <div class="flex flex-wrap items-center justify-between gap-4 mt-6">
       <div class="levels">
@@ -384,21 +370,6 @@ const levelItems = computed(() => LEVELS.map((item) => ({ label: String(item.id)
 </template>
 
 <style scoped>
-.train {
-  display: flex;
-  flex-direction: column;
-  flex: 1 0 auto;
-  max-width: 76rem;
-  margin: 0 auto;
-  padding: clamp(1rem, 3vw, 2.5rem);
-}
-
-.title {
-  font-family: var(--font-display);
-  font-size: clamp(1.75rem, 3vw, 2.25rem);
-  font-weight: 700;
-}
-
 /* Takes the task's place while open, so the keyboard stays on screen */
 .level-done {
   flex: 1;

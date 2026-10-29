@@ -1,5 +1,6 @@
 import { readonly, ref, shallowRef, watch } from 'vue'
 
+import { useMetronome } from '@/composables/useMetronome'
 import { useNoteSource } from '@/composables/useNoteSource'
 import { BANKS, useSynth, type BankId } from '@/composables/useSynth'
 import { exportBackup, importBackup, parseBackup, type Backup } from '@/db/backup'
@@ -18,9 +19,10 @@ import {
   type TaskStats,
 } from '@/db/progress'
 import { GLOBAL_PROFILE, createDb, type LevelProgress, type Profile, type SongProgress, type SongRecord, type TrainerDb } from '@/db/schema'
-import { addSong, deleteSong as deleteSongRow, getSong, getSongProgress, listSongs, saveUnitResult, type SongSummary } from '@/db/songs'
+import { addSong, deleteSong as deleteSongRow, getSong, getSongProgress, listSongs, resetUnits, saveUnitResult, type SongSummary } from '@/db/songs'
 import { i18n } from '@/i18n'
 import { parseInstrument } from '@/lib/instruments'
+import { parseLatencyHistories, parseMetronomeSettings } from '@/lib/metronome'
 import { starsFor } from '@/lib/levels'
 import { isValidPadMap, type PadMap } from '@/lib/noteSource'
 import { parseSong, songNameFromFile } from '@/lib/song'
@@ -31,6 +33,9 @@ const PAD_MAP_KEY = 'padMap'
 const INSTRUMENT_KEY = 'instrument'
 const BANK_KEY = 'soundBank'
 const DECLINED_KEY = 'declinedLevels'
+const METRONOME_KEY = 'metronome'
+/** How late this child's taps arrive after the click, per input: the last checks on the «Ритм» page (median is used). */
+const LATENCY_KEY = 'tapLatencyMs'
 /** Where step 5 kept the pad map before the database existed. */
 const LEGACY_PAD_MAP_KEY = 'chord-trainer:padMap'
 
@@ -101,7 +106,11 @@ async function loadProfileData(database: TrainerDb, current: Profile): Promise<v
   declinedLevels.value = (await getSetting<number[]>(database, current.id, DECLINED_KEY)) ?? []
   const instrument = await getSetting<unknown>(database, current.id, INSTRUMENT_KEY)
   const bank = await getSetting<BankId>(database, current.id, BANK_KEY)
+  const metronome = await getSetting<unknown>(database, current.id, METRONOME_KEY)
+  const latency = await getSetting<unknown>(database, current.id, LATENCY_KEY)
   applying = true
+  useMetronome().update(parseMetronomeSettings(metronome))
+  useMetronome().setLatencyHistories(parseLatencyHistories(latency))
   // Also converts the old short list ("piano", "organ"...) to bank and program.
   useSynth().setInstrument(parseInstrument(instrument))
   useSynth().setBank(BANKS.some((item) => item.id === bank) ? bank! : 'musescore')
@@ -123,6 +132,17 @@ function watchSettings(): void {
     if (applying || !profile.value) return
     const profileId = profile.value.id
     void safely((database) => setSetting(database, profileId, BANK_KEY, id))
+  })
+  watch(useMetronome().settings, (value) => {
+    if (applying || !profile.value) return
+    const profileId = profile.value.id
+    void safely((database) => setSetting(database, profileId, METRONOME_KEY, { ...value }))
+  })
+  watch(useMetronome().latencyHistories, (histories) => {
+    if (applying || !profile.value) return
+    const profileId = profile.value.id
+    const value = { screen: [...histories.screen], midi: [...histories.midi], keys: [...histories.keys] }
+    void safely((database) => setSetting(database, profileId, LATENCY_KEY, value))
   })
 }
 
@@ -269,6 +289,13 @@ async function saveSongUnit(result: { songId: number, channel: number, unit: str
   return safely((database) => saveUnitResult(database, { ...result, profileId }))
 }
 
+/** Starts the ladder again for the current player: some units of a part, or the whole part. */
+async function resetSongUnits(songId: number, channel: number, units?: readonly string[]): Promise<void> {
+  const profileId = profile.value?.id
+  if (profileId === undefined) return
+  await safely((database) => resetUnits(database, profileId, songId, channel, units))
+}
+
 async function forgetSetting(key: string): Promise<void> {
   const profileId = profile.value?.id
   if (profileId !== undefined) await safely((database) => deleteSetting(database, profileId, key))
@@ -299,5 +326,6 @@ export function useProgress() {
     removeSong,
     loadSongProgress,
     saveSongUnit,
+    resetSongUnits,
   }
 }

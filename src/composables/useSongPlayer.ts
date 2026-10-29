@@ -1,4 +1,4 @@
-import { readonly, ref, shallowRef } from 'vue'
+import { readonly, ref, shallowRef, watch } from 'vue'
 import { Sequencer } from 'spessasynth_lib'
 
 import { useSynth } from '@/composables/useSynth'
@@ -18,6 +18,12 @@ const rate = ref(1)
 const time = ref(0)
 const sequencer = shallowRef<Sequencer | null>(null)
 let frame = 0
+/**
+ * A seek made while paused. The sequencer lands a paused seek on the next MIDI event, not on the
+ * time asked for (a seek into a stretch with no new notes jumps ahead to them), so the exact time
+ * is kept here and applied again once playback runs.
+ */
+let pausedTarget: number | null = null
 
 function requireSynth() {
   const synth = useSynth().getSynth()
@@ -68,6 +74,11 @@ function play(): void {
   const current = sequencer.value
   if (!current) return
   current.play()
+  if (pausedTarget !== null) {
+    // While playing, the sequencer keeps the exact time and waits for the next event.
+    current.currentTime = pausedTarget
+    pausedTarget = null
+  }
   playing.value = true
   cancelAnimationFrame(frame)
   frame = requestAnimationFrame(tick)
@@ -80,13 +91,20 @@ function pause(): void {
   playing.value = false
   cancelAnimationFrame(frame)
   time.value = current.currentTime
+  pausedTarget = null
 }
 
-function seek(seconds: number): void {
+/**
+ * Moves the song. `atNote`: the time is the start of a note, where a paused seek lands exactly anyway;
+ * skipping the second seek on play keeps held accompaniment notes sounding (wait-mode resumes).
+ */
+function seek(seconds: number, atNote = false): void {
   const current = sequencer.value
   if (!current) return
-  current.currentTime = Math.max(0, Math.min(seconds, current.duration))
-  time.value = current.currentTime
+  const target = Math.max(0, Math.min(seconds, current.duration))
+  current.currentTime = target
+  pausedTarget = playing.value || atNote ? null : target
+  time.value = target
 }
 
 function setRate(value: number): void {
@@ -109,6 +127,27 @@ function unload(): void {
   loaded.value = false
 }
 
+/**
+ * For a play button's first tap: turns the sound on (browsers only start audio from a tap) and
+ * waits until the page has loaded its song. False when the sound could not start.
+ */
+async function ensureLoaded(): Promise<boolean> {
+  if (loaded.value) return true
+  const synth = useSynth()
+  await synth.start()
+  if (synth.status.value !== 'ready') return false
+  if (!loaded.value) {
+    await new Promise<void>((resolve) => {
+      const stop = watch(loaded, (value) => {
+        if (!value) return
+        stop()
+        resolve()
+      })
+    })
+  }
+  return true
+}
+
 export function useSongPlayer() {
   return {
     loaded: readonly(loaded),
@@ -117,6 +156,7 @@ export function useSongPlayer() {
     rate: readonly(rate),
     time: readonly(time),
     load,
+    ensureLoaded,
     play,
     pause,
     seek,
@@ -125,6 +165,6 @@ export function useSongPlayer() {
     setChannelGain,
     unload,
     /** Current position straight from the sequencer, for the wait-mode loop. */
-    currentTime: (): number => sequencer.value?.currentHighResolutionTime ?? 0,
+    currentTime: (): number => pausedTarget ?? sequencer.value?.currentHighResolutionTime ?? 0,
   }
 }

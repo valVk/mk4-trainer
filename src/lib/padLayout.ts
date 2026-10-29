@@ -1,7 +1,7 @@
 // Playing a part on the 8 MK4 pads instead of the keys: which note each pad plays.
 // Pure code, no Vue, no UI text.
 
-import type { Part, Step } from './song'
+import type { Part } from './song'
 
 export const PAD_SLOTS = 8
 
@@ -86,9 +86,4 @@ export function padLayout(part: Pick<Part, 'notes' | 'isDrum'>): PadLayout | nul
     if (key !== null) padOf.set(key, index + 1)
   })
   return { padKeys, padOf }
-}
-
-/** The part's steps as pads to hit together (pad numbers instead of notes). */
-export function padSteps(steps: readonly Step[], layout: PadLayout): { time: number, pads: number[] }[] {
-  return steps.map((step) => ({ time: step.time, pads: [...new Set(step.keys.map((key) => layout.padOf.get(key)!))].sort((a, b) => a - b) }))
 }

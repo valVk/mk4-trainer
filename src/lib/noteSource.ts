@@ -4,10 +4,11 @@
 export type NoteSourceKind = 'midi' | 'virtual'
 
 export type NoteEvent =
-  | { type: 'noteOn', note: number, velocity: number, channel: number, source: NoteSourceKind }
+  /** `onScreen`: tapped on the on-screen keyboard or pad strip, not a physical key. */
+  | { type: 'noteOn', note: number, velocity: number, channel: number, source: NoteSourceKind, onScreen?: boolean }
   | { type: 'noteOff', note: number, channel: number, source: NoteSourceKind }
   /** Pad number is 1-based, as printed on the MK4. */
-  | { type: 'pad', pad: number, velocity: number, source: NoteSourceKind }
+  | { type: 'pad', pad: number, velocity: number, source: NoteSourceKind, onScreen?: boolean }
   | { type: 'knob', control: number, value: number, channel: number, source: NoteSourceKind }
 
 export type NoteListener = (event: NoteEvent) => void

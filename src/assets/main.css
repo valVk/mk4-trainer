@@ -40,6 +40,8 @@
   --ui-border-muted: #dde2ec;
   --ui-border-accented: #b9c0d2;
   --ui-radius: 0.5rem;
+  /* Widest page: a Galaxy Tab S10+ in landscape is 1400 CSS px, the S10 Ultra 1480. */
+  --page-max: 92rem;
 }
 
 .dark {
@@ -63,7 +65,49 @@
   --ui-border-accented: #3a4166;
 }
 
+html {
+  color-scheme: light;
+  /* No grey flash on tap: every control has its own press state. */
+  -webkit-tap-highlight-color: transparent;
+  -webkit-text-size-adjust: 100%;
+  /* An app, not a document: no pull-to-refresh reloading the lesson, no page rubber band. */
+  overscroll-behavior: none;
+}
+
+html.dark {
+  color-scheme: dark;
+}
+
 body {
   font-family: var(--font-sans);
-  -webkit-tap-highlight-color: transparent;
+  overscroll-behavior: none;
+}
+
+/* Controls answer a tap at once (no double-tap zoom wait), and a long press does not select their label. */
+:where(button, a, [role="button"], [role="radio"]) {
+  touch-action: manipulation;
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-touch-callout: none;
+}
+
+/* Visible focus for our own buttons; Nuxt UI components bring their own ring. */
+:where(button, [role="button"], [role="radio"]):focus-visible {
+  outline: 3px solid var(--color-pad-sky);
+  outline-offset: 2px;
+}
+
+/* Page frame shared by every screen. Low specificity, so a page's own rules win. */
+:where(.page) {
+  width: 100%;
+  max-width: var(--page-max);
+  margin: 0 auto;
+  padding: clamp(0.75rem, 3.5vh, 2.5rem) clamp(1rem, 3vw, 2.5rem);
+}
+
+/* Screens that fill the height: header on top, the rest grows. */
+:where(.page--fill) {
+  display: flex;
+  flex-direction: column;
+  flex: 1 0 auto;
 }

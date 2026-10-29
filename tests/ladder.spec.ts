@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
-import { buildUnits, isWrongPress, nextUnit, scoreTempo, starsFor, tempoPasses, waitPasses } from '@/lib/ladder'
+import { buildUnits, countMistakes, isWrongPress, nextUnit, openRungs, scoreAttempt, scoreTempo, starsFor, tempoPasses, waitPasses } from '@/lib/ladder'
 import type { Phrase, Section } from '@/lib/phrases'
 import type { Step } from '@/lib/song'
 
@@ -28,7 +28,7 @@ describe('buildUnits', () => {
   it('gives each unit its time span, steps and rungs', () => {
     const section = units.find((unit) => unit.id === 's0')!
     expect([section.start, section.end, section.steps.length]).toEqual([0, 16, 4])
-    expect(units[0]!.rungs.map((rung) => `${rung.mode}@${rung.rate}`)).toEqual(['listen@1', 'wait@0.6', 'wait@1', 'tempo@0.7', 'tempo@1'])
+    expect(units[0]!.rungs.map((rung) => `${rung.mode}@${rung.rate}`)).toEqual(['listen@1', 'wait@0.6', 'tempo@0.6', 'tempo@0.8', 'tempo@1'])
     expect(section.rungs).toHaveLength(3)
     expect(units[units.length - 1]!.rungs.map((rung) => rung.mode)).toEqual(['tempo', 'tempo'])
     expect(units[units.length - 1]!.steps).toHaveLength(8)
@@ -37,6 +37,21 @@ describe('buildUnits', () => {
 
 describe('stars and next unit', () => {
   const units = buildUnits(phrases, sections)
+
+  it('never slows down after listening, in every kind of unit', () => {
+    const units = buildUnits(phrases, sections)
+    for (const unit of units) {
+      const rates = unit.rungs.filter((rung) => rung.mode !== 'listen').map((rung) => rung.rate)
+      expect(rates).toEqual([...rates].sort((a, b) => a - b))
+    }
+  })
+
+  it('opens the passed rungs and the next one', () => {
+    const unit = buildUnits(phrases, sections)[0]!
+    expect(openRungs(unit, 0)).toBe(1)
+    expect(openRungs(unit, 2)).toBe(3)
+    expect(openRungs(unit, 5)).toBe(5)
+  })
 
   it('gives a star for each of the last three rungs', () => {
     const phraseUnit = units[0]!
@@ -66,6 +81,19 @@ describe('wait mode', () => {
     expect(waitPasses(10, 3)).toBe(false)
     expect(waitPasses(3, 1)).toBe(true)
   })
+
+  it('forgives a neighbour key brushed together with the right one', () => {
+    // D brushed 30 ms before the right E, in either order; a lone wrong G a second later counts.
+    const presses = [
+      { key: 62, time: 1.0, wrong: true },
+      { key: 64, time: 1.03, wrong: false },
+      { key: 65, time: 1.05, wrong: true },
+      { key: 67, time: 2.0, wrong: true },
+    ]
+    expect(countMistakes(presses, 1)).toBe(1)
+    // Far keys are real mistakes even when struck together.
+    expect(countMistakes([{ key: 72, time: 1, wrong: true }, { key: 64, time: 1, wrong: false }], 1)).toBe(1)
+  })
 })
 
 describe('scoreTempo', () => {
@@ -89,9 +117,50 @@ describe('scoreTempo', () => {
     expect(scoreTempo([step(2, 64, 67)], [{ key: 76, time: 2 }, { key: 79, time: 2 }], 1, true).hits).toBe(1)
   })
 
+  it('counts a press once, so one press does not cover two repeated notes', () => {
+    const repeated = [step(1, 60), step(1.15, 60)]
+    expect(scoreTempo(repeated, [{ key: 60, time: 1.08 }], 1, false).hits).toBe(1)
+    expect(scoreTempo(repeated, [{ key: 60, time: 1.0 }, { key: 60, time: 1.16 }], 1, false).hits).toBe(2)
+  })
+
+  it('does not pass when every key is pressed', () => {
+    const steps5 = [1, 2, 3, 4, 5].map((t) => step(t, 60))
+    const mash = steps5.flatMap((item) => [60, 64, 67, 71, 74].map((key) => ({ key, time: item.time })))
+    const score = scoreTempo(steps5, mash, 1, false)
+    expect(score.hits).toBe(5)
+    expect(score.extra).toBe(20)
+    expect(tempoPasses(score)).toBe(false)
+  })
+
+  it('does not count brushed neighbours, doubled octaves or warming up before the start as extra', () => {
+    const presses = [{ key: 50, time: 0.2 }, { key: 60, time: 1 }, { key: 61, time: 1.02 }, { key: 72, time: 1.01 }]
+    expect(scoreTempo([step(1, 60)], presses, 1, false).extra).toBe(0)
+  })
+
   it('passes at 80% or more', () => {
     const steps5 = [1, 2, 3, 4, 5].map((t) => step(t, 60))
     const presses = [1, 2, 3, 4].map((t) => ({ key: 60, time: t }))
     expect(tempoPasses(scoreTempo(steps5, presses, 1, false))).toBe(true)
+  })
+})
+
+describe('scoreAttempt', () => {
+  const steps = [step(1, 60), step(2, 62)]
+  const base = { steps, presses: [], waitPresses: [], played: 0, rate: 1, anyOctave: false }
+
+  it('passes wait mode only when the unit was played to the end', () => {
+    expect(scoreAttempt({ ...base, mode: 'wait', played: 2 }).passed).toBe(true)
+    expect(scoreAttempt({ ...base, mode: 'wait', played: 1 }).passed).toBe(false)
+  })
+
+  it('keeps wrong presses and extra notes apart', () => {
+    const wait = scoreAttempt({ ...base, mode: 'wait', played: 2, waitPresses: [{ key: 70, time: 1, wrong: true }] })
+    expect([wait.mistakes, wait.extra]).toEqual([1, 0])
+    const tempo = scoreAttempt({ ...base, mode: 'tempo', presses: [{ key: 60, time: 1 }, { key: 62, time: 2 }, { key: 70, time: 1.5 }] })
+    expect([tempo.hits, tempo.mistakes, tempo.extra, tempo.passed]).toEqual([2, 0, 1, true])
+  })
+
+  it('always passes listening', () => {
+    expect(scoreAttempt({ ...base, mode: 'listen' })).toMatchObject({ passed: true, mode: 'listen' })
   })
 })

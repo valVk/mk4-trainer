@@ -1,30 +1,36 @@
 <script setup lang="ts">
-import { computed, ref, watch } from 'vue'
+import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 
 import IntervalBar from '@/components/IntervalBar.vue'
+import MidiStatus from '@/components/MidiStatus.vue'
+import PageHeader from '@/components/PageHeader.vue'
 import PianoKeyboard from '@/components/PianoKeyboard.vue'
 import SoundControl from '@/components/SoundControl.vue'
-import StatusLed from '@/components/StatusLed.vue'
+import { useKeyboardWindow } from '@/composables/useKeyboardWindow'
 import { useNoteNames } from '@/composables/useNoteNames'
 import { useNoteSource } from '@/composables/useNoteSource'
+import { SETTLE_MS, isRelease, useSettled } from '@/composables/useSettled'
 import { usePadActions } from '@/composables/usePadActions'
 import { useSynth } from '@/composables/useSynth'
 import { useWakeLock } from '@/composables/useWakeLock'
-import { KEYBOARD_KEYS, followRange, rangeStartFor } from '@/lib/keyboard'
+import { KEYBOARD_KEYS } from '@/lib/keyboard'
 import { buildChord, chordSymbol, identifyChord, intervalsBetween, midiName, noteName } from '@/lib/theory'
 
 const { t } = useI18n()
 useWakeLock()
-const { heldNotes, baseNote, midiStatus, connectMidi, pressNote, releaseNote, shiftOctave } = useNoteSource()
+const { heldNotes, pressNote, releaseNote, shiftOctave } = useNoteSource()
 const { status: soundStatus, playChord } = useSynth()
 const { localName, withLocal } = useNoteNames()
+// Lifting a chord key by key would read it as an interval, then a note: the name stays
+// until the hand is off, and changes at once when keys are added.
+const shown = useSettled(heldNotes, (next, current) => (isRelease(next, current) ? SETTLE_MS : 0))
 
 // Reference: the recognised chord in root position, from the octave of the lowest held note.
 function listen() {
   const chord = primary.value
   if (!chord) return
-  const lowest = Math.min(...heldNotes.value)
+  const lowest = Math.min(...shown.value)
   const root = Math.floor(lowest / 12) * 12 + chord.root
   playChord(buildChord(root > lowest ? root - 12 : root, chord.type))
 }
@@ -35,21 +41,14 @@ usePadActions({
   },
 })
 
-// The keyboard follows the octave buttons and jumps to notes played outside it.
-const start = ref(rangeStartFor(baseNote.value))
-watch(baseNote, (base) => {
-  start.value = rangeStartFor(base)
-})
-watch(heldNotes, (held) => {
-  start.value = followRange(start.value, held)
-})
+const start = useKeyboardWindow()
 
-const matches = computed(() => identifyChord(heldNotes.value))
+const matches = computed(() => identifyChord(shown.value))
 const primary = computed(() => matches.value[0] ?? null)
 const others = computed(() => matches.value.slice(1).map((match) => chordSymbol(match.root, match.type)))
 
 const reading = computed(() => {
-  const held = heldNotes.value
+  const held = shown.value
   if (held.length === 0) return { kind: 'empty' as const }
   if (held.length === 1) {
     const note = held[0] as number
@@ -75,25 +74,11 @@ const rangeLabel = computed(() => `${midiName(start.value)} – ${midiName(start
 </script>
 
 <template>
-  <main class="lab">
-    <header class="flex flex-wrap items-center gap-3 -ml-3">
-      <UButton to="/" icon="i-lucide-arrow-left" color="neutral" variant="ghost" size="xl" :aria-label="t('nav.home')" />
-      <h1 class="title text-highlighted">{{ t('lab.title') }}</h1>
-      <div class="ml-auto flex flex-wrap items-center gap-4">
-        <SoundControl />
-        <StatusLed v-if="midiStatus === 'connected'" on :label="t('lab.mk4Connected')" />
-        <UButton
-          v-else-if="midiStatus !== 'unsupported'"
-          icon="i-lucide-plug"
-          color="neutral"
-          variant="soft"
-          size="lg"
-          :loading="midiStatus === 'connecting'"
-          :label="t('midiTest.connect')"
-          @click="connectMidi"
-        />
-      </div>
-    </header>
+  <main class="page page--fill lab">
+    <PageHeader :title="t('lab.title')">
+      <SoundControl />
+      <MidiStatus />
+    </PageHeader>
 
     <section class="readout" aria-live="polite">
       <p v-if="reading.kind === 'empty'" class="prompt text-muted">{{ t('lab.empty') }}</p>
@@ -119,7 +104,7 @@ const rangeLabel = computed(() => `${midiName(start.value)} – ${midiName(start
         </p>
         <p v-else-if="reading.kind === 'note' && reading.name" class="name text-toned">{{ reading.name }}</p>
         <p v-else-if="reading.kind === 'unknown'" class="name text-toned">{{ t('lab.unknownHint') }}</p>
-        <IntervalBar v-if="heldNotes.length > 1" :notes="heldNotes" class="mt-5" />
+        <IntervalBar v-if="shown.length > 1" :notes="shown" class="mt-5" />
         <p v-if="others.length" class="mt-4 text-muted">{{ t('lab.alsoKnownAs', { names: others.join(', ') }) }}</p>
       </template>
     </section>
@@ -145,21 +130,6 @@ const rangeLabel = computed(() => `${midiName(start.value)} – ${midiName(start
 </template>
 
 <style scoped>
-.lab {
-  display: flex;
-  flex-direction: column;
-  flex: 1 0 auto;
-  max-width: 76rem;
-  margin: 0 auto;
-  padding: clamp(1rem, 3vw, 2.5rem);
-}
-
-.title {
-  font-family: var(--font-display);
-  font-size: clamp(1.75rem, 3vw, 2.25rem);
-  font-weight: 700;
-}
-
 .readout {
   flex: 1;
   display: flex;

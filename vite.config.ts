@@ -63,8 +63,8 @@ export default defineConfig({
         display: 'fullscreen',
         display_override: ['fullscreen', 'standalone'],
         orientation: 'landscape',
-        theme_color: '#18181b',
-        background_color: '#18181b',
+        theme_color: '#141729',
+        background_color: '#141729',
         icons: [
           { src: 'pwa-64x64.png', sizes: '64x64', type: 'image/png' },
           { src: 'pwa-192x192.png', sizes: '192x192', type: 'image/png' },

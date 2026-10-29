@@ -1,15 +1,12 @@
 // Practice logic for the «Песня» mode: the 25-key window, matching presses against a step,
 // finding steps in time. Pure code, no Vue.
 
-import { KEYBOARD_KEYS, rangeStartFor } from './keyboard'
+import { KEYBOARD_KEYS, fitsWindow, rangeStartFor } from './keyboard'
 import type { Step } from './song'
 import { pitchClass } from './theory'
 
 /** How far ahead the window looks when it has to move (seconds). */
 export const WINDOW_LOOKAHEAD_S = 8
-
-const fitsAll = (start: number, keys: readonly number[]) =>
-  keys.every((key) => key >= start && key < start + KEYBOARD_KEYS)
 
 /**
  * The 25-key window (always starting on a C) for the coming notes. It stays where it is while
@@ -17,7 +14,7 @@ const fitsAll = (start: number, keys: readonly number[]) =>
  * the most coming keys, and among equals the one closest to where it was.
  */
 export function chooseWindow(currentStart: number, upcomingKeys: readonly number[]): number {
-  if (upcomingKeys.length === 0 || fitsAll(currentStart, upcomingKeys)) return currentStart
+  if (upcomingKeys.length === 0 || fitsWindow(upcomingKeys, currentStart)) return currentStart
   const low = Math.min(...upcomingKeys)
   const high = Math.max(...upcomingKeys)
   let best = rangeStartFor(low)
@@ -32,6 +29,19 @@ export function chooseWindow(currentStart: number, upcomingKeys: readonly number
     }
   }
   return best
+}
+
+/** The window only has to change when a note this close does not fit (seconds of song time). */
+export const WINDOW_SOON_S = 1.5
+
+/**
+ * The window while the song plays: it stays put while the notes of the next WINDOW_SOON_S fit,
+ * even if later ones would not, so notes on screen do not jump to another octave mid-phrase.
+ * When it has to move, it picks the start that fits the coming WINDOW_LOOKAHEAD_S best.
+ */
+export function followWindow(currentStart: number, steps: readonly Step[], time: number): number {
+  if (fitsWindow(upcomingKeys(steps, time, WINDOW_SOON_S), currentStart)) return currentStart
+  return chooseWindow(currentStart, upcomingKeys(steps, time))
 }
 
 /** Keys of the steps that start within the lookahead from `time`. */
