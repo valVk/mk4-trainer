@@ -1,0 +1,170 @@
+/* Shared by «Теория» and its sections: tabs, the level row, stars, the task card, results and controls. */
+
+.sections,
+.levels {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.375rem;
+}
+
+.sections {
+  margin-top: 0.75rem;
+}
+
+.section,
+.level {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.375rem;
+  min-height: 2.5rem;
+  padding: 0 0.875rem;
+  border-radius: 0.625rem;
+  font-weight: 600;
+  color: var(--ui-text-toned);
+  background: var(--ui-bg-elevated);
+  box-shadow: 0 0 0 1px var(--ui-border) inset;
+  transition: background-color 120ms ease, transform 100ms ease-out;
+}
+
+.section:active:not(:disabled),
+.level:active:not(:disabled) {
+  transform: scale(0.96);
+}
+
+.section:disabled,
+.level:disabled {
+  opacity: 0.5;
+}
+
+.section--on,
+.level--on {
+  color: #fff;
+  background: var(--color-pad-sky);
+  box-shadow: none;
+}
+
+.level--piece {
+  gap: 0.125rem;
+  padding: 0 0.5rem;
+  color: var(--color-pad-sky);
+  box-shadow: 0 0 0 1.5px color-mix(in oklab, var(--color-pad-sky) 50%, transparent) inset;
+}
+
+.level--closed {
+  opacity: 0.5;
+}
+
+.level--done:not(.level--on) {
+  box-shadow: 0 0 0 2px var(--color-pad-aqua) inset;
+}
+
+.levels-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 1rem;
+  margin-top: 0.75rem;
+}
+
+.stars {
+  font-size: 1.5rem;
+  letter-spacing: 0.1em;
+  color: var(--color-pad-sun);
+}
+
+.stars__off {
+  color: var(--star-off);
+}
+
+.task {
+  position: relative;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 0.75rem;
+  min-height: 0;
+  margin-top: 1rem;
+  padding: 1rem 1.25rem;
+  border-radius: 1rem;
+  background: var(--ui-bg-muted);
+}
+
+.how {
+  margin-top: 0.25rem;
+  font-size: 1.0625rem;
+}
+
+.prompt {
+  font-family: var(--font-display);
+  font-size: clamp(1.25rem, 2.4vw, 1.75rem);
+  font-weight: 700;
+}
+
+.intro {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(16rem, 1fr));
+  gap: 1rem;
+}
+
+.intro__item {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.result {
+  position: absolute;
+  top: 0.75rem;
+  right: 0.75rem;
+  max-width: min(28rem, calc(100% - 1.5rem));
+  padding: 0.75rem 1rem;
+  border-radius: 0.875rem;
+  background: var(--ui-bg-elevated);
+  box-shadow: 0 12px 32px -12px rgb(0 0 0 / 0.35);
+}
+
+.result--passed {
+  box-shadow: 0 0 0 2px var(--color-pad-aqua) inset, 0 12px 32px -12px rgb(0 0 0 / 0.35);
+}
+
+.result--again {
+  box-shadow: 0 0 0 2px var(--color-pad-sun) inset, 0 12px 32px -12px rgb(0 0 0 / 0.35);
+}
+
+.result__title {
+  font-family: var(--font-display);
+  font-size: 1.25rem;
+  font-weight: 700;
+  color: var(--ui-text-highlighted);
+}
+
+.controls {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.75rem;
+  margin-top: 1rem;
+}
+
+/* Short tablets (650 px high): a tighter card, so even two hands fit without scrolling. */
+@media (max-height: 720px) {
+  .sections,
+  .levels-row {
+    margin-top: 0.5rem;
+  }
+
+  .task {
+    gap: 0.375rem;
+    margin-top: 0.5rem;
+    padding: 0.625rem 1rem;
+  }
+
+  .controls {
+    margin-top: 0.625rem;
+  }
+
+  .how {
+    font-size: 0.9375rem;
+  }
+}

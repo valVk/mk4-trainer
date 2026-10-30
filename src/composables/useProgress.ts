@@ -28,6 +28,7 @@ import { isValidPadMap, type PadMap } from '@/lib/noteSource'
 import { PIECES, buildPieceMidi, builtinId, pieceFileName } from '@/lib/pieces'
 import { parseSongView, type SongView } from '@/lib/practice'
 import type { Rhythm, RhythmScore } from '@/lib/rhythm'
+import { parseNoteProgress, type NoteLevelProgress } from '@/lib/noteLevels'
 import { addKindStats, parseKindStats, parseRhythmProgress, type KindStats, type RhythmKind, type RhythmLevelProgress } from '@/lib/rhythmLevels'
 import { parseSong, songNameFromFile } from '@/lib/song'
 
@@ -46,6 +47,8 @@ const SONG_VIEW_KEY = 'songView'
 const RHYTHM_KEY = 'theoryRhythm'
 /** «Теория» → «Ритм»: tries and misses by kind of note, for the weak spots. */
 const RHYTHM_WEAK_KEY = 'theoryRhythmWeak'
+/** «Теория» → «Ноты»: notes found per level. */
+const NOTES_KEY = 'theoryNotes'
 /** How late this child's taps arrive after the click, per input: the last checks on the «Ритм» page (median is used). */
 const LATENCY_KEY = 'tapLatencyMs'
 /** Where step 5 kept the pad map before the database existed. */
@@ -67,6 +70,7 @@ const trainLevel = ref<number | null>(null)
 const songView = ref<SongView>('fall')
 const rhythmProgress = ref<Record<number, RhythmLevelProgress>>({})
 const rhythmWeak = ref<Partial<Record<RhythmKind, KindStats>>>({})
+const noteProgress = ref<Record<number, NoteLevelProgress>>({})
 const songs = shallowRef<SongSummary[]>([])
 // Applying stored settings must not write them straight back.
 let applying = false
@@ -134,6 +138,7 @@ async function loadProfileData(database: TrainerDb, current: Profile): Promise<v
   songView.value = parseSongView(await getSetting<unknown>(database, current.id, SONG_VIEW_KEY))
   rhythmProgress.value = parseRhythmProgress(await getSetting<unknown>(database, current.id, RHYTHM_KEY))
   rhythmWeak.value = parseKindStats(await getSetting<unknown>(database, current.id, RHYTHM_WEAK_KEY))
+  noteProgress.value = parseNoteProgress(await getSetting<unknown>(database, current.id, NOTES_KEY))
   const instrument = await getSetting<unknown>(database, current.id, INSTRUMENT_KEY)
   const bank = await getSetting<BankId>(database, current.id, BANK_KEY)
   const metronome = await getSetting<unknown>(database, current.id, METRONOME_KEY)
@@ -243,6 +248,15 @@ async function addRhythmPass(level: number): Promise<void> {
   const profileId = profile.value?.id
   if (profileId === undefined) return
   await safely((database) => setSetting(database, profileId, RHYTHM_KEY, plain(next)))
+}
+
+/** One more note found on a level of «Теория» → «Ноты». */
+async function addNoteCorrect(level: number): Promise<void> {
+  const next = { ...noteProgress.value, [level]: { correct: (noteProgress.value[level]?.correct ?? 0) + 1 } }
+  noteProgress.value = next
+  const profileId = profile.value?.id
+  if (profileId === undefined) return
+  await safely((database) => setSetting(database, profileId, NOTES_KEY, plain(next)))
 }
 
 async function setSongView(view: SongView): Promise<void> {
@@ -392,6 +406,7 @@ export function useProgress() {
     songView: readonly(songView),
     rhythmProgress: readonly(rhythmProgress),
     rhythmWeak: readonly(rhythmWeak),
+    noteProgress: readonly(noteProgress),
     songs: readonly(songs),
     init,
     record,
@@ -400,6 +415,7 @@ export function useProgress() {
     setSongView,
     addRhythmPass,
     addRhythmStats,
+    addNoteCorrect,
     switchProfile,
     addProfile,
     renameProfile,

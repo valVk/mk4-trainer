@@ -41,7 +41,7 @@ import { parseMix } from '@/lib/mix'
 import { MIDDLE_C, clefFor, markPlayed, needsGrandStaff, writePart, writePlayed, type PlayedKey } from '@/lib/notation'
 import { drumKind, PAD_NOTE_MIN_S, padLayout } from '@/lib/padLayout'
 import { partPhrases, songSections, type Phrase } from '@/lib/phrases'
-import { SONG_VIEWS, chooseWindow, coversStep, followWindow, octaveHint, stepIndexAt, upcomingKeys, type SongView } from '@/lib/practice'
+import { KEY_HINT_DELAY_MS, SONG_VIEWS, chooseWindow, coversStep, followWindow, octaveHint, stepIndexAt, upcomingKeys, type SongView } from '@/lib/practice'
 import { parseSong, type Part, type Song } from '@/lib/song'
 import { chordSymbol, identifyChord, midiName, noteName } from '@/lib/theory'
 
@@ -538,7 +538,6 @@ const soundingKeys = computed(() => {
  * find it from the notes, like a teacher who waits before pointing. In tempo there is no time to think,
  * so the keys light up as the notes come.
  */
-const KEY_HINT_DELAY_MS = 2000
 const keyHint = ref(false)
 let keyHintTimer: ReturnType<typeof setTimeout> | undefined
 watch([waiting, pendingIndex], () => {

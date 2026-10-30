@@ -97,3 +97,6 @@ export type SongView = (typeof SONG_VIEWS)[number]
 export function parseSongView(value: unknown): SongView {
   return SONG_VIEWS.includes(value as SongView) ? (value as SongView) : 'fall'
 }
+
+/** Time to find a key from the notes before it lights up as a hint, like a teacher who waits before pointing. */
+export const KEY_HINT_DELAY_MS = 2000

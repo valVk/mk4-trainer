@@ -6,6 +6,7 @@ import { MIDIBuilder, MIDIMessageTypes } from 'spessasynth_core'
 
 import { noteQuarters, type Duration } from './rhythm'
 import type { TimeSignature } from './song'
+import { pitch } from './staff'
 
 /** One written note of a voice; `key` null is a rest. */
 export interface PieceNote {
@@ -55,14 +56,7 @@ const DRUMS = 9
 /** The drum a rhythm piece is tapped on: the snare, pad 2 on the MK4 layout. */
 const RHYTHM_DRUM = 38
 
-/** Notes in scientific pitch: C4 is middle C (60). */
-const NOTE_INDEX: Record<string, number> = { C: 0, D: 2, E: 4, F: 5, G: 7, A: 9, B: 11 }
-export function pitch(name: string): number {
-  const match = /^([A-G])(#|b)?(-?\d)$/.exec(name)
-  if (!match) throw new Error(`Bad note ${name}`)
-  const [, letter, accidental, octave] = match
-  return (Number(octave) + 1) * 12 + NOTE_INDEX[letter!]! + (accidental === '#' ? 1 : accidental === 'b' ? -1 : 0)
-}
+export { pitch }
 
 /**
  * A voice written compactly: "E5/16 D#5/16 A4/8 r/16" — note (or r for a rest), slash, value
