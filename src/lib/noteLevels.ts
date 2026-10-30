@@ -6,15 +6,15 @@ import { isGraze, type Press } from './ladder'
 import type { Rhythm, RhythmScore } from './rhythm'
 import { RHYTHM_LEVELS, makeTask, passes } from './rhythmLevels'
 import { STAR_THRESHOLDS, starsFor } from './levels'
-import { keyOf, spelled, stepTarget, type Spelled, type StepTask } from './accidentals'
+import { barKeys, keyOf, spelled, stepTarget, type BarNote, type KeySignature, type Letter, type Spelled, type StepTask } from './accidentals'
 import { pitch } from './staff'
 import { pitchClass } from './theory'
 
 export type NoteIntroId = 'keyboard' | 'names' | 'treble' | 'bass' | 'grand' | 'ledgers' | 'timed' | 'reading'
-  | 'semitone' | 'sharpFlat' | 'natural' | 'double' | 'enharmonic'
+  | 'semitone' | 'sharpFlat' | 'natural' | 'double' | 'enharmonic' | 'keySignature'
 
 /** How the task is shown: the note's name only, a step from a key on the keyboard, or the note on a staff. */
-export type NoteShow = 'name' | 'step' | 'treble' | 'bass' | 'grand'
+export type NoteShow = 'name' | 'step' | 'bar' | 'treble' | 'bass' | 'grand'
 
 export interface NoteLevel {
   id: number
@@ -66,7 +66,43 @@ export const ACCIDENTAL_LEVELS: readonly NoteLevel[] = [
   writtenLevel({ id: 2, show: 'treble', anyOctave: false, introduces: ['sharpFlat'] }, 'C#4 D#4 F#4 G#4 A#4 Db4 Eb4 Gb4 Ab4 Bb4'),
   writtenLevel({ id: 3, show: 'treble', anyOctave: false, introduces: ['natural', 'double'] }, 'Fn4 Bn4 Fx4 Cx4 Gx4 Bbb4 Ebb4 Abb4'),
   writtenLevel({ id: 4, show: 'treble', anyOctave: false, introduces: ['enharmonic'] }, 'E#4 B#4 Fb4 Cb5 C#4 Db4 F#4 Gb4 A#4 Bb4'),
+  // A bar under a key signature, played note by note; a whole bar counts as one answer.
+  { id: 5, show: 'bar', keys: keys('C4 C#4 D4 D#4 E4 F4 F#4 G4 G#4 A4 A#4 B4 C5'), anyOctave: false, introduces: ['keySignature'], stars: [3, 6, 10] },
 ]
+
+/** A bar to play under a key signature, and the keys it sounds on. */
+export interface KeyBar {
+  key: KeySignature
+  notes: BarNote[]
+  keys: number[]
+}
+
+/** The letter each key signature alters: F in G major, B in F major. */
+const KEY_LETTER: Record<'G' | 'F', Letter> = { G: 3, F: 6 }
+/** Signs that make a usual black key on each letter (no E♯ or C♭ here: those are for П4). */
+const PLAIN_SIGNS: Record<Letter, (1 | -1)[]> = { 0: [1], 1: [1, -1], 2: [-1], 3: [1], 4: [1, -1], 5: [1, -1], 6: [-1] }
+
+/**
+ * A bar of four notes on C4-B4 (C5 at most) that teaches one of two things: the key-signature letter played
+ * altered, then cancelled by a natural that holds to the end of the bar; or a sign that holds for the same note
+ * later in the bar. The key-signature letter is always in it.
+ */
+export function makeKeyBar(random: () => number = Math.random): KeyBar {
+  const pick = <T>(items: readonly T[]): T => items[Math.floor(random() * items.length)]!
+  const key = pick(['G', 'F'] as const)
+  const marked = KEY_LETTER[key]
+  const others = ([0, 1, 2, 3, 4, 5, 6] as Letter[]).filter((letter) => letter !== marked)
+  const plain = (letter: Letter): BarNote => ({ letter, octave: 4, sign: null })
+  let notes: BarNote[]
+  if (random() < 0.5) {
+    notes = [plain(marked), plain(pick(others)), { letter: marked, octave: 4, sign: 'natural' }, plain(marked)]
+  } else {
+    const letter = pick(others)
+    const sign = pick(PLAIN_SIGNS[letter])
+    notes = [{ letter, octave: 4, sign }, plain(letter), plain(pick(others.filter((other) => other !== letter))), plain(marked)]
+  }
+  return { key, notes, keys: barKeys(key, notes) }
+}
 
 export const NOTE_SECTIONS: Readonly<Record<NoteSectionId, readonly NoteLevel[]>> = { notes: NOTE_LEVELS, accidentals: ACCIDENTAL_LEVELS }
 
@@ -156,6 +192,8 @@ export interface NoteTask {
   key: number
   written?: Spelled
   step?: StepTask
+  /** A bar under a key signature: its keys are played one after the other; `key` is the first. */
+  bar?: KeyBar
 }
 
 /** The next task: never the same as the one before, so the child sees that the task changed. */
@@ -169,6 +207,10 @@ export function nextTask(level: NoteLevel, previous: NoteTask | null, random: ()
     const steps = level.keys.filter((from) => from !== previous?.step?.from).flatMap((from) => ([1, 2] as const).flatMap((semitones) => [true, false].map((up): StepTask => ({ from, semitones, up }))))
     const step = pick(steps.filter((item) => stepTarget(item) >= low && stepTarget(item) <= high))
     return { key: stepTarget(step), step }
+  }
+  if (level.show === 'bar') {
+    const bar = makeKeyBar(random)
+    return { key: bar.keys[0]!, bar }
   }
   if (level.written) {
     const index = level.written.indexOf(pick(level.written.filter((note) => note !== previous?.written)))

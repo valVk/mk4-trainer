@@ -205,6 +205,10 @@ export function writePart(notes: readonly SongNote[], bars: readonly number[], m
 
 const NAMES = ['c', 'c', 'd', 'd', 'e', 'f', 'f', 'g', 'g', 'a', 'a', 'b'] as const
 const SHARP = [false, true, false, true, false, false, true, false, true, false, true, false]
+/** The order sharps are added to a key signature: F C G D A E B. */
+const SHARP_ORDER = ['f', 'c', 'g', 'd', 'a', 'e', 'b'] as const
+/** VexFlow's names of the sharp keys by the number of sharps (flat keys are not spelled here: notes are written with sharps). */
+export const SHARP_KEYS = ['C', 'G', 'D', 'A', 'E', 'B', 'F#', 'C#'] as const
 
 export interface SpelledKey {
   /** VexFlow key, e.g. "c#/5" (octave 4 is the one of middle C). */
@@ -215,16 +219,19 @@ export interface SpelledKey {
 
 /**
  * Spells the keys of one bar with sharps. A sharp holds for the rest of the bar on that line, so it is
- * printed once; going back to the plain note on the same line prints a natural.
+ * printed once; going back to the plain note on the same line prints a natural. With `keySharps` the key
+ * signature's sharps hold already: F♯ in D major prints no sign, F prints a natural.
  */
-export function spellBar(chords: readonly (readonly number[])[]): SpelledKey[][] {
+export function spellBar(chords: readonly (readonly number[])[], keySharps = 0): SpelledKey[][] {
   const state = new Map<string, boolean>()
+  // Letters sharp by the key signature (F, C, G… in that order) are sharp from the start of every bar.
+  const inKey = new Set(SHARP_ORDER.slice(0, Math.max(0, keySharps)))
   return chords.map((keys) => keys.map((midi) => {
     const pc = ((midi % 12) + 12) % 12
     const octave = Math.floor(midi / 12) - 1
     const line = `${NAMES[pc]}${octave}`
     const sharp = SHARP[pc]!
-    const before = state.get(line) ?? false
+    const before = state.get(line) ?? inKey.has(NAMES[pc]!)
     state.set(line, sharp)
     const accidental = sharp ? (before ? null : '#') : before ? 'n' : null
     return { key: `${NAMES[pc]}${sharp ? '#' : ''}/${octave}`, accidental }

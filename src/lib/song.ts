@@ -48,6 +48,8 @@ export interface Song {
   /** Tempo at the start of the song. */
   bpm: number
   timeSignature: TimeSignature
+  /** Sharps (positive) or flats (negative) of the key signature at the start; 0 when the file has none. */
+  keySignature: number
   /** Start time of every bar in seconds; the last entry is the end of the last bar. */
   bars: number[]
   /** Channels that have notes, in channel order. */
@@ -55,6 +57,7 @@ export interface Song {
 }
 
 const META_TIME_SIGNATURE = 0x58
+const META_KEY_SIGNATURE = 0x59
 const STATUS_PROGRAM_CHANGE = 0xc0
 
 /** Groups notes into steps: each step starts with a note and takes every note within STEP_WINDOW_S of it. */
@@ -119,6 +122,15 @@ function readMeters(midi: BasicMIDI): MeterChange[] {
   return meters
 }
 
+/** The first key signature of the file: sharps positive, flats negative (a signed byte in the file). */
+function readKeySignature(midi: BasicMIDI): number {
+  const events = midi.tracks.flatMap((track) => track.events).filter((event) => event.statusByte === META_KEY_SIGNATURE && event.data.length >= 1)
+  const first = events.sort((a, b) => a.ticks - b.ticks)[0]
+  if (!first) return 0
+  const value = first.data[0]!
+  return value > 127 ? value - 256 : value
+}
+
 /** The program each channel has when its first note sounds (GM program 0 if none was set). */
 function readPrograms(midi: BasicMIDI, firstNoteTicks: number[]): number[] {
   const programs = Array.from({ length: 16 }, () => 0)
@@ -172,6 +184,7 @@ export function parseSong(buffer: ArrayBuffer, name = 'song'): Song {
     duration: midi.duration,
     bpm: startTempo,
     timeSignature: firstMeter ? { numerator: firstMeter.numerator, denominator: firstMeter.denominator } : { numerator: 4, denominator: 4 },
+    keySignature: readKeySignature(midi),
     bars,
     parts,
   }

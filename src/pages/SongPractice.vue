@@ -741,7 +741,7 @@ const nextLabel = computed(() => {
               </button>
             </div>
             <div v-if="showStaff" class="stage__staff" :class="{ 'stage__staff--alone': !showFall }">
-              <SongStaff :bars="written" :clef="clef" :meter="song!.timeSignature" :get-time="player.currentTime" :lower="writtenLow" :played="playedBars" :marks="playedMarks" :scale="showFall ? (grand || onPads ? 0.85 : 1.1) : undefined" />
+              <SongStaff :bars="written" :clef="clef" :meter="song!.timeSignature" :key-sharps="Math.max(0, song!.keySignature)" :get-time="player.currentTime" :lower="writtenLow" :played="playedBars" :marks="playedMarks" :scale="showFall ? (grand || onPads ? 0.85 : 1.1) : undefined" />
             </div>
             <NoteFall v-if="showFall" class="stage__fall" :class="{ 'stage__fall--short': showStaff, 'stage__fall--shortest': showStaff && (grand || onPads) }" :notes="fallNotes" :start="windowStart" :get-time="player.currentTime" :pending="pendingKeys" :pad-keys="onPads ? layout!.padKeys : undefined" />
             <template v-if="onPads">

@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vitest'
 import { KEYBOARD_KEYS } from '@/lib/keyboard'
 import { PIECES, buildPieceMidi, builtinId, pieceFileName, pitch, rhythmVoice, voice, voiceQuarters } from '@/lib/pieces'
 import { barQuarters } from '@/lib/rhythm'
-import { NOTE_LEVELS } from '@/lib/noteLevels'
+import { NOTE_SECTIONS } from '@/lib/noteLevels'
 import { RHYTHM_LEVELS } from '@/lib/rhythmLevels'
 import { parseSong } from '@/lib/song'
 
@@ -61,7 +61,7 @@ describe('pieces in «Теория»', () => {
 
   it('each comes after a real level of its section and has a short chip name', () => {
     for (const piece of PIECES.filter((item) => item.after)) {
-      const levels = piece.after!.section === 'rhythm' ? RHYTHM_LEVELS : NOTE_LEVELS
+      const levels = piece.after!.section === 'rhythm' ? RHYTHM_LEVELS : NOTE_SECTIONS[piece.after!.section]
       expect(levels.some((level) => level.id === piece.after!.level)).toBe(true)
       expect(piece.short!.length).toBeLessThanOrEqual(12)
     }
@@ -77,5 +77,14 @@ describe('ties', () => {
     // The first long C: a sixteenth tied over the bar line to a quarter and a sixteenth, six sixteenths at 56 BPM.
     const longC = tune.notes.find((note) => note.key === 72 && note.length > 0.6)!
     expect(longC.length).toBeCloseTo((60 / 56) * 1.5, 1)
+  })
+})
+
+describe('key signature in a piece', () => {
+  it('writes the key into the file and reads it back', () => {
+    const piece = PIECES.find((item) => item.id === 'ode-d-major')!
+    expect(parseSong(buildPieceMidi(piece), pieceFileName(piece)).keySignature).toBe(2)
+    const plain = PIECES.find((item) => item.id === 'ode-right-hand')!
+    expect(parseSong(buildPieceMidi(plain), pieceFileName(plain)).keySignature).toBe(0)
   })
 })

@@ -51,6 +51,8 @@ export interface Piece {
   learner: number
   /** Rhythm pieces: the drum part is a groove of its own, not the rhythm of the tune. */
   groove?: boolean
+  /** Sharps of the key signature written into the file (plan step 20); none when absent. */
+  keySharps?: number
   /** The level of «Теория» the piece comes after: it opens with that level's last star. */
   after?: { section: TheorySection, level: number }
 }
@@ -328,7 +330,30 @@ const ODE_RIGHT: Piece = {
   ],
 }
 
-export const PIECES: readonly Piece[] = [FUR_ELISE, ODE, CHIZHIK, WALTZ, YOLKA, ENTERTAINER, ROW, DRUMMER, ODE_RIGHT]
+// «Ода к радости» in D major (plan step 20, after the key-signature level П5). The plan said G major, but there the
+// theme never meets its F♯; in D major it starts on F♯ and plays it again and again, with C♯ near the end.
+const ODE_D_MELODY = voice(`
+  F#4/4 F#4/4 G4/4 A4/4   A4/4 G4/4 F#4/4 E4/4   D4/4 D4/4 E4/4 F#4/4   F#4/4 E4/4 E4/2
+  F#4/4 F#4/4 G4/4 A4/4   A4/4 G4/4 F#4/4 E4/4   D4/4 D4/4 E4/4 F#4/4   E4/4 D4/4 D4/2
+`)
+const ODE_D: Piece = {
+  id: 'ode-d-major',
+  version: 1,
+  title: 'Ода к радости — ре мажор',
+  short: 'Ода в ре',
+  kind: 'melody',
+  meter: { numerator: 4, denominator: 4 },
+  bpm: 72,
+  learner: 0,
+  keySharps: 2,
+  after: { section: 'accidentals', level: 5 },
+  voices: [
+    { channel: 0, program: 0, notes: ODE_D_MELODY },
+    { channel: 1, program: 32, velocity: 80, notes: voice('D3/1 A2/1 D3/1 A2/1 D3/1 A2/1 D3/1 A2/2 D3/2') },
+  ],
+}
+
+export const PIECES: readonly Piece[] = [FUR_ELISE, ODE, CHIZHIK, WALTZ, YOLKA, ENTERTAINER, ROW, DRUMMER, ODE_RIGHT, ODE_D]
 
 /** The file name a piece is stored under: built in, with its version. */
 export function pieceFileName(piece: Pick<Piece, 'id' | 'version'>): string {
@@ -347,6 +372,8 @@ export function buildPieceMidi(piece: Piece): ArrayBuffer {
   const midi = new MIDIBuilder({ name: piece.title, timeDivision: TICKS_PER_QUARTER, initialTempo: piece.bpm, format: 1 })
   const { numerator, denominator } = piece.meter
   midi.addEvent(0, 0, MIDIMessageTypes.timeSignature, [numerator, Math.log2(denominator), 24, 8])
+  // Sharps as a positive byte, major mode.
+  if (piece.keySharps) midi.addEvent(0, 0, MIDIMessageTypes.keySignature, [piece.keySharps, 0])
   piece.voices.forEach((item) => {
     midi.addTrack(`ch${item.channel + 1}`)
     const track = midi.tracks.length - 1

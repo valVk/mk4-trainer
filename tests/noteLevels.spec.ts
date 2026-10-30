@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 
 import { KEYBOARD_KEYS } from '@/lib/keyboard'
-import { NOTE_LEVELS, type NoteTask, checkNote, countsForStars, makeMelody, noteStars, readMarks, readingPasses, currentNoteLevel, isNoteLevelOpen, nextTask, ACCIDENTAL_LEVELS, parseNoteProgress } from '@/lib/noteLevels'
+import { NOTE_LEVELS, type NoteTask, checkNote, countsForStars, makeMelody, noteStars, readMarks, readingPasses, currentNoteLevel, isNoteLevelOpen, nextTask, makeKeyBar, ACCIDENTAL_LEVELS, parseNoteProgress } from '@/lib/noteLevels'
 import { octaveShift } from '@/lib/staff'
 
 const level = (id: number) => NOTE_LEVELS.find((item) => item.id === id)!
@@ -181,9 +181,19 @@ describe('«Полутоны и знаки»', () => {
     expect(ACCIDENTAL_LEVELS.flatMap((item) => item.keys).every((key) => octaveShift(key, MK4_START) === 0)).toBe(true)
   })
 
+  it('makes bars under a key signature that always use its letter, on C4-C5', () => {
+    const bars = Array.from({ length: 100 }, (_, seed) => makeKeyBar(random(seed)))
+    expect(new Set(bars.map((bar) => bar.key))).toEqual(new Set(['G', 'F']))
+    expect(bars.every((bar) => bar.notes.length === 4 && bar.notes.some((note) => note.letter === (bar.key === 'G' ? 3 : 6)))).toBe(true)
+    expect(bars.every((bar) => bar.keys.every((key) => key >= 60 && key <= 72))).toBe(true)
+    // Both lessons come up: a natural, and a sign held later in the bar.
+    expect(bars.some((bar) => bar.notes.some((note) => note.sign === 'natural'))).toBe(true)
+    expect(bars.some((bar) => bar.notes[0]!.sign !== null && bar.notes[0]!.sign !== 'natural' && bar.keys[1] === bar.keys[0])).toBe(true)
+  })
+
   it('opens and counts on its own levels', () => {
     expect(isNoteLevelOpen(2, { 1: { correct: 20 } }, ACCIDENTAL_LEVELS)).toBe(true)
-    expect(isNoteLevelOpen(5, { 4: { correct: 20 } }, ACCIDENTAL_LEVELS)).toBe(false)
+    expect(isNoteLevelOpen(6, { 5: { correct: 10 } }, ACCIDENTAL_LEVELS)).toBe(false)
     expect(currentNoteLevel({ 1: { correct: 20 } }, ACCIDENTAL_LEVELS)).toBe(2)
   })
 })

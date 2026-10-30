@@ -15,6 +15,8 @@ export interface StaffNote {
   key: number
   /** How the note is written (plan step 20): D♭ stays D♭ on the staff although it is the key of C♯. */
   written?: Spelled
+  /** Exact VexFlow writing inside a bar under a key signature: the sounding key, the sign only where printed. */
+  vex?: { key: string, accidental: string | null }
   /** Written under the note, e.g. «соль». */
   label?: string
   /** CSS colour: right and wrong answers. */
@@ -25,6 +27,8 @@ const props = defineProps<{
   notes: readonly StaffNote[]
   show: StaffClef | 'grand'
   scale?: number
+  /** Key signature at the clef, as VexFlow names it ('G', 'F', 'D'). */
+  keySignature?: string
   /** Fill the height the parent gives (a flex child), scaled up to `scale` at most. */
   fit?: boolean
 }>()
@@ -47,7 +51,7 @@ const LABEL_ROOM = 18
 
 /** A whole note; a single one sits in the middle of the staff. */
 function staveNote(item: StaffNote, clef: StaffClef, alone: boolean): StaveNote {
-  const spelled = item.written ? vexSpelling(item.written) : spellBar([[item.key]])[0]![0]!
+  const spelled = item.vex ?? (item.written ? vexSpelling(item.written) : spellBar([[item.key]])[0]![0]!)
   const note = new StaveNote({ keys: [spelled.key], duration: 'w', clef, alignCenter: alone })
   if (spelled.accidental) note.addModifier(new Accidental(spelled.accidental), 0)
   if (item.label) {
@@ -65,7 +69,7 @@ function draw() {
   const most = props.scale ?? 1.5
   const scale = props.fit ? Math.max(0.7, Math.min(most, element.clientHeight / height, element.clientWidth / MIN_WIDTH)) : props.scale
   const { context, width } = staffContext(element, height, scale)
-  const staves = clefs.map((clef, i) => new Stave(LEFT, i * STAFF_GAP, width - LEFT - 2, { spaceAboveStaffLn: SPACE_ABOVE }).addClef(clef).setContext(context))
+  const staves = clefs.map((clef, i) => new Stave(LEFT, i * STAFF_GAP, width - LEFT - 2, { spaceAboveStaffLn: SPACE_ABOVE }).addClef(clef).addKeySignature(props.keySignature ?? 'C').setContext(context))
   staves.forEach((stave) => stave.draw())
   if (staves.length === 2) {
     new StaveConnector(staves[0]!, staves[1]!).setType('brace').setContext(context).draw()
@@ -91,7 +95,7 @@ onMounted(() => {
   if (host.value) observer.observe(host.value)
 })
 onBeforeUnmount(() => observer?.disconnect())
-watch(() => [props.notes, props.show, props.scale], draw, { deep: true })
+watch(() => [props.notes, props.show, props.scale, props.keySignature], draw, { deep: true })
 </script>
 
 <template>

@@ -12,6 +12,18 @@ const slotsOf = { whole: 16, half: 8, quarter: 4, eighth: 2, sixteenth: 1 } as c
 /** Sixteenths written in a bar; a bar rest fills the whole bar whatever the meter. */
 const barSlots = (bar: WrittenBar, full: number) => (bar.notes[0]?.barRest ? full : bar.notes.reduce((sum, item) => sum + slotsOf[item.duration] * (item.dots ? 1.5 : 1), 0))
 
+describe('spelling under a key signature', () => {
+  it('prints no sign for the key\'s sharps and a natural for the plain note', () => {
+    // D major (two sharps): F♯ and C♯ need no sign, F and C get a natural, G♯ its own sharp.
+    expect(spellBar([[66], [65], [61], [68]], 2).map((chord) => chord[0])).toEqual([
+      { key: 'f#/4', accidental: null },
+      { key: 'f/4', accidental: 'n' },
+      { key: 'c#/4', accidental: null },
+      { key: 'g#/4', accidental: '#' },
+    ])
+  })
+})
+
 describe('spellSpan', () => {
   it('writes spans with values that start on their beat', () => {
     expect(spellSpan(0, 16, FOUR).map((p) => p.duration)).toEqual(['whole'])

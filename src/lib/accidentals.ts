@@ -71,3 +71,45 @@ export interface StepTask {
 export function stepTarget(task: StepTask): number {
   return task.from + (task.up ? task.semitones : -task.semitones)
 }
+
+// Key signatures and signs in a bar (plan step 20): a sharp or flat at the clef holds for that letter in every
+// octave; a sign before a note holds to the end of the bar, for that letter in that octave only; a natural
+// cancels both.
+
+export type KeySignature = 'C' | 'G' | 'D' | 'F'
+
+/** Letters a key signature alters, and how. */
+export const KEY_SIGNATURES: Readonly<Record<KeySignature, Partial<Record<Letter, Alter>>>> = {
+  C: {},
+  G: { 3: 1 },
+  D: { 3: 1, 0: 1 },
+  F: { 6: -1 },
+}
+
+/** A note as printed in a bar: letter and octave, and the sign before it (none, or ♯ ♭ ♮). */
+export interface BarNote {
+  letter: Letter
+  octave: number
+  sign: 1 | -1 | 'natural' | null
+}
+
+/** The keys a bar is played on, reading it as a musician does: key signature, then signs to the end of the bar. */
+export function barKeys(key: KeySignature, notes: readonly BarNote[]): number[] {
+  const signs = new Map<string, Alter>()
+  return notes.map((note) => {
+    const place = `${note.letter}/${note.octave}`
+    if (note.sign !== null) signs.set(place, note.sign === 'natural' ? 0 : note.sign)
+    const alter = signs.get(place) ?? KEY_SIGNATURES[key][note.letter] ?? 0
+    return keyOf({ letter: note.letter, octave: note.octave, alter })
+  })
+}
+
+/** The note for VexFlow inside a bar: the key as it sounds, the sign only where one is printed. */
+export function barVexSpelling(key: KeySignature, notes: readonly BarNote[]): { key: string, accidental: string | null }[] {
+  const keys = barKeys(key, notes)
+  return notes.map((note, i) => {
+    const alter = (keys[i]! - keyOf({ letter: note.letter, octave: note.octave, alter: 0 })) as Alter
+    const name = `${LETTERS[note.letter]!.toLowerCase()}${alter === 0 ? '' : VEX_ACCIDENTAL[alter]}/${note.octave}`
+    return { key: name, accidental: note.sign === null ? null : note.sign === 'natural' ? 'n' : VEX_ACCIDENTAL[note.sign] }
+  })
+}

@@ -20,7 +20,7 @@ import { useTheoryPieces } from '@/composables/useTheoryPieces'
 import { useWakeLock } from '@/composables/useWakeLock'
 import { KEYBOARD_KEYS } from '@/lib/keyboard'
 import { STAR_THRESHOLDS } from '@/lib/levels'
-import { keyOf, spelled, type Spelled } from '@/lib/accidentals'
+import { barKeys, barVexSpelling, keyOf, spelled, type Alter, type BarNote, type Spelled } from '@/lib/accidentals'
 import { NOTE_SECTIONS, checkNote, countsForStars, currentNoteLevel, isNoteLevelOpen, nextTask, noteStars, type NoteIntroId, type NoteSectionId, type NoteTask } from '@/lib/noteLevels'
 import { KEY_HINT_DELAY_MS } from '@/lib/practice'
 import { octaveShift, pitch, windowOctaves } from '@/lib/staff'
@@ -67,7 +67,11 @@ watch(passed, (value) => {
 const introSeen = ref(new Set<number>())
 const phase = ref<'intro' | 'task'>('task')
 const task = ref<NoteTask>(nextTask(info.value, null))
-const target = computed(() => task.value.key)
+/** In a bar (П5): the note to play now; the bar is done when its last note is played. */
+const barIndex = ref(0)
+/** After a note of a bar is found, the next counts only once the keys are up: the same key twice is two presses. */
+const armed = ref(true)
+const target = computed(() => task.value.bar ? task.value.bar.keys[barIndex.value]! : task.value.key)
 const solved = ref(false)
 const levelDone = ref(false)
 const keyHint = ref(false)
@@ -83,17 +87,23 @@ function newTask(previous: NoteTask | null) {
   clearTimeout(nextTimer)
   clearTimeout(hintTimer)
   task.value = nextTask(info.value, previous)
+  barIndex.value = 0
+  armed.value = true
   solved.value = false
   slowAnswer.value = false
-  keyHint.value = false
   taskNumber.value++
   shownAt = performance.now()
-  // On the timed level the key never lights up: it would give the answer away; melodies have no single key.
-  if (info.value.timed === undefined && info.value.readingBpm === undefined) {
-    hintTimer = setTimeout(() => {
-      keyHint.value = true
-    }, KEY_HINT_DELAY_MS)
-  }
+  waitForHint()
+}
+
+/** The key lights up after a while to look for it; never on the timed level (it would give the answer away), nor for melodies. */
+function waitForHint() {
+  clearTimeout(hintTimer)
+  keyHint.value = false
+  if (info.value.timed !== undefined || info.value.readingBpm !== undefined) return
+  hintTimer = setTimeout(() => {
+    keyHint.value = true
+  }, KEY_HINT_DELAY_MS)
 }
 
 function openLevel(id: number) {
@@ -126,10 +136,23 @@ watch(heldNotes, (held) => {
 const check = computed(() => checkNote(target.value, presses.value, info.value.anyOctave))
 // «Wrong» and «other octave» wait until the fingers have landed.
 const settledHeld = useSettled(heldNotes, (next) => (next.length === 0 ? 0 : SETTLE_MS))
-const settledCheck = computed(() => (settledHeld.value.length === 0 ? 'empty' : check.value))
+const settledCheck = computed(() => (settledHeld.value.length === 0 || !armed.value ? 'empty' : check.value))
+
+watch(() => heldNotes.value.length, (count) => {
+  if (count === 0) armed.value = true
+})
 
 watch(check, (status) => {
-  if (status !== 'right' || solved.value || phase.value !== 'task' || info.value.readingBpm !== undefined) return
+  if (status !== 'right' || solved.value || !armed.value || phase.value !== 'task' || info.value.readingBpm !== undefined) return
+  // A bar: on to its next note; the bar is one answer, counted when its last note is played.
+  const bar = task.value.bar
+  if (bar && barIndex.value < bar.keys.length - 1) {
+    barIndex.value++
+    armed.value = false
+    playCue('step')
+    waitForHint()
+    return
+  }
   solved.value = true
   clearTimeout(hintTimer)
   // Right is always praised; on the timed level a slow answer just does not count towards the stars.
@@ -189,7 +212,23 @@ const writtenName = (note: Spelled) => {
   const base = name(LETTER_KEYS[note.letter]!)
   return note.alter === 0 ? base : t(`theory.accidentals.alter.${note.alter}`, { name: base })
 }
-const staffNotes = computed<StaffNote[]>(() => [{
+/** A bar: every note as printed, played ones green with their name, the one to play now blue. */
+const barNotes = computed<StaffNote[]>(() => {
+  const bar = task.value.bar
+  if (!bar) return []
+  const writing = barVexSpelling(bar.key, bar.notes)
+  return bar.notes.map((note, i) => {
+    const done = solved.value || i < barIndex.value
+    const alter = (bar.keys[i]! - keyOf({ letter: note.letter, octave: note.octave, alter: 0 })) as Alter
+    return {
+      key: bar.keys[i]!,
+      vex: writing[i]!,
+      label: done ? writtenName({ letter: note.letter, octave: note.octave, alter }) : undefined,
+      colour: done ? STAFF_COLOURS.onTime : i === barIndex.value ? STAFF_COLOURS.current : undefined,
+    }
+  })
+})
+const staffNotes = computed<StaffNote[]>(() => task.value.bar ? barNotes.value : [{
   key: target.value,
   written: task.value.written,
   label: solved.value ? (task.value.written ? writtenName(task.value.written) : name(target.value)) : undefined,
@@ -208,7 +247,15 @@ const LETTERS = ['C', 'D', 'E', 'F', 'G', 'A', 'B']
 const landmarks = (names: string): StaffNote[] => names.split(' ').map(pitch).map((key) => ({ key, label: name(key) }))
 /** Written notes for the intros of «Полутоны и знаки», each with its name. */
 const writtenNotes = (names: string): StaffNote[] => names.split(' ').map(spelled).map((note) => ({ key: keyOf(note), written: note, label: writtenName(note) }))
-const INTRO_NOTES: Partial<Record<NoteIntroId, { show: 'treble' | 'bass' | 'grand', notes: () => StaffNote[] }>> = {
+/** The key-signature intro: in G major F sounds as F♯; a natural makes it F up to the bar line. */
+const keyBarIntro = (): StaffNote[] => {
+  const notes: BarNote[] = [{ letter: 3, octave: 4, sign: null }, { letter: 3, octave: 4, sign: 'natural' }, { letter: 3, octave: 4, sign: null }]
+  const keys = barKeys('G', notes)
+  const writing = barVexSpelling('G', notes)
+  return notes.map((note, i) => ({ key: keys[i]!, vex: writing[i]!, label: writtenName({ letter: note.letter, octave: note.octave, alter: (keys[i]! - 65) as Alter }) }))
+}
+const INTRO_NOTES: Partial<Record<NoteIntroId, { show: 'treble' | 'bass' | 'grand', notes: () => StaffNote[], keySignature?: string }>> = {
+  keySignature: { show: 'treble', notes: keyBarIntro, keySignature: 'G' },
   sharpFlat: { show: 'treble', notes: () => writtenNotes('F4 F#4 B4 Bb4') },
   natural: { show: 'treble', notes: () => writtenNotes('F#4 Fn4') },
   double: { show: 'treble', notes: () => writtenNotes('Fx4 Bbb4') },
@@ -286,7 +333,7 @@ const INTRO_NOTES: Partial<Record<NoteIntroId, { show: 'treble' | 'bass' | 'gran
                 <span class="names__letter text-muted">{{ LETTERS[i] }}</span>
               </span>
             </div>
-            <NoteStaff v-else-if="INTRO_NOTES[id]" :notes="INTRO_NOTES[id]!.notes()" :show="INTRO_NOTES[id]!.show" :scale="1.4" class="intro__staff" />
+            <NoteStaff v-else-if="INTRO_NOTES[id]" :notes="INTRO_NOTES[id]!.notes()" :show="INTRO_NOTES[id]!.show" :key-signature="INTRO_NOTES[id]!.keySignature" :scale="1.4" class="intro__staff" />
             <p class="text-toned">{{ t(`theory.notes.intro.${id}`) }}</p>
           </div>
         </div>
@@ -294,7 +341,7 @@ const INTRO_NOTES: Partial<Record<NoteIntroId, { show: 'treble' | 'bass' | 'gran
 
       <template v-else>
         <p class="prompt text-highlighted">
-          {{ info.show === 'name' ? t('theory.notes.pressName') : info.show === 'step' ? t('theory.accidentals.stepPrompt') : info.anyOctave ? t('theory.notes.findAny') : t('theory.notes.findExact') }}
+          {{ info.show === 'name' ? t('theory.notes.pressName') : info.show === 'step' ? t('theory.accidentals.stepPrompt') : info.show === 'bar' ? t('theory.accidentals.barPrompt') : info.anyOctave ? t('theory.notes.findAny') : t('theory.notes.findExact') }}
         </p>
         <p v-if="info.show === 'name'" class="big-name" :class="{ 'big-name--right': solved }">{{ name(target) }}</p>
         <!-- A step: from the key with the dot, by a half or a whole step; the answer's name shows once it is found. -->
@@ -302,7 +349,7 @@ const INTRO_NOTES: Partial<Record<NoteIntroId, { show: 'treble' | 'bass' | 'gran
           {{ t('theory.accidentals.stepFrom', { name: name(task.step.from), step: stepWords }) }}
           <span v-if="solved" class="big-name__answer">→ {{ name(target) }}</span>
         </p>
-        <NoteStaff v-else-if="info.show !== 'step'" :notes="staffNotes" :show="info.show" :scale="info.show === 'grand' ? 1.7 : 2.2" fit class="task__staff" />
+        <NoteStaff v-else-if="info.show !== 'step'" :notes="staffNotes" :show="info.show === 'bar' ? 'treble' : info.show" :key-signature="task.bar?.key" :class="{ 'task__staff--bar': task.bar }" :scale="info.show === 'grand' ? 1.7 : 2.2" fit class="task__staff" />
         <!-- Calm pills over the card, never pushing the layout. -->
         <!-- Time for a star: a calm bar that empties, no countdown numbers and nothing red. -->
         <span v-if="info.timed && !solved" :key="taskNumber" class="timer" :style="{ animationDuration: `${info.timed}ms` }" aria-hidden="true" />
@@ -349,6 +396,11 @@ const INTRO_NOTES: Partial<Record<NoteIntroId, { show: 'treble' | 'bass' | 'gran
 <style scoped src="./theory.css"></style>
 
 <style scoped>
+.task__staff--bar {
+  /* Four notes with their names under them need the room. */
+  width: min(100%, 50rem);
+}
+
 .task__staff {
   flex: 1;
   min-height: 6rem;

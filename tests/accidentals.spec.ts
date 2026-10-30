@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
-import { enharmonic, keyOf, spelled, spellings, stepTarget, vexSpelling } from '@/lib/accidentals'
+import { barKeys, barVexSpelling, enharmonic, keyOf, spelled, spellings, stepTarget, vexSpelling } from '@/lib/accidentals'
 
 describe('written notes', () => {
   it('finds the key of a note with any accidental', () => {
@@ -34,5 +34,30 @@ describe('semitones and tones', () => {
   it('steps from a key by a half or whole step', () => {
     expect(stepTarget({ from: 64, semitones: 1, up: true })).toBe(65)
     expect(stepTarget({ from: 60, semitones: 2, up: false })).toBe(58)
+  })
+})
+
+describe('key signature and signs in a bar', () => {
+  const F = 3 as const
+  const C = 0 as const
+  const B = 6 as const
+  const note = (letter: 0 | 1 | 2 | 3 | 4 | 5 | 6, octave: number, sign: 1 | -1 | 'natural' | null = null) => ({ letter, octave, sign })
+
+  it('plays every F as F♯ in G major, in any octave', () => {
+    expect(barKeys('G', [note(F, 4), note(F, 5), note(C, 5)])).toEqual([66, 78, 72])
+  })
+
+  it('keeps a sign to the end of the bar, for that octave only', () => {
+    expect(barKeys('C', [note(C, 4, 1), note(C, 4), note(C, 5)])).toEqual([61, 61, 72])
+  })
+
+  it('lets a natural cancel the key signature until the bar ends', () => {
+    expect(barKeys('G', [note(F, 4, 'natural'), note(F, 4), note(F, 5)])).toEqual([65, 65, 78])
+    expect(barKeys('F', [note(B, 4), note(B, 4, 'natural'), note(B, 4)])).toEqual([70, 71, 71])
+  })
+
+  it('writes the bar for the staff: the sounding key, a sign only where printed', () => {
+    expect(barVexSpelling('G', [note(F, 4), note(F, 4, 'natural')])).toEqual([{ key: 'f#/4', accidental: null }, { key: 'f/4', accidental: 'n' }])
+    expect(barVexSpelling('D', [note(C, 5)])).toEqual([{ key: 'c#/5', accidental: null }])
   })
 })
