@@ -10,6 +10,8 @@ import { quarterSeconds, sounds, type Rhythm, type Sound } from '@/lib/rhythm'
 
 /** Rhythms start a moment after the tap, so the first click is never cut. */
 const START_DELAY_S = 0.15
+/** The left hand of a two-hand rhythm: an octave under the right hand's C5. */
+const LOWER_HZ = 261.63
 
 export function useRhythmPlayer() {
   const metronome = useMetronome()
@@ -36,9 +38,10 @@ export function useRhythmPlayer() {
 
   /**
    * Plays the rhythm at `bpm` (beats of its meter, like the metronome) after `countInBars` bars of clicks.
-   * With `notes: false` only the clicks sound: the child plays the notes.
+   * With `notes: false` only the clicks sound: the child plays the notes. `lower` is a second hand,
+   * heard an octave lower.
    */
-  function play(rhythm: Rhythm, bpm: number, { countInBars = 1, notes = true }: { countInBars?: number, notes?: boolean } = {}) {
+  function play(rhythm: Rhythm, bpm: number, { countInBars = 1, notes = true, lower = null }: { countInBars?: number, notes?: boolean, lower?: Rhythm | null } = {}) {
     stop()
     const audio = metronome.audioContext()
     void audio.resume()
@@ -56,6 +59,9 @@ export function useRhythmPlayer() {
     if (notes) {
       for (const item of heard) {
         if (!item.rest) scheduled.push(...metronome.noteAt(firstNoteAt.value + item.start, item.length))
+      }
+      for (const item of lower ? sounds(lower, bpm) : []) {
+        if (!item.rest) scheduled.push(...metronome.noteAt(firstNoteAt.value + item.start, item.length, LOWER_HZ))
       }
     }
     playing.value = true

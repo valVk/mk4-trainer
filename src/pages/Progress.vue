@@ -10,6 +10,7 @@ import { BANKS, useSynth, type BankId } from '@/composables/useSynth'
 import { BackupParseError, parseBackup } from '@/db/backup'
 import type { TaskStats } from '@/db/progress'
 import { LEVELS, STAR_THRESHOLDS } from '@/lib/levels'
+import { weakKinds } from '@/lib/rhythmLevels'
 import { noteName } from '@/lib/theory'
 
 const { t } = useI18n()
@@ -67,6 +68,8 @@ async function saveRename() {
 // --- Weak spots -----------------------------------------------------------
 
 const weak = ref<TaskStats[]>([])
+/** Rhythm kinds of «Теория» missed most. */
+const weakRhythm = computed(() => weakKinds(progress.rhythmWeak.value))
 async function loadWeak() {
   weak.value = await progress.weakTasks(5)
 }
@@ -193,13 +196,20 @@ async function confirmImport() {
           <template #header>
             <h2 class="subtitle text-highlighted">{{ t('progress.weak') }}</h2>
           </template>
-          <p v-if="weak.length === 0" class="text-muted">{{ t('progress.weakEmpty') }}</p>
+          <p v-if="weak.length === 0 && weakRhythm.length === 0" class="text-muted">{{ t('progress.weakEmpty') }}</p>
           <ul v-else class="flex flex-col gap-3">
             <li v-for="item in weak" :key="item.task" class="flex flex-wrap items-baseline justify-between gap-x-4">
               <span class="font-medium text-highlighted">{{ describeTask(item.task) }}</span>
               <span class="text-muted text-sm tabular-nums">
                 {{ t('progress.weakStats', { misses: item.misses, tries: item.tries, seconds: (item.avgMs / 1000).toFixed(1) }) }}
               </span>
+            </li>
+          </ul>
+          <!-- «Теория» → «Ритм»: the kinds of notes missed most, on one short line each. -->
+          <ul v-if="weakRhythm.length" class="flex flex-col gap-2" :class="{ 'mt-4': weak.length }">
+            <li v-for="item in weakRhythm" :key="item.kind" class="flex flex-wrap items-baseline justify-between gap-x-4">
+              <span class="font-medium text-highlighted">{{ t('progress.weakRhythm') }}: {{ t(`progress.rhythmKinds.${item.kind}`) }}</span>
+              <span class="text-muted text-sm tabular-nums">{{ t('progress.weakRhythmStats', { misses: item.misses, tries: item.tries }) }}</span>
             </li>
           </ul>
         </UCard>

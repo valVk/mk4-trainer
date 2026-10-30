@@ -1,6 +1,6 @@
 import { expect, test, type Page } from '@playwright/test'
 
-import { keyFor, open } from './helpers'
+import { keyFor, open, storedSetting } from './helpers'
 
 const state = (page: Page) => page.evaluate(() => {
   const s = (document.querySelector('main.theory') as unknown as { __vueParentComponent: { setupState: Record<string, unknown> } }).__vueParentComponent.setupState
@@ -68,4 +68,15 @@ test('a rhythm played late is not passed and says so', async ({ page }) => {
   await expect.poll(async () => (await state(page)).phase, { timeout: 15_000 }).toBe('result')
   expect(await state(page)).toMatchObject({ passed: false, passes: 0 })
   await expect(page.getByText('Отстаёшь')).toBeVisible()
+})
+
+test('saves progress of every level, not only the first', async ({ page }) => {
+  await open(page, '/train/theory')
+  // Two levels of passes through the page's own progress store, as finished attempts do.
+  await page.evaluate(async () => {
+    const s = (document.querySelector('main.theory') as unknown as { __vueParentComponent: { setupState: { progress: { addRhythmPass: (level: number) => Promise<void> } } } }).__vueParentComponent.setupState
+    for (let i = 0; i < 9; i++) await s.progress.addRhythmPass(1)
+    await s.progress.addRhythmPass(2)
+  })
+  await expect.poll(() => storedSetting(page, 'theoryRhythm')).toEqual({ 1: { passes: 9 }, 2: { passes: 1 } })
 })

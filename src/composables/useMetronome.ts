@@ -171,7 +171,7 @@ const NOTE_HZ = 523.25
  * One note of a rhythm exercise. It sounds for the note's length, so a half note is heard as long as
  * it is, and fades a little before the end so repeated notes stay apart.
  */
-function playNote(time: number, length: number): AudioScheduledSourceNode[] {
+function playNote(time: number, length: number, hz = NOTE_HZ): AudioScheduledSourceNode[] {
   const audio = context()
   const gain = audio.createGain()
   const end = time + Math.max(0.06, length * 0.9)
@@ -180,7 +180,7 @@ function playNote(time: number, length: number): AudioScheduledSourceNode[] {
   gain.gain.setTargetAtTime(0.3, time + 0.05, 0.1)
   gain.gain.setTargetAtTime(0.0001, end - 0.04, 0.015)
   gain.connect(output(audio))
-  const sources = [tone(audio, 'triangle', NOTE_HZ, time, end - time + 0.05, gain)]
+  const sources = [tone(audio, 'triangle', hz, time, end - time + 0.05, gain)]
   pending.push({ time, sources })
   return sources
 }
@@ -446,7 +446,8 @@ export function useMetronome() {
     heardTime: (): number => heardTime(),
     /** Schedules one click or one rhythm note on the audio clock; returns the sounds, so a player can stop them. */
     clickAt: (time: number, accent: Accent): AudioScheduledSourceNode[] => playClick(time, accent),
-    noteAt: (time: number, length: number): AudioScheduledSourceNode[] => playNote(time, length),
+    /** `hz`: pitch; the left hand of a two-hand rhythm sounds an octave lower. */
+    noteAt: (time: number, length: number, hz?: number): AudioScheduledSourceNode[] => playNote(time, length, hz),
     audioContext: context,
     /**
      * How long ago, in real seconds, the child heard the moment a press from this input stands for:

@@ -6,17 +6,25 @@ import {
   RHYTHM_LEVELS,
   RHYTHM_TEMPOS,
   TASK_BARS,
+  addKindStats,
   currentLevel,
+  handSplit,
   hintsFor,
   introRhythm,
   isOpen,
   levelTempo,
   makeTask,
+  makeTwoHands,
+  padHand,
+  parseKindStats,
   parseRhythmProgress,
   passes,
   rhythmLevel,
+  slowTempo,
   starsOf,
   tempoOf,
+  troubleSpot,
+  weakKinds,
 } from '@/lib/rhythmLevels'
 
 describe('rhythm levels', () => {
@@ -135,5 +143,51 @@ describe('passing and hints', () => {
     const halves = sounds({ meter: { numerator: 4, denominator: 4 }, notes: [{ duration: 'half' }, { duration: 'half' }] }, 60)
     const score = scoreRhythm(halves, [{ time: 0, end: 0.9 }, { time: 2, end: 3.9 }])
     expect(hintsFor(score)).toEqual(['holdLonger'])
+  })
+})
+
+describe('a hard place and weak spots', () => {
+  it('offers to slow down when the same note goes wrong three attempts in a row', () => {
+    expect(troubleSpot([[2], [1, 2]])).toBeNull()
+    expect(troubleSpot([[2, 3], [2], [0, 2]])).toBe(2)
+    expect(troubleSpot([[2], [3], [2]])).toBeNull()
+    expect(slowTempo(80)).toBe(60)
+    expect(slowTempo(60)).toBe(45)
+    expect(slowTempo(40)).toBe(40)
+  })
+
+  it('counts tries and misses by kind of note and finds the weak ones', () => {
+    const rhythm = { meter: { numerator: 4, denominator: 4 }, notes: [{ duration: 'quarter' as const }, { duration: 'quarter' as const, dots: 1, tie: true }, { duration: 'eighth' as const }, { duration: 'half' as const }] }
+    const heard = sounds(rhythm, 60)
+    // The dotted quarter is played late; the eighth after the tie is not played (tied), the rest is fine.
+    const score = scoreRhythm(heard, [{ time: 0, end: 0.8 }, { time: 1.2, end: 2.8 }, { time: 3, end: 4.8 }])
+    let stats = addKindStats({}, rhythm, score)
+    expect(stats).toMatchObject({ quarter: { tries: 1, misses: 0 }, dotted: { tries: 1, misses: 1 }, half: { tries: 1, misses: 0 } })
+    for (let i = 0; i < 6; i++) stats = addKindStats(stats, rhythm, score)
+    expect(weakKinds(stats).map((item) => item.kind)).toEqual(['dotted'])
+  })
+
+  it('reads saved stats and drops anything broken', () => {
+    expect(parseKindStats({ eighth: { tries: 5, misses: 2 }, triplet: { tries: 1, misses: 3 }, jazz: { tries: 9, misses: 1 } })).toEqual({ eighth: { tries: 5, misses: 2 } })
+  })
+})
+
+describe('two hands, «2 против 3»', () => {
+  it('writes triplets for the right hand against eighths for the left, both filling two bars', () => {
+    for (let i = 0; i < 20; i++) {
+      const { right, left } = makeTwoHands()
+      expect(totalQuarters(right)).toBeCloseTo(TASK_BARS * barQuarters(right.meter))
+      expect(totalQuarters(left)).toBeCloseTo(TASK_BARS * barQuarters(left.meter))
+      expect(right.notes.slice(0, 3).every((note) => note.tuplet)).toBe(true)
+      expect(left.notes.slice(0, 2).map((note) => note.duration)).toEqual(['eighth', 'eighth'])
+    }
+  })
+
+  it('splits the keys by octave and the pads by rows', () => {
+    // The MK4 window C3-C5: the left hand plays C3-B3.
+    expect(handSplit([48, 52, 64])).toBe(60)
+    expect(handSplit([50])).toBe(60)
+    expect(handSplit([])).toBe(60)
+    expect([1, 4, 5, 8].map(padHand)).toEqual(['left', 'left', 'right', 'right'])
   })
 })

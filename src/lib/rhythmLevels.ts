@@ -6,7 +6,7 @@ import { barQuarters, generateBar, generateCellBar, noteQuarters, type Duration,
 import type { TimeSignature } from './song'
 
 /** What a level shows first: a new value or a new idea, with a small example to look at and hear. */
-export type IntroId = Duration | 'dottedHalf' | 'dottedQuarter' | 'tie' | 'meters' | 'accent' | 'pickup' | 'syncopation' | 'triplet' | 'sixEight'
+export type IntroId = Duration | 'dottedHalf' | 'dottedQuarter' | 'tie' | 'meters' | 'accent' | 'pickup' | 'syncopation' | 'triplet' | 'sixEight' | 'twoHands'
 
 export interface RhythmLevel {
   id: number
@@ -25,6 +25,8 @@ export interface RhythmLevel {
   accents?: boolean
   /** 6/8 is counted in eighths: the tempo steps are twice as fast in beats per minute. */
   tempoScale?: number
+  /** Every third task is for two hands: «2 против 3». */
+  twoHands?: boolean
   introduces: IntroId[]
 }
 
@@ -84,7 +86,8 @@ export const RHYTHM_LEVELS: readonly RhythmLevel[] = [
       { notes: [h({ dots: 1 })], starts: [0] },
     ],
     tempoScale: 2,
-    introduces: ['sixEight'],
+    twoHands: true,
+    introduces: ['sixEight', 'twoHands'],
     rests: false,
     meters: [SIX_EIGHT],
   },
@@ -177,6 +180,7 @@ export function introRhythm(id: IntroId): Rhythm {
     case 'syncopation': return { meter: FOUR, notes: [e(), q(), e(), e(), q(), e()] }
     case 'triplet': return { meter: FOUR, notes: [...Array.from({ length: 3 }, () => e({ tuplet: TRIPLET })), q(), ...Array.from({ length: 3 }, () => e({ tuplet: TRIPLET })), q()] }
     case 'sixEight': return { meter: SIX_EIGHT, notes: [e(), e(), e(), q({ dots: 1 })] }
+    case 'twoHands': return { meter: TWO, notes: [e({ tuplet: TRIPLET }), e({ tuplet: TRIPLET }), e({ tuplet: TRIPLET }), e({ tuplet: TRIPLET }), e({ tuplet: TRIPLET }), e({ tuplet: TRIPLET })] }
     default: {
       const count = Math.round(barQuarters(FOUR) / noteQuarters({ duration: id }))
       return { meter: FOUR, notes: Array.from({ length: count }, () => ({ duration: id })) }
@@ -190,7 +194,7 @@ export function passes(score: RhythmScore): boolean {
   return missed === 0 && score.extra <= 1 && score.onTime >= Math.ceil(score.total * 0.75)
 }
 
-export type RhythmHint = 'rushing' | 'dragging' | 'missed' | 'extra' | 'holdLonger' | 'letGo' | 'accent' | 'great'
+export type RhythmHint = 'rushing' | 'dragging' | 'missed' | 'extra' | 'holdLonger' | 'letGo' | 'accent' | 'slowDown' | 'great'
 
 /**
  * One or two things to tell the child, most important first, in the order a teacher would:
@@ -226,4 +230,126 @@ export function hintsFor(score: RhythmScore, rhythm?: Rhythm): RhythmHint[] {
   else if (results.some((result) => result.hold === 'long')) hints.push('letGo')
   if (rhythm && accentsPlayed(score, rhythm) === false) hints.push('accent')
   return hints.length ? hints.slice(0, 2) : ['great']
+}
+
+/** Indexes of the written notes the child got wrong in an attempt: missed, early or late. */
+export function troubleNotes(score: RhythmScore): number[] {
+  return score.results.filter((result) => result.verdict !== 'onTime').map((result) => result.index)
+}
+
+/** Attempts in a row with the same note wrong before the app offers to slow down. */
+export const TROUBLE_ATTEMPTS = 3
+/** Practice tempo when the child slows down: three quarters of the level's tempo. */
+export const SLOW_FACTOR = 0.75
+
+/**
+ * The note that went wrong in each of the last TROUBLE_ATTEMPTS attempts of one task (a teacher would
+ * say «this place is hard, let's go slower»), or null.
+ */
+export function troubleSpot(history: readonly (readonly number[])[]): number | null {
+  if (history.length < TROUBLE_ATTEMPTS) return null
+  const [first, ...rest] = history.slice(-TROUBLE_ATTEMPTS)
+  return first!.find((index) => rest.every((attempt) => attempt.includes(index))) ?? null
+}
+
+/** The slow practice tempo, rounded to 5 like the metronome steps. */
+export function slowTempo(bpm: number): number {
+  return Math.max(40, Math.round((bpm * SLOW_FACTOR) / 5) * 5)
+}
+
+/** What kind of rhythm a note is, for the weak spots: its value, or the figure it belongs to. */
+export type RhythmKind = Duration | 'dotted' | 'triplet' | 'tie' | 'rest'
+
+export function kindOf(note: RhythmNote, previous?: RhythmNote): RhythmKind {
+  if (note.rest) return 'rest'
+  if (note.tuplet) return 'triplet'
+  if (note.dots) return 'dotted'
+  if (previous?.tie) return 'tie'
+  return note.duration
+}
+
+export interface KindStats {
+  tries: number
+  misses: number
+}
+
+/** Adds one attempt to the stats: every note is a try, every note not on time a miss. */
+export function addKindStats(stats: Readonly<Partial<Record<RhythmKind, KindStats>>>, rhythm: Rhythm, score: RhythmScore): Partial<Record<RhythmKind, KindStats>> {
+  const next: Partial<Record<RhythmKind, KindStats>> = { ...stats }
+  for (const result of score.results) {
+    const note = rhythm.notes[result.index]
+    if (!note) continue
+    const kind = kindOf(note, rhythm.notes[result.index - 1])
+    const old = next[kind] ?? { tries: 0, misses: 0 }
+    next[kind] = { tries: old.tries + 1, misses: old.misses + (result.verdict === 'onTime' ? 0 : 1) }
+  }
+  return next
+}
+
+/** At least this many tries before a kind can be called weak, so one bad day does not count. */
+const WEAK_MIN_TRIES = 6
+const WEAK_SHARE = 0.25
+
+/** The kinds the child misses most (a quarter of the time or more), worst first. */
+export function weakKinds(stats: Readonly<Partial<Record<RhythmKind, KindStats>>>, limit = 3): { kind: RhythmKind, tries: number, misses: number }[] {
+  return (Object.entries(stats) as [RhythmKind, KindStats][])
+    .filter(([, item]) => item.tries >= WEAK_MIN_TRIES && item.misses / item.tries >= WEAK_SHARE)
+    .sort((a, b) => b[1].misses / b[1].tries - a[1].misses / a[1].tries)
+    .slice(0, limit)
+    .map(([kind, item]) => ({ kind, ...item }))
+}
+
+const KINDS: readonly RhythmKind[] = ['whole', 'half', 'quarter', 'eighth', 'sixteenth', 'dotted', 'triplet', 'tie', 'rest']
+
+/** Stored stats; anything broken is dropped. */
+export function parseKindStats(value: unknown): Partial<Record<RhythmKind, KindStats>> {
+  if (typeof value !== 'object' || value === null || Array.isArray(value)) return {}
+  const stats: Partial<Record<RhythmKind, KindStats>> = {}
+  for (const [kind, item] of Object.entries(value)) {
+    const { tries, misses } = (item ?? {}) as Partial<KindStats>
+    if (KINDS.includes(kind as RhythmKind) && typeof tries === 'number' && typeof misses === 'number' && tries >= misses && misses >= 0) {
+      stats[kind as RhythmKind] = { tries, misses }
+    }
+  }
+  return stats
+}
+
+/** Two hands at once (Р10, «2 против 3»): the right hand plays triplets while the left plays eighths. */
+export interface TwoHands {
+  right: Rhythm
+  left: Rhythm
+}
+
+export type Hand = 'left' | 'right'
+
+/** Beats of a two-hand task that are «2 против 3»; the others are a quarter in both hands, to breathe. */
+const POLY_SHARE = 0.75
+
+export function makeTwoHands(random: () => number = Math.random): TwoHands {
+  const right: RhythmNote[] = []
+  const left: RhythmNote[] = []
+  const beats = TASK_BARS * barQuarters(TWO)
+  for (let beat = 0; beat < beats; beat++) {
+    // The first beat is always the polyrhythm: it is what the level is about.
+    if (beat === 0 || random() < POLY_SHARE) {
+      right.push(e({ tuplet: TRIPLET }), e({ tuplet: TRIPLET }), e({ tuplet: TRIPLET }))
+      left.push(e(), e())
+    } else {
+      right.push(q())
+      left.push(q())
+    }
+  }
+  return { right: { meter: TWO, notes: right }, left: { meter: TWO, notes: left } }
+}
+
+/** The first key of the right hand: the left hand plays the lower octave of the window (C to B). */
+export function handSplit(keys: readonly number[]): number {
+  if (keys.length === 0) return 60
+  const lowest = Math.min(...keys)
+  return lowest - (((lowest % 12) + 12) % 12) + 12
+}
+
+/** Pads 1-4 are the left hand, 5-8 the right (plan: «пэды 1–4 против 5–8»). */
+export function padHand(pad: number): Hand {
+  return pad <= 4 ? 'left' : 'right'
 }
