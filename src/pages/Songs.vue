@@ -1,11 +1,12 @@
 <script setup lang="ts">
-import { ref } from 'vue'
+import { computed, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useRouter } from 'vue-router'
 import { useToast } from '@nuxt/ui/composables'
 
 import PageHeader from '@/components/PageHeader.vue'
 import { useProgress } from '@/composables/useProgress'
+import { PIECES, builtinId } from '@/lib/pieces'
 
 const { t } = useI18n()
 const toast = useToast()
@@ -41,6 +42,15 @@ async function remove(id: number) {
 }
 
 const formatDate = (time: number) => new Date(time).toLocaleDateString('ru-RU', { day: 'numeric', month: 'long', year: 'numeric' })
+
+/** Built-in pieces (plan step 18) come first and open straight on the part the child plays. */
+const pieceOf = (fileName: string) => PIECES.find((piece) => piece.id === builtinId(fileName)) ?? null
+/** Built-in pieces first, in the order they are learned; the child's own songs after them, as stored. */
+const order = (fileName: string) => {
+  const piece = pieceOf(fileName)
+  return piece ? PIECES.indexOf(piece) : PIECES.length
+}
+const list = computed(() => [...songs.value].sort((a, b) => order(a.fileName) - order(b.fileName)))
 const formatSize = (bytes: number) => `${Math.max(1, Math.round(bytes / 1024))} КБ`
 </script>
 
@@ -73,15 +83,19 @@ const formatSize = (bytes: number) => `${Math.max(1, Math.round(bytes / 1024))} 
     />
 
     <ul v-else class="list">
-      <li v-for="song in songs" :key="song.id" class="item">
-        <RouterLink :to="`/songs/${song.id}`" class="item__link">
-          <UIcon name="i-lucide-music" class="size-6 shrink-0 text-muted" />
+      <li v-for="song in list" :key="song.id" class="item">
+        <RouterLink :to="pieceOf(song.fileName) ? `/songs/${song.id}/${pieceOf(song.fileName)!.learner}` : `/songs/${song.id}`" class="item__link">
+          <UIcon :name="pieceOf(song.fileName) ? 'i-lucide-star' : 'i-lucide-music'" class="size-6 shrink-0 text-muted" />
           <span class="min-w-0">
             <span class="item__name text-highlighted">{{ song.name }}</span>
-            <span class="item__meta text-muted">{{ t('songs.meta', { date: formatDate(song.importedAt), size: formatSize(song.size) }) }}</span>
+            <span class="item__meta text-muted">
+              {{ pieceOf(song.fileName) ? t('songs.builtin', { part: t(`songs.builtinPart.${pieceOf(song.fileName)!.kind}`) }) : t('songs.meta', { date: formatDate(song.importedAt), size: formatSize(song.size) }) }}
+            </span>
           </span>
         </RouterLink>
-        <div v-if="confirmDelete === song.id" class="flex items-center gap-2">
+        <!-- A built-in piece would come back on the next start: nothing to delete. -->
+        <span v-if="pieceOf(song.fileName)" />
+        <div v-else-if="confirmDelete === song.id" class="flex items-center gap-2">
           <UButton color="error" variant="soft" size="lg" :label="t('songs.deleteYes')" @click="remove(song.id)" />
           <UButton color="neutral" variant="ghost" size="lg" :label="t('pads.cancel')" @click="confirmDelete = null" />
         </div>

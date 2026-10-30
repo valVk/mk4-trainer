@@ -67,3 +67,16 @@ export async function resetUnits(db: TrainerDb, profileId: number, songId: numbe
     .filter((row) => row.channel === channel && (!units || units.includes(row.unit)))
     .delete()
 }
+
+/**
+ * Puts a built-in piece in the song table: adds it the first time, and refreshes the stored copy when
+ * the piece's notes changed (another file name), keeping its id so practice progress stays with it.
+ */
+export async function upsertBuiltin(db: TrainerDb, song: Omit<SongRecord, 'id'>, isSame: (fileName: string) => boolean): Promise<void> {
+  const existing = await db.song.filter((row) => isSame(row.fileName)).first()
+  if (!existing) {
+    await db.song.add(song as SongRecord)
+    return
+  }
+  if (existing.fileName !== song.fileName) await db.song.update(existing.id, { name: song.name, fileName: song.fileName, data: song.data, size: song.size })
+}

@@ -12,6 +12,7 @@ import { useProgress } from '@/composables/useProgress'
 import { useRhythmPlayer } from '@/composables/useRhythmPlayer'
 import { useSynth } from '@/composables/useSynth'
 import { useWakeLock } from '@/composables/useWakeLock'
+import { PIECES, builtinId } from '@/lib/pieces'
 import { scaleGroups, tapInputOf, type TapInput } from '@/lib/metronome'
 import { quarterSeconds, scoreRhythm, sounds, type Rhythm, type RhythmPress, type RhythmScore, type TimingVerdict } from '@/lib/rhythm'
 import {
@@ -358,6 +359,13 @@ onBeforeUnmount(() => cancelAnimationFrame(countFrame))
 
 /** The intro: one bar of each new value, to look at and listen to. */
 const introRhythms = computed(() => info.value.introduces.map((id) => ({ id, rhythm: introRhythm(id) })))
+/** Rhythm pieces that come after a level, with a link to their stored song once it is there. */
+function piecesAfter(id: number) {
+  return PIECES.filter((piece) => piece.kind === 'rhythm' && piece.afterLevel === id).map((piece) => {
+    const song = progress.songs.value.find((item) => builtinId(item.fileName) === piece.id)
+    return { id: piece.id, title: piece.short ?? piece.title, to: song ? `/songs/${song.id}/${piece.learner}` : null }
+  })
+}
 const levelTabs = computed(() => RHYTHM_LEVELS.map((item) => ({ id: item.id, open: isOpen(item.id, passed.value), stars: starsOf(passed.value[item.id]?.passes ?? 0) })))
 </script>
 
@@ -376,20 +384,31 @@ const levelTabs = computed(() => RHYTHM_LEVELS.map((item) => ({ id: item.id, ope
 
     <div class="levels-row">
       <div class="levels" role="tablist" :aria-label="t('theory.levelsLabel')">
-        <button
-          v-for="tab in levelTabs"
-          :key="tab.id"
-          type="button"
-          role="tab"
-          class="level"
-          :class="{ 'level--on': tab.id === level, 'level--done': tab.stars === 3 }"
-          :aria-selected="tab.id === level"
-          :disabled="!tab.open"
-          @click="openLevel(tab.id)"
-        >
-          <span>Р{{ tab.id }}</span>
-          <UIcon v-if="!tab.open" name="i-lucide-lock" class="size-3" />
-        </button>
+        <template v-for="tab in levelTabs" :key="tab.id">
+          <button
+            type="button"
+            role="tab"
+            class="level"
+            :class="{ 'level--on': tab.id === level, 'level--done': tab.stars === 3 }"
+            :aria-selected="tab.id === level"
+            :disabled="!tab.open"
+            @click="openLevel(tab.id)"
+          >
+            <span>Р{{ tab.id }}</span>
+            <UIcon v-if="!tab.open" name="i-lucide-lock" class="size-3" />
+          </button>
+          <!-- The piece that ends this group of levels: open once the level has all its stars (plan step 18). -->
+          <template v-for="piece in piecesAfter(tab.id)" :key="piece.id">
+            <RouterLink v-if="piece.to && tab.stars === 3" :to="piece.to" class="level level--piece">
+              <UIcon name="i-lucide-music" class="size-3.5" />
+              {{ piece.title }}
+            </RouterLink>
+            <span v-else class="level level--piece level--closed" :aria-label="t('theory.pieceLocked', { name: piece.title, n: tab.id })">
+              <UIcon name="i-lucide-music" class="size-3.5" />
+              <UIcon name="i-lucide-lock" class="size-3" />
+            </span>
+          </template>
+        </template>
       </div>
       <span class="stars" :aria-label="t('train.stars', { n: stars })">{{ '★'.repeat(stars) }}<span class="stars__off">{{ '★'.repeat(3 - stars) }}</span></span>
       <!-- Tempo from the metronome scale, one tap, like a mechanical metronome. -->
@@ -594,6 +613,15 @@ const levelTabs = computed(() => RHYTHM_LEVELS.map((item) => ({ id: item.id, ope
   color: #fff;
   background: var(--color-pad-sky);
   box-shadow: none;
+}
+
+.level--piece {
+  color: var(--color-pad-sky);
+  box-shadow: 0 0 0 1.5px color-mix(in oklab, var(--color-pad-sky) 50%, transparent) inset;
+}
+
+.level--closed {
+  opacity: 0.5;
 }
 
 .level--done:not(.level--on) {

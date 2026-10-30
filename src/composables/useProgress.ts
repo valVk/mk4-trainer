@@ -19,12 +19,13 @@ import {
   type TaskStats,
 } from '@/db/progress'
 import { GLOBAL_PROFILE, createDb, type LevelProgress, type Profile, type SongProgress, type SongRecord, type TrainerDb } from '@/db/schema'
-import { addSong, deleteSong as deleteSongRow, getSong, getSongProgress, listSongs, resetUnits, saveUnitResult, setSongMix, type SongSummary } from '@/db/songs'
+import { addSong, deleteSong as deleteSongRow, getSong, getSongProgress, listSongs, resetUnits, saveUnitResult, setSongMix, upsertBuiltin, type SongSummary } from '@/db/songs'
 import { i18n } from '@/i18n'
 import { parseInstrument } from '@/lib/instruments'
 import { parseLatencyHistories, parseMetronomeSettings } from '@/lib/metronome'
 import { startLevel, starsFor } from '@/lib/levels'
 import { isValidPadMap, type PadMap } from '@/lib/noteSource'
+import { PIECES, buildPieceMidi, builtinId, pieceFileName } from '@/lib/pieces'
 import { parseSongView, type SongView } from '@/lib/practice'
 import type { Rhythm, RhythmScore } from '@/lib/rhythm'
 import { addKindStats, parseKindStats, parseRhythmProgress, type KindStats, type RhythmKind, type RhythmLevelProgress } from '@/lib/rhythmLevels'
@@ -188,6 +189,7 @@ function init(): Promise<void> {
     await safely(async (database) => {
       await loadPadMap(database)
       await loadProfileData(database, await ensureProfile(database, i18n.global.t('progress.defaultName')))
+      await addBuiltinPieces(database)
       songs.value = await listSongs(database)
     })
     watchSettings()
@@ -311,6 +313,14 @@ async function weakTasks(limit = 5): Promise<TaskStats[]> {
  * Imports a MIDI file from the device. The file is parsed first, so a broken or non-MIDI file
  * throws before anything is saved. Songs stay in this browser only.
  */
+/** The built-in pieces (plan step 18) live in the song table like imported songs, so practice works the same. */
+async function addBuiltinPieces(database: TrainerDb): Promise<void> {
+  for (const piece of PIECES) {
+    const data = buildPieceMidi(piece)
+    await upsertBuiltin(database, { name: piece.title, fileName: pieceFileName(piece), data, size: data.byteLength, importedAt: 0 }, (fileName) => builtinId(fileName) === piece.id)
+  }
+}
+
 async function importSong(file: File): Promise<SongSummary> {
   const data = await file.arrayBuffer()
   parseSong(data, file.name)

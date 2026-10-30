@@ -14,7 +14,7 @@ import {
   type AttemptInput,
 } from '@/db/progress'
 import { GLOBAL_PROFILE, createDb, type TrainerDb } from '@/db/schema'
-import { addSong, deleteSong, getSong, getSongProgress, listSongs, resetUnits, saveUnitResult, setSongMix } from '@/db/songs'
+import { addSong, deleteSong, getSong, getSongProgress, listSongs, resetUnits, saveUnitResult, setSongMix, upsertBuiltin } from '@/db/songs'
 
 let counter = 0
 const opened: TrainerDb[] = []
@@ -151,6 +151,18 @@ describe('songs', () => {
     await deleteSong(db, id)
     expect(await getSong(db, id)).toBeUndefined()
     expect(await listSongs(db)).toEqual([])
+  })
+
+  it('adds a built-in piece once and refreshes it in place when its notes change', async () => {
+    const db = freshDb()
+    const same = (fileName: string) => fileName.startsWith('builtin-ode-')
+    await upsertBuiltin(db, { name: 'Ода', fileName: 'builtin-ode-v1.mid', data: bytes(8), size: 8, importedAt: 0 }, same)
+    await upsertBuiltin(db, { name: 'Ода', fileName: 'builtin-ode-v1.mid', data: bytes(8), size: 8, importedAt: 0 }, same)
+    const [first] = await listSongs(db)
+    await upsertBuiltin(db, { name: 'Ода', fileName: 'builtin-ode-v2.mid', data: bytes(12), size: 12, importedAt: 0 }, same)
+    const list = await listSongs(db)
+    expect(list).toHaveLength(1)
+    expect(list[0]).toMatchObject({ id: first!.id, fileName: 'builtin-ode-v2.mid', size: 12 })
   })
 
   it('keeps the part volumes with the song', async () => {
