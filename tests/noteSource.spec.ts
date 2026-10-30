@@ -3,12 +3,13 @@ import { describe, expect, it } from 'vitest'
 import {
   DEFAULT_BASE_NOTE,
   DEFAULT_PAD_MAP,
-  HeldNotes,
   MAX_BASE_NOTE,
   MIN_BASE_NOTE,
   VIRTUAL_NOTE_KEYS,
   calibrationPress,
+  HeldNotes,
   isValidPadMap,
+  mk4OctaveBase,
   padAction,
   parseMidiMessage,
   shiftBaseNote,
@@ -156,5 +157,26 @@ describe('pad actions and calibration', () => {
   it('rejects a repeated pad and a key from another channel', () => {
     expect(calibrationPress([44, 45], 10, { note: 45, channel: 10 })).toEqual({ status: 'duplicate', pad: 2 })
     expect(calibrationPress([44], 10, { note: 60, channel: 1 })).toEqual({ status: 'otherChannel', channel: 10 })
+  })
+})
+
+describe('MK4 Octave buttons (SysEx)', () => {
+  const octave = (position: number) => [0xf0, 0x47, 0x00, 0x5d, 0x3b, 0x00, 0x01, position, 0xf7]
+
+  it('reads the position: 4 is home (C3), each step an octave', () => {
+    expect(mk4OctaveBase(octave(4))).toBe(48)
+    expect(mk4OctaveBase(octave(3))).toBe(36)
+    expect(mk4OctaveBase(octave(5))).toBe(60)
+  })
+
+  it('turns it into an octave event and ignores other SysEx', () => {
+    expect(parseMidiMessage(octave(3))).toEqual({ type: 'octave', base: 36, source: 'midi' })
+    expect(parseMidiMessage([0xf0, 0x7e, 0x7f, 0x06, 0x01, 0xf7])).toBeNull()
+    expect(mk4OctaveBase([0xf0, 0x47, 0x00, 0x5d, 0x3b, 0x00, 0x02, 4, 0xf7])).toBeNull()
+  })
+
+  it('stays inside the MIDI range', () => {
+    expect(mk4OctaveBase(octave(0))).toBe(MIN_BASE_NOTE)
+    expect(mk4OctaveBase(octave(12))).toBe(MAX_BASE_NOTE)
   })
 })

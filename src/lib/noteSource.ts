@@ -10,6 +10,8 @@ export type NoteEvent =
   /** Pad number is 1-based, as printed on the MK4. */
   | { type: 'pad', pad: number, velocity: number, source: NoteSourceKind, onScreen?: boolean }
   | { type: 'knob', control: number, value: number, channel: number, source: NoteSourceKind }
+  /** The MK4's Octave buttons moved its keys: `base` is the first key now (its own SysEx, found by the owner). */
+  | { type: 'octave', base: number, source: NoteSourceKind }
 
 export type NoteListener = (event: NoteEvent) => void
 
@@ -34,6 +36,19 @@ export const DEFAULT_PAD_MAP: PadMap = {
 
 export const PAD_COUNT = 8
 
+/** What the MK4 sends when Octave − or + is pressed (DAW and plugin modes): F0 47 00 5D 3B 00 01 <position> F7. */
+const MK4_OCTAVE_HEADER = [0xf0, 0x47, 0x00, 0x5d, 0x3b, 0x00, 0x01] as const
+/** Position 4 is the MK4 out of the box: C3-C5. Each step moves the keys an octave. */
+const MK4_HOME_POSITION = 4
+
+/** The first key of the MK4 after an Octave press, from its SysEx; null for any other message. */
+export function mk4OctaveBase(data: ArrayLike<number>): number | null {
+  if (data.length !== MK4_OCTAVE_HEADER.length + 2 || data[data.length - 1] !== 0xf7) return null
+  if (!MK4_OCTAVE_HEADER.every((byte, i) => data[i] === byte)) return null
+  const base = DEFAULT_BASE_NOTE + (data[MK4_OCTAVE_HEADER.length]! - MK4_HOME_POSITION) * 12
+  return Math.min(MAX_BASE_NOTE, Math.max(MIN_BASE_NOTE, base))
+}
+
 /** Turns one raw MIDI message into an event; returns null for messages the trainer ignores. */
 export function parseMidiMessage(
   data: ArrayLike<number>,
@@ -41,6 +56,10 @@ export function parseMidiMessage(
   source: NoteSourceKind = 'midi',
 ): NoteEvent | null {
   const status = data[0]
+  if (status === 0xf0) {
+    const base = mk4OctaveBase(data)
+    return base === null ? null : { type: 'octave', base, source }
+  }
   if (status === undefined || status >= 0xf0) return null
   const type = status & 0xf0
   const channel = (status & 0x0f) + 1

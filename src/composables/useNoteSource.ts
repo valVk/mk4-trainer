@@ -165,7 +165,12 @@ export class VirtualSource implements NoteSource {
   }
 
   shiftOctave(octaves: number): void {
-    this.baseNote = shiftBaseNote(this.baseNote, octaves)
+    this.setBaseNote(shiftBaseNote(this.baseNote, octaves))
+  }
+
+  /** Puts the first key somewhere (the MK4 told where its keys are now). */
+  setBaseNote(base: number): void {
+    this.baseNote = base
     this.onBaseNote?.(this.baseNote)
   }
 
@@ -231,6 +236,8 @@ const midiInputs = shallowRef<MidiInputInfo[]>([])
 const baseNote = ref(DEFAULT_BASE_NOTE)
 
 function dispatch(event: NoteEvent): void {
+  // The MK4's Octave buttons: the keys under the hands, the computer keys and the octave map follow at once.
+  if (event.type === 'octave') virtual.setBaseNote(event.base)
   if (held.apply(event)) heldNotes.value = held.notes()
   hub.emit(event)
 }
