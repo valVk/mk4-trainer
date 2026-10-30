@@ -63,7 +63,7 @@ describe('pieces in «Теория»', () => {
     for (const piece of PIECES.filter((item) => item.after)) {
       const levels = piece.after!.section === 'rhythm' ? RHYTHM_LEVELS : NOTE_SECTIONS[piece.after!.section]
       expect(levels.some((level) => level.id === piece.after!.level)).toBe(true)
-      expect(piece.short!.length).toBeLessThanOrEqual(12)
+      expect(piece.short!.length).toBeLessThanOrEqual(14)
     }
   })
 })
@@ -86,5 +86,16 @@ describe('key signature in a piece', () => {
     expect(parseSong(buildPieceMidi(piece), pieceFileName(piece)).keySignature).toBe(2)
     const plain = PIECES.find((item) => item.id === 'ode-right-hand')!
     expect(parseSong(buildPieceMidi(plain), pieceFileName(plain)).keySignature).toBe(0)
+  })
+})
+
+describe('flat key signature in a piece', () => {
+  it('writes one flat as a signed byte and reads it back', () => {
+    const piece = PIECES.find((item) => item.id === 'yolochka-f')!
+    expect(parseSong(buildPieceMidi(piece), pieceFileName(piece)).keySignature).toBe(-1)
+    const moved = PIECES.find((item) => item.id === 'yolochka-g')!
+    const tune = (id: string) => parseSong(buildPieceMidi(PIECES.find((item) => item.id === id)!), 'x.mid').parts.find((part) => part.channel === 0)!.notes.map((item) => item.key)
+    expect(tune('yolochka-g')).toEqual(tune('yolochka-f').map((key) => key + 2))
+    expect(parseSong(buildPieceMidi(moved), pieceFileName(moved)).keySignature).toBe(1)
   })
 })

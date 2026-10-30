@@ -33,7 +33,7 @@ export interface PieceVoice {
 export type PieceKind = 'melody' | 'rhythm'
 
 /** Sections of «Теория» that end their level groups with pieces. */
-export type TheorySection = 'rhythm' | 'notes' | 'accidentals' | 'intervals'
+export type TheorySection = 'rhythm' | 'notes' | 'accidentals' | 'intervals' | 'scales'
 
 export interface Piece {
   /** Stable id; the version goes up whenever the notes change, so saved copies are refreshed. */
@@ -51,8 +51,8 @@ export interface Piece {
   learner: number
   /** Rhythm pieces: the drum part is a groove of its own, not the rhythm of the tune. */
   groove?: boolean
-  /** Sharps of the key signature written into the file (plan step 20); none when absent. */
-  keySharps?: number
+  /** Key signature written into the file (plan steps 20, 22): sharps positive, flats negative. */
+  keySignature?: number
   /** The level of «Теория» the piece comes after: it opens with that level's last star. */
   after?: { section: TheorySection, level: number }
 }
@@ -345,7 +345,7 @@ const ODE_D: Piece = {
   meter: { numerator: 4, denominator: 4 },
   bpm: 72,
   learner: 0,
-  keySharps: 2,
+  keySignature: 2,
   after: { section: 'accidentals', level: 5 },
   voices: [
     { channel: 0, program: 0, notes: ODE_D_MELODY },
@@ -353,7 +353,43 @@ const ODE_D: Piece = {
   ],
 }
 
-export const PIECES: readonly Piece[] = [FUR_ELISE, ODE, CHIZHIK, WALTZ, YOLKA, ENTERTAINER, ROW, DRUMMER, ODE_RIGHT, ODE_D]
+/** The same tune, every note moved by some semitones (rests stay). */
+function transposeVoice(notes: readonly PieceNote[], semitones: number): PieceNote[] {
+  return notes.map((note) => ({ ...note, key: note.key === null ? null : note.key + semitones }))
+}
+
+// «Ёлочка» on the keys (plan step 22): first in F major as written, then moved a tone up to G major, as the child
+// did with its first phrase in «Гаммы».
+const YOLKA_BASS = voice('r/2 F2/2 F2/2 C3/2 F2/2 Bb2/2 F2/2 C3/2 F2/2')
+const YOLKA_F: Piece = {
+  id: 'yolochka-f',
+  version: 1,
+  title: 'В лесу родилась ёлочка — фа мажор',
+  short: 'Ёлочка в фа',
+  kind: 'melody',
+  meter: { numerator: 2, denominator: 4 },
+  bpm: 76,
+  learner: 0,
+  keySignature: -1,
+  after: { section: 'scales', level: 6 },
+  voices: [
+    { channel: 0, program: 0, notes: YOLKA_MELODY },
+    { channel: 1, program: 32, velocity: 80, notes: YOLKA_BASS },
+  ],
+}
+const YOLKA_G: Piece = {
+  ...YOLKA_F,
+  id: 'yolochka-g',
+  title: 'В лесу родилась ёлочка — соль мажор',
+  short: 'Ёлочка в соль',
+  keySignature: 1,
+  voices: [
+    { channel: 0, program: 0, notes: transposeVoice(YOLKA_MELODY, 2) },
+    { channel: 1, program: 32, velocity: 80, notes: transposeVoice(YOLKA_BASS, 2) },
+  ],
+}
+
+export const PIECES: readonly Piece[] = [FUR_ELISE, ODE, CHIZHIK, WALTZ, YOLKA, ENTERTAINER, ROW, DRUMMER, ODE_RIGHT, ODE_D, YOLKA_F, YOLKA_G]
 
 /** The file name a piece is stored under: built in, with its version. */
 export function pieceFileName(piece: Pick<Piece, 'id' | 'version'>): string {
@@ -372,8 +408,8 @@ export function buildPieceMidi(piece: Piece): ArrayBuffer {
   const midi = new MIDIBuilder({ name: piece.title, timeDivision: TICKS_PER_QUARTER, initialTempo: piece.bpm, format: 1 })
   const { numerator, denominator } = piece.meter
   midi.addEvent(0, 0, MIDIMessageTypes.timeSignature, [numerator, Math.log2(denominator), 24, 8])
-  // Sharps as a positive byte, major mode.
-  if (piece.keySharps) midi.addEvent(0, 0, MIDIMessageTypes.keySignature, [piece.keySharps, 0])
+  // Sharps or flats as a signed byte, major mode.
+  if (piece.keySignature) midi.addEvent(0, 0, MIDIMessageTypes.keySignature, [(piece.keySignature + 256) % 256, 0])
   piece.voices.forEach((item) => {
     midi.addTrack(`ch${item.channel + 1}`)
     const track = midi.tracks.length - 1

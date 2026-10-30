@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
-import { barKeys, barVexSpelling, enharmonic, keyOf, spelled, spellings, stepTarget, vexSpelling } from '@/lib/accidentals'
+import { barKeys, barVexSpelling, enharmonic, vexInKey, keyOf, spelled, spellings, stepTarget, vexSpelling } from '@/lib/accidentals'
 
 describe('written notes', () => {
   it('finds the key of a note with any accidental', () => {
@@ -59,5 +59,15 @@ describe('key signature and signs in a bar', () => {
   it('writes the bar for the staff: the sounding key, a sign only where printed', () => {
     expect(barVexSpelling('G', [note(F, 4), note(F, 4, 'natural')])).toEqual([{ key: 'f#/4', accidental: null }, { key: 'f/4', accidental: 'n' }])
     expect(barVexSpelling('D', [note(C, 5)])).toEqual([{ key: 'c#/5', accidental: null }])
+  })
+})
+
+describe('notes under a key signature', () => {
+  it('prints a sign only where the note differs from the signature', () => {
+    expect(vexInKey(spelled('C#4'), -1)).toEqual({ key: 'c#/4', accidental: '#' })
+    expect(vexInKey(spelled('F#4'), 1)).toEqual({ key: 'f#/4', accidental: null })
+    expect(vexInKey(spelled('B4'), -1)).toEqual({ key: 'b/4', accidental: 'n' })
+    expect(vexInKey(spelled('Bb4'), -1)).toEqual({ key: 'bb/4', accidental: null })
+    expect(vexInKey(spelled('G#3'), 0)).toEqual({ key: 'g#/3', accidental: '#' })
   })
 })

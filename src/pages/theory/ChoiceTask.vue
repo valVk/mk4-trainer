@@ -4,26 +4,34 @@ import { useI18n } from 'vue-i18n'
 
 import NoteStaff, { type StaffNote } from '@/components/NoteStaff.vue'
 import { useSynth } from '@/composables/useSynth'
-import { keyOf } from '@/lib/accidentals'
-import type { IntervalId } from '@/lib/intervals'
-import type { IntervalChoice } from '@/lib/noteLevels'
 
-// «Теория» → «Интервалы», by ear and by notes (plan step 21): the interval sounds or stands on the staff, the child
-// taps its name. A wrong name just greys out and the child tries again; the right one turns green. When reading, a
-// note turns green once its key is pressed, so the child can find both on the keys before counting.
+// A task answered with buttons («Теория»: an interval by ear or by notes, step 21; a key by its signature, step 22).
+// What to answer sounds, or stands on the staff; the child taps its name. A wrong name just greys out and the child
+// tries again; the right one turns green. Notes on the staff light up when their keys are pressed.
+
+export interface ChoiceOption {
+  id: string
+  label: string
+}
 
 const props = defineProps<{
-  choice: IntervalChoice
-  /** Read from the staff instead of heard. */
-  read: boolean
+  options: readonly ChoiceOption[]
+  answer: string
   solved: boolean
+  /** Notes to read; without them the task is heard. */
+  staffNotes?: readonly StaffNote[]
+  keySignature?: string
+  /** What to hear: keys one after the other, or together. */
+  sound?: { keys: readonly number[], together: boolean }
+  /** Text on a wrong answer, given its label. */
+  wrongText: (label: string) => string
 }>()
 
 const emit = defineEmits<{
   right: []
 }>()
 
-/** Gap between the two notes of a melodic interval, and how long each sounds. */
+/** Gap between the notes heard one after the other, and how long each sounds. */
 const NOTE_MS = 700
 /** A moment after the task appears before it sounds, so it is not lost in the previous answer's chime. */
 const FIRST_PLAY_MS = 400
@@ -31,59 +39,57 @@ const FIRST_PLAY_MS = 400
 const { t } = useI18n()
 const { status: soundStatus, playChord } = useSynth()
 
-const wrong = ref<IntervalId[]>([])
+const wrong = ref<string[]>([])
 let timers: ReturnType<typeof setTimeout>[] = []
-
-const keys = computed(() => [keyOf(props.choice.low), keyOf(props.choice.high)])
 
 function listen() {
   timers.forEach(clearTimeout)
   timers = []
-  if (props.choice.harmonic) {
-    playChord(keys.value, NOTE_MS * 2)
+  const sound = props.sound
+  if (!sound) return
+  if (sound.together) {
+    playChord(sound.keys, NOTE_MS * 2)
     return
   }
-  playChord([keys.value[0]!], NOTE_MS)
-  timers.push(setTimeout(() => playChord([keys.value[1]!], NOTE_MS), NOTE_MS))
+  sound.keys.forEach((key, i) => timers.push(setTimeout(() => playChord([key], NOTE_MS), i * NOTE_MS)))
 }
 
-watch(() => props.choice, () => {
+watch(() => [props.answer, props.options], () => {
   wrong.value = []
-  if (!props.read) timers.push(setTimeout(listen, FIRST_PLAY_MS))
+  if (!props.staffNotes) timers.push(setTimeout(listen, FIRST_PLAY_MS))
 }, { immediate: true })
 
 onBeforeUnmount(() => timers.forEach(clearTimeout))
 
-function answer(id: IntervalId) {
+function choose(id: string) {
   if (props.solved || wrong.value.includes(id)) return
-  if (id === props.choice.answer) emit('right')
+  if (id === props.answer) emit('right')
   else wrong.value = [...wrong.value, id]
 }
 
-const lastWrong = computed(() => wrong.value[wrong.value.length - 1] ?? null)
-const staffNotes = computed<StaffNote[]>(() => [props.choice.low, props.choice.high].map((note) => ({ key: keyOf(note), written: note })))
+const lastWrong = computed(() => props.options.find((option) => option.id === wrong.value[wrong.value.length - 1]) ?? null)
 </script>
 
 <template>
-  <NoteStaff v-if="read" :notes="staffNotes" show="treble" playable :scale="2" fit class="choice__staff" />
+  <NoteStaff v-if="staffNotes" :notes="staffNotes" show="treble" :key-signature="keySignature" playable :scale="2" fit class="choice__staff" />
   <div v-else class="choice__ear">
-    <UButton icon="i-lucide-ear" color="neutral" variant="soft" size="xl" :label="t('theory.intervals.listenAgain')" @click="listen" />
-    <p v-if="soundStatus !== 'ready'" class="text-toned">{{ t('theory.intervals.needSound') }}</p>
+    <UButton icon="i-lucide-ear" color="neutral" variant="soft" size="xl" :label="t('theory.choice.listenAgain')" @click="listen" />
+    <p v-if="soundStatus !== 'ready'" class="text-toned">{{ t('theory.choice.needSound') }}</p>
   </div>
-  <div class="choice__options" role="group" :aria-label="t('theory.intervals.optionsLabel')">
+  <div class="choice__options" role="group" :aria-label="t('theory.choice.optionsLabel')">
     <button
-      v-for="id in choice.options"
-      :key="id"
+      v-for="option in options"
+      :key="option.id"
       type="button"
       class="option"
-      :class="{ 'option--wrong': wrong.includes(id), 'option--right': solved && id === choice.answer }"
-      :disabled="wrong.includes(id)"
-      @click="answer(id)"
+      :class="{ 'option--wrong': wrong.includes(option.id), 'option--right': solved && option.id === answer }"
+      :disabled="wrong.includes(option.id)"
+      @click="choose(option.id)"
     >
-      {{ t(`theory.intervals.names.${id}`) }}
+      {{ option.label }}
     </button>
   </div>
-  <p v-if="lastWrong && !solved" class="pill" role="status">{{ t(read ? 'theory.intervals.notThisRead' : 'theory.intervals.notThis', { name: t(`theory.intervals.names.${lastWrong}`) }) }}</p>
+  <p v-if="lastWrong && !solved" class="pill" role="status">{{ wrongText(lastWrong.label) }}</p>
 </template>
 
 <style scoped>

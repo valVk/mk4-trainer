@@ -3,7 +3,8 @@ import { computed, onBeforeUnmount, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 
 import ChordDiagram from '@/components/ChordDiagram.vue'
-import IntervalChoice from '@/pages/theory/IntervalChoice.vue'
+import CircleOfFifths from '@/components/CircleOfFifths.vue'
+import ChoiceTask from '@/pages/theory/ChoiceTask.vue'
 import NoteStaff, { type StaffNote } from '@/components/NoteStaff.vue'
 import OctaveMap from '@/components/OctaveMap.vue'
 import NoteReading from '@/pages/theory/NoteReading.vue'
@@ -21,9 +22,11 @@ import { useTheoryPieces } from '@/composables/useTheoryPieces'
 import { useWakeLock } from '@/composables/useWakeLock'
 import { KEYBOARD_KEYS } from '@/lib/keyboard'
 import { STAR_THRESHOLDS } from '@/lib/levels'
-import { barKeys, barVexSpelling, keyOf, spelled, type Alter, type BarNote, type Spelled } from '@/lib/accidentals'
+import { barKeys, barVexSpelling, keyOf, spelled, vexInKey, type Alter, type BarNote, type Spelled } from '@/lib/accidentals'
 import { NOTE_SECTIONS, checkNote, countsForStars, currentNoteLevel, isNoteLevelOpen, nextTask, noteStars, type NoteIntroId, type NoteSectionId, type NoteTask } from '@/lib/noteLevels'
+import { keySignatureName } from '@/lib/notation'
 import { KEY_HINT_DELAY_MS } from '@/lib/practice'
+import { KEY_INFO, scaleKeys } from '@/lib/scales'
 import { octaveShift, pitch, windowOctaves } from '@/lib/staff'
 import { pitchClass } from '@/lib/theory'
 
@@ -72,7 +75,9 @@ const task = ref<NoteTask>(nextTask(info.value, null))
 const barIndex = ref(0)
 /** After a note of a bar is found, the next counts only once the keys are up: the same key twice is two presses. */
 const armed = ref(true)
-const target = computed(() => task.value.bar ? task.value.bar.keys[barIndex.value]! : task.value.key)
+/** Keys played one after the other: a bar (П5), a scale or a moved melody (Г1–Г3, Г6). */
+const sequenceKeys = computed(() => task.value.bar?.keys ?? task.value.sequence?.keys ?? null)
+const target = computed(() => sequenceKeys.value ? sequenceKeys.value[barIndex.value]! : task.value.key)
 const solved = ref(false)
 const levelDone = ref(false)
 const keyHint = ref(false)
@@ -101,7 +106,7 @@ function newTask(previous: NoteTask | null) {
 function waitForHint() {
   clearTimeout(hintTimer)
   keyHint.value = false
-  if (info.value.timed !== undefined || info.value.readingBpm !== undefined || task.value.choice) return
+  if (info.value.timed !== undefined || info.value.readingBpm !== undefined || task.value.choice || task.value.keyChoice) return
   hintTimer = setTimeout(() => {
     keyHint.value = true
   }, KEY_HINT_DELAY_MS)
@@ -138,17 +143,17 @@ const check = computed(() => checkNote(target.value, presses.value, info.value.a
 // «Wrong» and «other octave» wait until the fingers have landed.
 const settledHeld = useSettled(heldNotes, (next) => (next.length === 0 ? 0 : SETTLE_MS))
 // Tasks answered with buttons: the keys are free to try things on, never «wrong».
-const settledCheck = computed(() => (settledHeld.value.length === 0 || !armed.value || task.value.choice ? 'empty' : check.value))
+const settledCheck = computed(() => (settledHeld.value.length === 0 || !armed.value || task.value.choice || task.value.keyChoice ? 'empty' : check.value))
 
 watch(() => heldNotes.value.length, (count) => {
   if (count === 0) armed.value = true
 })
 
 watch(check, (status) => {
-  if (task.value.choice || status !== 'right' || solved.value || !armed.value || phase.value !== 'task' || info.value.readingBpm !== undefined) return
+  if (task.value.choice || task.value.keyChoice || status !== 'right' || solved.value || !armed.value || phase.value !== 'task' || info.value.readingBpm !== undefined) return
   // A bar: on to its next note; the bar is one answer, counted when its last note is played.
-  const bar = task.value.bar
-  if (bar && barIndex.value < bar.keys.length - 1) {
+  const keys = sequenceKeys.value
+  if (keys && barIndex.value < keys.length - 1) {
     barIndex.value++
     armed.value = false
     playCue('step')
@@ -189,7 +194,7 @@ onBeforeUnmount(() => {
 })
 
 /** Octave buttons the target needs on an exact level; 0 when it is under the hands (or any octave counts). */
-const shiftNeeded = computed(() => (info.value.anyOctave || task.value.choice ? 0 : octaveShift(target.value, windowStart.value)))
+const shiftNeeded = computed(() => (info.value.anyOctave || task.value.choice || task.value.keyChoice ? 0 : octaveShift(target.value, windowStart.value)))
 /** The key to light up as a hint: the target itself, or on «any octave» the same note inside the window. */
 const hintKey = computed(() => {
   if (!info.value.anyOctave) return shiftNeeded.value === 0 ? target.value : null
@@ -235,7 +240,36 @@ const barNotes = computed<StaffNote[]>(() => {
     }
   })
 })
-const staffNotes = computed<StaffNote[]>(() => task.value.bar ? barNotes.value : [{
+/**
+ * A scale (Г1–Г3) shows only what is played, so the staff fills in note by note; a melody to move (Г6) stands whole,
+ * played notes green and the one to move now blue. Written under the task's key signature.
+ */
+const sequenceNotes = computed<StaffNote[]>(() => {
+  const sequence = task.value.sequence
+  if (!sequence) return []
+  return sequence.written.flatMap((note, i) => {
+    const done = solved.value || i < barIndex.value
+    if (sequence.reveal && !done) return []
+    return [{ key: keyOf(note), vex: vexInKey(note, sequence.signature), label: sequence.reveal ? writtenName(note) : undefined, colour: done ? STAFF_COLOURS.onTime : i === barIndex.value ? STAFF_COLOURS.current : undefined }]
+  })
+})
+/** A melody to finish (Г5): its notes, and the note it resolves to once found. */
+const resolutionNotes = computed<StaffNote[]>(() => {
+  const resolution = task.value.resolution
+  if (!resolution) return []
+  const signature = KEY_INFO[resolution.key].signature
+  const notes: StaffNote[] = resolution.written.map((note) => ({ key: keyOf(note), vex: vexInKey(note, signature) }))
+  if (solved.value) notes.push({ key: keyOf(resolution.resolution), vex: vexInKey(resolution.resolution, signature), label: writtenName(resolution.resolution), colour: STAFF_COLOURS.onTime })
+  return notes
+})
+/** The key signature on the task's staff, VexFlow's name. */
+const staffKeySignature = computed(() => {
+  if (task.value.bar) return task.value.bar.key
+  if (task.value.sequence) return keySignatureName(task.value.sequence.signature)
+  if (task.value.resolution) return keySignatureName(KEY_INFO[task.value.resolution.key].signature)
+  return undefined
+})
+const staffNotes = computed<StaffNote[]>(() => task.value.bar ? barNotes.value : task.value.sequence ? sequenceNotes.value : task.value.resolution ? resolutionNotes.value : [{
   key: target.value,
   written: task.value.written,
   label: solved.value ? (task.value.written ? writtenName(task.value.written) : name(target.value)) : undefined,
@@ -249,7 +283,44 @@ const prompt = computed(() => {
   if (show === 'bar') return t('theory.accidentals.barPrompt')
   if (show === 'ear') return t(info.value.harmonic ? 'theory.intervals.earHarmonicPrompt' : 'theory.intervals.earPrompt')
   if (show === 'read') return t('theory.intervals.readPrompt')
+  const sequence = task.value.sequence
+  if (show === 'scale' && sequence?.scale) return t('theory.scales.buildPrompt', { scale: t(`theory.scales.kinds.${sequence.scale.kind}`, { key: t(`theory.scales.tonics.${sequence.scale.key}`) }) })
+  if (show === 'transpose' && sequence) return t(sequence.shift === 1 ? 'theory.scales.transposeSemitone' : 'theory.scales.transposeTone')
+  if (show === 'keyChoice') return t('theory.scales.keyPrompt')
+  if (show === 'resolve') return t('theory.scales.resolvePrompt', { key: t(`theory.scales.keys.${task.value.resolution?.key ?? 'C'}`) })
   return info.value.anyOctave ? t('theory.notes.findAny') : t('theory.notes.findExact')
+})
+/** A scale after a wrong key: how far the next note is, «тон», «полутон» or «полтора тона». */
+const stepHint = computed(() => {
+  const sequence = task.value.sequence
+  if (!sequence?.scale || barIndex.value === 0) return null
+  const size = sequence.keys[barIndex.value]! - sequence.keys[barIndex.value - 1]!
+  return t(`theory.scales.stepHint.${size}`)
+})
+/** The options of a button task: an interval (step 21) or a key (step 22). */
+const choiceTask = computed(() => {
+  const choice = task.value.choice
+  if (choice) {
+    const notes = [choice.low, choice.high]
+    return {
+      answer: choice.answer as string,
+      options: choice.options.map((id) => ({ id: id as string, label: t(`theory.intervals.names.${id}`) })),
+      staffNotes: info.value.show === 'read' ? notes.map((note) => ({ key: keyOf(note), written: note })) : undefined,
+      sound: info.value.show === 'read' ? undefined : { keys: notes.map(keyOf), together: choice.harmonic },
+      keySignature: undefined as string | undefined,
+      wrongText: (label: string) => t(info.value.show === 'read' ? 'theory.intervals.notThisRead' : 'theory.intervals.notThis', { name: label }),
+    }
+  }
+  const keyChoice = task.value.keyChoice
+  if (!keyChoice) return null
+  return {
+    answer: keyChoice.answer as string,
+    options: keyChoice.options.map((id) => ({ id: id as string, label: t(`theory.scales.keys.${id}`) })),
+    staffNotes: keyChoice.written.map((note) => ({ key: keyOf(note), vex: vexInKey(note, keyChoice.signature) })),
+    sound: undefined,
+    keySignature: keySignatureName(keyChoice.signature),
+    wrongText: (label: string) => t('theory.scales.notThisKey', { name: label }),
+  }
 })
 /** A step task in words: «на полутон выше», «на тон ниже». */
 const stepWords = computed(() => {
@@ -268,11 +339,14 @@ const landmarks = (names: string): StaffNote[] => names.split(' ').map(pitch).ma
 /** Written notes for the intros of «Полутоны и знаки», each with its name. */
 const writtenNotes = (names: string): StaffNote[] => names.split(' ').map(spelled).map((note) => ({ key: keyOf(note), written: note, label: writtenName(note) }))
 /** Intros drawn as keys with the semitones between them. */
-const INTRO_KEYS: Partial<Record<NoteIntroId, number[][]>> = {
-  semitone: [[64, 65], [60, 62]],
-  perfect: [[60, 65], [60, 67]],
-  thirds: [[60, 63], [60, 64]],
-  sixths: [[60, 69], [60, 71]],
+const INTRO_KEYS: Partial<Record<NoteIntroId, { lit: number[], from?: number, to?: number }[]>> = {
+  semitone: [{ lit: [64, 65] }, { lit: [60, 62] }],
+  perfect: [{ lit: [60, 65] }, { lit: [60, 67] }],
+  thirds: [{ lit: [60, 63] }, { lit: [60, 64] }],
+  sixths: [{ lit: [60, 69] }, { lit: [60, 71] }],
+  majorSteps: [{ lit: scaleKeys(60, 'major') }],
+  minorSteps: [{ lit: scaleKeys(57, 'minor'), from: 57, to: 69 }],
+  scaleVariants: [{ lit: scaleKeys(57, 'harmonicMinor'), from: 57, to: 69 }, { lit: scaleKeys(57, 'melodicMinor'), from: 57, to: 69 }],
 }
 /** The key-signature intro: in G major F sounds as F♯; a natural makes it F up to the bar line. */
 const keyBarIntro = (): StaffNote[] => {
@@ -283,6 +357,8 @@ const keyBarIntro = (): StaffNote[] => {
 }
 const INTRO_NOTES: Partial<Record<NoteIntroId, { show: 'treble' | 'bass' | 'grand', notes: () => StaffNote[], keySignature?: string }>> = {
   keySignature: { show: 'treble', notes: keyBarIntro, keySignature: 'G' },
+  stable: { show: 'treble', notes: () => writtenNotes('C4 E4 G4 C5') },
+  transpose: { show: 'treble', notes: () => writtenNotes('C4 A4 A4 G4'), keySignature: 'F' },
   sharpFlat: { show: 'treble', notes: () => writtenNotes('F4 F#4 B4 Bb4') },
   natural: { show: 'treble', notes: () => writtenNotes('F#4 Fn4') },
   double: { show: 'treble', notes: () => writtenNotes('Fx4 Bbb4') },
@@ -345,11 +421,13 @@ const INTRO_NOTES: Partial<Record<NoteIntroId, { show: 'treble' | 'bass' | 'gran
       <template v-if="phase === 'intro'">
         <p class="prompt text-highlighted">{{ t('theory.intro.title') }}</p>
         <div class="intro">
-          <div v-for="id in info.introduces" :key="id" class="intro__item" :class="{ 'intro__item--wide': id === 'keyboard' || id === 'names' || id === 'ledgers' }">
+          <div v-for="id in info.introduces" :key="id" class="intro__item" :class="{ 'intro__item--wide': id === 'keyboard' || id === 'names' || id === 'ledgers' || id === 'majorSteps' || id === 'minorSteps' }">
             <!-- Steps and intervals counted in keys: the number over the keys is the semitones. -->
           <div v-if="INTRO_KEYS[id]" class="steps-pictures">
-            <ChordDiagram v-for="lit in INTRO_KEYS[id]" :key="lit.join()" :lit="lit" :from="60" :to="72" />
+            <ChordDiagram v-for="item in INTRO_KEYS[id]" :key="item.lit.join()" :lit="item.lit" :from="item.from ?? 60" :to="item.to ?? 72" />
           </div>
+          <!-- Tap a key on the circle: its scale and its tonic chord sound. -->
+          <CircleOfFifths v-else-if="id === 'circle'" />
           <PianoMap v-else-if="id === 'keyboard'" :window-start="windowStart" class="intro__map" />
             <!-- Live: press Octave + or − and keys, and watch the band and the notes move. -->
             <OctaveMap v-else-if="id === 'ledgers'" :window-start="windowStart" :held="heldNotes" :scale="short ? 0.7 : 0.9" />
@@ -375,8 +453,18 @@ const INTRO_NOTES: Partial<Record<NoteIntroId, { show: 'treble' | 'bass' | 'gran
           {{ t('theory.accidentals.stepFrom', { name: name(task.step.from), step: stepWords }) }}
           <span v-if="solved" class="big-name__answer">→ {{ name(target) }}</span>
         </p>
-        <IntervalChoice v-else-if="task.choice" :choice="task.choice" :read="info.show === 'read'" :solved="solved" @right="answeredRight" />
-        <NoteStaff v-else-if="info.show !== 'step'" :notes="staffNotes" :show="info.show === 'bar' || info.show === 'ear' || info.show === 'read' ? 'treble' : info.show" :key-signature="task.bar?.key" :class="{ 'task__staff--bar': task.bar }" :scale="info.show === 'grand' ? 1.7 : 2.2" fit class="task__staff" />
+        <ChoiceTask
+          v-else-if="choiceTask"
+          :answer="choiceTask.answer"
+          :options="choiceTask.options"
+          :staff-notes="choiceTask.staffNotes"
+          :sound="choiceTask.sound"
+          :key-signature="choiceTask.keySignature"
+          :wrong-text="choiceTask.wrongText"
+          :solved="solved"
+          @right="answeredRight"
+        />
+        <NoteStaff v-else-if="info.show !== 'step'" :notes="staffNotes" :show="info.show === 'treble' || info.show === 'bass' || info.show === 'grand' ? info.show : 'treble'" :key-signature="staffKeySignature" :class="{ 'task__staff--bar': sequenceKeys }" :scale="info.show === 'grand' ? 1.7 : 2.2" fit class="task__staff" />
         <!-- Calm pills over the card, never pushing the layout. -->
         <!-- Time for a star: a calm bar that empties, no countdown numbers and nothing red. -->
         <span v-if="info.timed && !solved" :key="taskNumber" class="timer" :style="{ animationDuration: `${info.timed}ms` }" aria-hidden="true" />
@@ -385,7 +473,7 @@ const INTRO_NOTES: Partial<Record<NoteIntroId, { show: 'treble' | 'bass' | 'gran
           {{ shiftNeeded > 0 ? t('theory.notes.octaveUp') : t('theory.notes.octaveDown') }}
         </p>
         <p v-else-if="settledCheck === 'octave' && !solved" class="pill" role="status">{{ t('theory.notes.otherOctave') }}</p>
-        <p v-else-if="settledCheck === 'wrong' && !solved" class="pill" role="status">{{ t('theory.notes.notThis') }}</p>
+        <p v-else-if="settledCheck === 'wrong' && !solved" class="pill" role="status">{{ stepHint ?? t('theory.notes.notThis') }}</p>
       </template>
 
       <div v-if="levelDone" class="result result--passed" role="status">
@@ -413,7 +501,7 @@ const INTRO_NOTES: Partial<Record<NoteIntroId, { show: 'treble' | 'bass' | 'gran
       :start="windowStart"
       :held="heldNotes"
       :hint="phase === 'task' && keyHint && !solved && hintKey !== null ? [hintKey] : []"
-    :mark="phase === 'task' ? task.step?.from ?? null : null"
+    :mark="phase === 'task' ? task.step?.from ?? (task.sequence?.scale ? task.sequence.keys[0] : null) ?? null : null"
       @press="pressNote"
       @release="releaseNote"
     />

@@ -10,6 +10,7 @@ import SoundControl from '@/components/SoundControl.vue'
 import TheoryNotes from '@/pages/theory/TheoryNotes.vue'
 import TheoryRhythm from '@/pages/theory/TheoryRhythm.vue'
 import { useKeyboardWindow } from '@/composables/useKeyboardWindow'
+import { NOTE_SECTIONS, type NoteSectionId } from '@/lib/noteLevels'
 
 // «Теория» (plan steps 17-24): the course from the video, section by section, fitted to the 25 keys of the
 // MK4. This page is the frame: the sections are their own components. The open section is in the address
@@ -22,12 +23,15 @@ const windowStart = useKeyboardWindow()
 const SECTIONS = ['rhythm', 'notes', 'accidentals', 'intervals', 'scales', 'functions', 'sevenths'] as const
 type Section = typeof SECTIONS[number]
 /** Sections built so far; the others wait for their plan step. */
-const READY: readonly Section[] = ['rhythm', 'notes', 'accidentals', 'intervals']
+const READY: readonly Section[] = ['rhythm', 'notes', 'accidentals', 'intervals', 'scales']
 
 const section = computed<Section>(() => {
   const asked = route.query.section
   return READY.find((item) => item === asked) ?? 'rhythm'
 })
+
+/** Sections run by the note-finding screen; «Ритм» has its own. */
+const noteSection = computed<NoteSectionId | null>(() => (section.value in NOTE_SECTIONS ? section.value as NoteSectionId : null))
 
 function openSection(next: Section) {
   void router.replace({ query: next === 'rhythm' ? {} : { section: next } })
@@ -62,7 +66,7 @@ function openSection(next: Section) {
 
     <TheoryRhythm v-if="section === 'rhythm'" />
     <!-- One screen for every note-finding section; a new key, so switching sections starts it fresh. -->
-    <TheoryNotes v-else-if="section === 'notes' || section === 'accidentals' || section === 'intervals'" :key="section" :section="section" />
+    <TheoryNotes v-else-if="noteSection" :key="noteSection" :section="noteSection" />
   </main>
 </template>
 

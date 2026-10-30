@@ -204,37 +204,52 @@ export function writePart(notes: readonly SongNote[], bars: readonly number[], m
 }
 
 const NAMES = ['c', 'c', 'd', 'd', 'e', 'f', 'f', 'g', 'g', 'a', 'a', 'b'] as const
-const SHARP = [false, true, false, true, false, false, true, false, true, false, true, false]
-/** The order sharps are added to a key signature: F C G D A E B. */
+/** Black keys written as flats: D♭ E♭ G♭ A♭ B♭ sit on the line of the letter above. */
+const FLAT_NAMES = ['c', 'd', 'd', 'e', 'e', 'f', 'g', 'g', 'a', 'a', 'b', 'b'] as const
+const BLACK = [false, true, false, true, false, false, true, false, true, false, true, false]
+/** The order sharps are added to a key signature: F C G D A E B; flats go the other way, B E A D G C F. */
 const SHARP_ORDER = ['f', 'c', 'g', 'd', 'a', 'e', 'b'] as const
-/** VexFlow's names of the sharp keys by the number of sharps (flat keys are not spelled here: notes are written with sharps). */
+const FLAT_ORDER = ['b', 'e', 'a', 'd', 'g', 'c', 'f'] as const
+/** VexFlow's names of the major keys by sharps (positive) and flats (negative). */
 export const SHARP_KEYS = ['C', 'G', 'D', 'A', 'E', 'B', 'F#', 'C#'] as const
+export const FLAT_KEYS = ['C', 'F', 'Bb', 'Eb', 'Ab', 'Db', 'Gb', 'Cb'] as const
+
+/** VexFlow's name of a key signature: 2 is D major, −1 F major. */
+export function keySignatureName(signature: number): string {
+  return signature >= 0 ? SHARP_KEYS[signature] ?? 'C' : FLAT_KEYS[-signature] ?? 'C'
+}
 
 export interface SpelledKey {
   /** VexFlow key, e.g. "c#/5" (octave 4 is the one of middle C). */
   key: string
-  /** Accidental to print: sharp, natural, or none when the bar already says it. */
-  accidental: '#' | 'n' | null
+  /** Accidental to print: sharp, flat, natural, or none when the bar already says it. */
+  accidental: '#' | 'b' | 'n' | null
 }
 
 /**
- * Spells the keys of one bar with sharps. A sharp holds for the rest of the bar on that line, so it is
- * printed once; going back to the plain note on the same line prints a natural. With `keySharps` the key
- * signature's sharps hold already: F♯ in D major prints no sign, F prints a natural.
+ * Spells the keys of one bar. A sign holds for the rest of the bar on that line, so it is printed once; going
+ * back to the plain note on the same line prints a natural. `signature` is the key signature: sharps
+ * (positive) are written as sharps, flats (negative) as flats, and the signature's own signs hold already:
+ * F♯ in D major prints no sign, F prints a natural; B♭ in F major prints none, B a natural.
  */
-export function spellBar(chords: readonly (readonly number[])[], keySharps = 0): SpelledKey[][] {
+export function spellBar(chords: readonly (readonly number[])[], signature = 0): SpelledKey[][] {
+  const flats = signature < 0
+  const names = flats ? FLAT_NAMES : NAMES
+  const sign = flats ? 'b' : '#'
   const state = new Map<string, boolean>()
-  // Letters sharp by the key signature (F, C, G… in that order) are sharp from the start of every bar.
-  const inKey = new Set(SHARP_ORDER.slice(0, Math.max(0, keySharps)))
+  // Letters altered by the key signature are altered from the start of every bar.
+  const inKey = new Set<string>(flats ? FLAT_ORDER.slice(0, -signature) : SHARP_ORDER.slice(0, Math.max(0, signature)))
   return chords.map((keys) => keys.map((midi) => {
     const pc = ((midi % 12) + 12) % 12
+    // A flat is written on the octave of its letter: C♭ would be the only exception, and it is not used here.
     const octave = Math.floor(midi / 12) - 1
-    const line = `${NAMES[pc]}${octave}`
-    const sharp = SHARP[pc]!
-    const before = state.get(line) ?? inKey.has(NAMES[pc]!)
-    state.set(line, sharp)
-    const accidental = sharp ? (before ? null : '#') : before ? 'n' : null
-    return { key: `${NAMES[pc]}${sharp ? '#' : ''}/${octave}`, accidental }
+    const letter = names[pc]!
+    const line = `${letter}${octave}`
+    const altered = BLACK[pc]!
+    const before = state.get(line) ?? inKey.has(letter)
+    state.set(line, altered)
+    const accidental = altered ? (before ? null : sign) : before ? 'n' : null
+    return { key: `${letter}${altered ? sign : ''}/${octave}`, accidental }
   }))
 }
 

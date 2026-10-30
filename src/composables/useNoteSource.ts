@@ -63,7 +63,7 @@ export class WebMidiSource implements NoteSource {
 
   async start(): Promise<void> {
     if (this.access) return
-    this.access = await navigator.requestMIDIAccess({ sysex: false })
+    this.access = await navigator.requestMIDIAccess({ sysex: true, software: true })
     // Plugging the MK4 in or out re-attaches handlers to whatever is connected now.
     this.access.onstatechange = () => this.attach()
     this.attach()

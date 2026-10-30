@@ -8,16 +8,20 @@ import { RHYTHM_LEVELS, makeTask, passes } from './rhythmLevels'
 import { STAR_THRESHOLDS, starsFor } from './levels'
 import { barKeys, keyOf, spelled, stepTarget, type Alter, type BarNote, type KeySignature, type Letter, type Spelled, type StepTask } from './accidentals'
 import { interval, type IntervalId } from './intervals'
+import { KEYS, KEY_INFO, RESOLUTION, parallelKey, relativeKey, spellScale, transpose, type KeyName, type ScaleKind } from './scales'
 import { pitch } from './staff'
 import { pitchClass } from './theory'
 
 export type NoteIntroId = 'keyboard' | 'names' | 'treble' | 'bass' | 'grand' | 'ledgers' | 'timed' | 'reading'
   | 'semitone' | 'sharpFlat' | 'natural' | 'double' | 'enharmonic' | 'keySignature'
   | 'perfect' | 'thirds' | 'sixths' | 'byEar' | 'harmonic' | 'byNotes'
+  | 'majorSteps' | 'minorSteps' | 'scaleVariants' | 'circle' | 'stable' | 'transpose'
 
 /** How the task is shown: the note's name only, a step from a key on the keyboard, or the note on a staff. */
 /** `ear` and `read`: an interval to name with buttons, heard or read from the staff (plan step 21). */
 export type NoteShow = 'name' | 'step' | 'bar' | 'ear' | 'read' | 'treble' | 'bass' | 'grand'
+  /** Plan step 22: build a scale, name a key, finish a melody, move a melody up. */
+  | 'scale' | 'keyChoice' | 'resolve' | 'transpose'
 
 export interface NoteLevel {
   id: number
@@ -40,10 +44,12 @@ export interface NoteLevel {
   harmonic?: boolean
   /** Buttons to choose from on `ear` and `read` levels, the right one among them. */
   options?: number
+  /** Scales to build on a `scale` level. */
+  scales?: readonly ScaleKind[]
 }
 
 /** Sections of «Теория» built from note-finding levels. */
-export type NoteSectionId = 'notes' | 'accidentals' | 'intervals'
+export type NoteSectionId = 'notes' | 'accidentals' | 'intervals' | 'scales'
 
 const keys = (names: string) => names.trim().split(/\s+/).map(pitch)
 const writtenAs = (names: string) => names.trim().split(/\s+/).map(spelled)
@@ -125,7 +131,105 @@ export const INTERVAL_LEVELS: readonly NoteLevel[] = [
   { id: 6, show: 'read', keys: WHITE_KEYS, anyOctave: false, introduces: ['byNotes'], intervals: ['m2', 'M2', 'm3', 'M3', 'P4', 'A4', 'P5', 'm6', 'M6', 'm7', 'M7', 'P8'], options: 4 },
 ]
 
-export const NOTE_SECTIONS: Readonly<Record<NoteSectionId, readonly NoteLevel[]>> = { notes: NOTE_LEVELS, accidentals: ACCIDENTAL_LEVELS, intervals: INTERVAL_LEVELS }
+// «Теория» → «Гаммы» (plan step 22): build scales one octave up (up and down was too long a row for a child),
+// name keys by their signature, finish a melody on its stable note, move a melody up. Everything inside C3-C5.
+export const SCALE_LEVELS: readonly NoteLevel[] = [
+  { id: 1, show: 'scale', keys: [], anyOctave: false, introduces: ['majorSteps'], scales: ['major'] },
+  { id: 2, show: 'scale', keys: [], anyOctave: false, introduces: ['minorSteps'], scales: ['minor'] },
+  { id: 3, show: 'scale', keys: [], anyOctave: false, introduces: ['scaleVariants'], scales: ['harmonicMinor', 'melodicMinor', 'harmonicMajor'] },
+  { id: 4, show: 'keyChoice', keys: [], anyOctave: false, introduces: ['circle'], options: 4 },
+  { id: 5, show: 'resolve', keys: [], anyOctave: false, introduces: ['stable'] },
+  { id: 6, show: 'transpose', keys: [], anyOctave: false, introduces: ['transpose'], stars: [3, 6, 10] },
+]
+
+export const NOTE_SECTIONS: Readonly<Record<NoteSectionId, readonly NoteLevel[]>> = { notes: NOTE_LEVELS, accidentals: ACCIDENTAL_LEVELS, intervals: INTERVAL_LEVELS, scales: SCALE_LEVELS }
+
+/** Notes played one after the other (a scale, a melody moved up), with what the staff shows for them. */
+export interface NoteSequence {
+  keys: number[]
+  /** Written notes on the staff: the scale itself (shown as it is played), or the melody to move. */
+  written: Spelled[]
+  /** Key signature of the written notes. */
+  signature: number
+  /** The scale is revealed note by note; a melody to move stands whole from the start. */
+  reveal: boolean
+  /** What is asked: the key and kind of the scale, or how far to move the melody. */
+  scale?: { key: KeyName, kind: ScaleKind }
+  shift?: number
+}
+
+/** A key to name by its signature and a last bar that ends on its tonic. */
+export interface KeyChoice {
+  answer: KeyName
+  options: KeyName[]
+  written: Spelled[]
+  signature: number
+}
+
+/** A short melody that stops on an unstable degree; the key it pulls to is the answer. */
+export interface Resolution {
+  key: KeyName
+  written: Spelled[]
+  /** The note it resolves to, shown once found. */
+  resolution: Spelled
+}
+
+const MAJORS: KeyName[] = ['C', 'G', 'D', 'F']
+const MINORS: KeyName[] = ['Am', 'Em', 'Bm', 'Dm']
+
+/** A scale to build: the key fits its kind (minor kinds on minor keys), the tonic low enough to end by C5. */
+export function makeScaleSequence(level: NoteLevel, previous: NoteSequence | null, random: () => number = Math.random): NoteSequence {
+  const pick = <T>(items: readonly T[]): T => items[Math.floor(random() * items.length)]!
+  const kind: ScaleKind = pick<ScaleKind>(level.scales ?? ['major'])
+  const keys = (kind === 'major' || kind === 'harmonicMajor' ? MAJORS : MINORS).filter((name) => name !== previous?.scale?.key || (level.scales?.length ?? 1) > 1)
+  const key = pick(keys)
+  const written = spellScale(KEY_INFO[key].tonic, kind)
+  return { keys: written.map(keyOf), written, signature: 0, reveal: true, scale: { key, kind } }
+}
+
+/**
+ * A key to name: its signature and the last bar, degrees 3-2-7-1 (in minor the raised 7th, the sign that tells it
+ * from the major with the same signature). The choices are the key, its relative and parallel keys, and others.
+ */
+export function makeKeyChoice(level: NoteLevel, previous: KeyName | null, random: () => number = Math.random): KeyChoice {
+  const pick = <T>(items: readonly T[]): T => items[Math.floor(random() * items.length)]!
+  const answer = pick(KEYS.filter((name) => name !== previous))
+  const info = KEY_INFO[answer]
+  const options = new Set<KeyName>([answer])
+  for (const near of [relativeKey(answer), parallelKey(answer)]) if (near) options.add(near)
+  while (options.size < (level.options ?? 4)) options.add(pick(KEYS))
+  // Written an octave up when the tonic is low: easier to read on the treble staff.
+  const tonic = { ...info.tonic, octave: info.tonic.octave < 4 ? info.tonic.octave + 1 : info.tonic.octave }
+  const scale = spellScale(tonic, info.minor ? 'harmonicMinor' : 'major')
+  const below = (note: Spelled): Spelled => ({ ...note, octave: note.octave - 1 })
+  return { answer, options: [...options].sort(() => random() - 0.5), written: [scale[2]!, scale[1]!, below(scale[6]!), scale[0]!], signature: info.signature }
+}
+
+/** Short melodies that stop on an unstable degree (2, 4, 6, 7), by the degree they stop on. */
+const PULLS: Record<number, number[]> = { 2: [1, 3, 2], 4: [5, 3, 4], 6: [3, 5, 6], 7: [5, 6, 7] }
+
+export function makeResolution(previous: Resolution | null, random: () => number = Math.random): Resolution {
+  const pick = <T>(items: readonly T[]): T => items[Math.floor(random() * items.length)]!
+  const key = pick(MAJORS.filter((name) => name !== previous?.key))
+  const scale = spellScale(KEY_INFO[key].tonic, 'major')
+  const degree = pick([2, 4, 6, 7])
+  return { key, written: PULLS[degree]!.map((step) => scale[step - 1]!), resolution: scale[RESOLUTION[degree]! - 1]! }
+}
+
+/** Melodies the child knows, written in their key, to move up a semitone or a tone (Ёлочка a tone: F to G major). */
+const PHRASES: { notes: string, signature: number, shifts: number[] }[] = [
+  { notes: 'C4 A4 A4 G4 A4 F4 C4 C4', signature: -1, shifts: [2] },
+  { notes: 'E4 E4 F4 G4 G4 F4 E4 D4', signature: 0, shifts: [1, 2] },
+  { notes: 'A4 F4 A4 F4 Bb4 A4 G4', signature: -1, shifts: [1, 2] },
+]
+
+export function makeTransposition(previous: NoteSequence | null, random: () => number = Math.random): NoteSequence {
+  const pick = <T>(items: readonly T[]): T => items[Math.floor(random() * items.length)]!
+  const choices = PHRASES.flatMap((phrase) => phrase.shifts.map((shift) => ({ phrase, shift }))).filter(({ phrase, shift }) => !(previous && previous.shift === shift && previous.written.length === phrase.notes.split(' ').length))
+  const { phrase, shift } = pick(choices)
+  const written = phrase.notes.split(' ').map(spelled)
+  return { keys: transpose(written.map(keyOf), shift), written, signature: phrase.signature, reveal: false, shift }
+}
 
 /** The rhythm level the melodies of «Читаем с ритмом» take their values from: halves, quarters, eighths, rests. */
 const READING_RHYTHM = RHYTHM_LEVELS.find((item) => item.id === 4)!
@@ -217,6 +321,12 @@ export interface NoteTask {
   bar?: KeyBar
   /** An interval to name with buttons: the two notes (lower first), heard or read, and the choices. */
   choice?: IntervalChoice
+  /** Notes played one after the other: a scale to build, a melody to move up. `key` is the first. */
+  sequence?: NoteSequence
+  /** A key to name with buttons. */
+  keyChoice?: KeyChoice
+  /** A melody to finish: `key` is where it resolves. */
+  resolution?: Resolution
 }
 
 export interface IntervalChoice {
@@ -260,6 +370,15 @@ export function makeChoice(level: NoteLevel, previous: IntervalId | null, random
 /** The next task: never the same as the one before, so the child sees that the task changed. */
 export function nextTask(level: NoteLevel, previous: NoteTask | null, random: () => number = Math.random): NoteTask {
   const pick = <T>(items: readonly T[]): T => items[Math.floor(random() * items.length)] ?? items[0]!
+  if (level.show === 'scale' || level.show === 'transpose') {
+    const sequence = level.show === 'scale' ? makeScaleSequence(level, previous?.sequence ?? null, random) : makeTransposition(previous?.sequence ?? null, random)
+    return { key: sequence.keys[0]!, sequence }
+  }
+  if (level.show === 'keyChoice') return { key: 0, keyChoice: makeKeyChoice(level, previous?.keyChoice?.answer ?? null, random) }
+  if (level.show === 'resolve') {
+    const resolution = makeResolution(previous?.resolution ?? null, random)
+    return { key: keyOf(resolution.resolution), resolution }
+  }
   if (level.show === 'ear' || level.show === 'read') return { key: 0, choice: makeChoice(level, previous?.choice?.answer ?? null, random) }
   if (level.show === 'step') {
     // A step or an interval up or down from a key, landing between the lowest key and the highest (C4-C5 at most):

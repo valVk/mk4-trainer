@@ -13,6 +13,7 @@ declare module 'vue' {
   export interface GlobalComponents {
     AppPad: typeof import('./src/components/AppPad.vue')['default']
     ChordDiagram: typeof import('./src/components/ChordDiagram.vue')['default']
+    CircleOfFifths: typeof import('./src/components/CircleOfFifths.vue')['default']
     HeldNotesPanel: typeof import('./src/components/HeldNotesPanel.vue')['default']
     InstrumentPicker: typeof import('./src/components/InstrumentPicker.vue')['default']
     IntervalBar: typeof import('./src/components/IntervalBar.vue')['default']

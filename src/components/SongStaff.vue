@@ -3,7 +3,7 @@ import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { Accidental, Beam, Dot, Formatter, Stave, StaveConnector, StaveNote, StaveTie, Voice, type RenderContext } from 'vexflow/bravura'
 
 import { paintNote, STAFF_COLOURS, STAFF_SCALE, staffContext } from '@/components/staffDrawing'
-import { SHARP_KEYS, barAt, drumPlace, spellBar, type Clef, type PlayedMark, type WrittenBar, type WrittenNote } from '@/lib/notation'
+import { barAt, keySignatureName, drumPlace, spellBar, type Clef, type PlayedMark, type WrittenBar, type WrittenNote } from '@/lib/notation'
 import type { TimeSignature } from '@/lib/song'
 
 // A song part as notes on a staff (plan step 16, owner's addition): a page of bars that turns as the
@@ -26,9 +26,9 @@ const props = withDefaults(defineProps<{
   marks?: Readonly<Record<string, PlayedMark>>
   /** Drawing scale; smaller when the staff shares the stage with the falling notes. */
   scale?: number
-  /** Sharps of the key signature (0 or none for flat keys: notes are spelled with sharps). */
-  keySharps?: number
-}>(), { keySharps: 0, perPage: 2, lower: null, played: null, marks: () => ({}), scale: STAFF_SCALE })
+  /** Key signature: sharps positive, flats negative. */
+  keySignature?: number
+}>(), { keySignature: 0, perPage: 2, lower: null, played: null, marks: () => ({}), scale: STAFF_SCALE })
 
 const host = ref<HTMLDivElement | null>(null)
 
@@ -82,7 +82,7 @@ const shownIndexes = computed(() => props.bars.slice(page.value * props.perPage,
 function barNotes(row: Row, bar: WrittenBar): StaveNote[] {
   const drums = row.clef === 'percussion'
   // Drums have no pitch to spell: each sits on its own place, without accidentals.
-  const spelled = drums ? bar.notes.map((note) => note.keys.map((key) => ({ key: drumPlace(key), accidental: null }))) : spellBar(bar.notes.map((note) => note.keys), row.clef === 'percussion' ? 0 : props.keySharps)
+  const spelled = drums ? bar.notes.map((note) => note.keys.map((key) => ({ key: drumPlace(key), accidental: null }))) : spellBar(bar.notes.map((note) => note.keys), row.clef === 'percussion' ? 0 : props.keySignature)
   return bar.notes.map((note, i) => {
     const rest = note.keys.length === 0
     const staveNote = new StaveNote({
@@ -134,7 +134,7 @@ function draw() {
       const stave = new Stave(x, tops[r]!, staveWidth)
       if (b === 0) {
         stave.addClef(row.clef)
-        if (props.keySharps > 0 && row.clef !== 'percussion') stave.addKeySignature(SHARP_KEYS[props.keySharps] ?? 'C')
+        if (props.keySignature !== 0 && row.clef !== 'percussion') stave.addKeySignature(keySignatureName(props.keySignature))
         if (row.part) stave.addTimeSignature(signature)
       }
       stave.setContext(context).draw()

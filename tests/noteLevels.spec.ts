@@ -2,9 +2,10 @@ import { describe, expect, it } from 'vitest'
 
 import { keyOf } from '@/lib/accidentals'
 import { interval, intervalBetween, type IntervalId } from '@/lib/intervals'
+import { KEY_INFO } from '@/lib/scales'
 
 import { KEYBOARD_KEYS } from '@/lib/keyboard'
-import { INTERVAL_LEVELS, NOTE_LEVELS, makeChoice, type NoteTask, checkNote, countsForStars, makeMelody, noteStars, readMarks, readingPasses, currentNoteLevel, isNoteLevelOpen, nextTask, makeKeyBar, ACCIDENTAL_LEVELS, parseNoteProgress } from '@/lib/noteLevels'
+import { INTERVAL_LEVELS, NOTE_LEVELS, SCALE_LEVELS, makeChoice, type NoteTask, checkNote, countsForStars, makeMelody, noteStars, readMarks, readingPasses, currentNoteLevel, isNoteLevelOpen, nextTask, makeKeyBar, ACCIDENTAL_LEVELS, parseNoteProgress } from '@/lib/noteLevels'
 import { octaveShift } from '@/lib/staff'
 
 const level = (id: number) => NOTE_LEVELS.find((item) => item.id === id)!
@@ -241,6 +242,63 @@ describe('«Интервалы»', () => {
       const choice = makeChoice(at(5), previous, mixed(seed))
       expect(choice.answer).not.toBe(previous)
       previous = choice.answer
+    }
+  })
+})
+
+describe('«Гаммы»', () => {
+  const at = (id: number) => SCALE_LEVELS.find((item) => item.id === id)!
+  const seeded = (seed: number) => {
+    let state = seed * 2654435761
+    return () => {
+      state = (state + 0x6d2b79f5) | 0
+      let x = Math.imul(state ^ (state >>> 15), 1 | state)
+      x = (x + Math.imul(x ^ (x >>> 7), 61 | x)) ^ x
+      return ((x ^ (x >>> 14)) >>> 0) / 4294967296
+    }
+  }
+
+  it('builds scales of eight notes inside C3-C5, written as they sound', () => {
+    for (const id of [1, 2, 3]) {
+      for (let seed = 0; seed < 60; seed++) {
+        const task = nextTask(at(id), null, seeded(seed))
+        const sequence = task.sequence!
+        expect(sequence.keys).toHaveLength(8)
+        expect(sequence.keys[0]).toBeGreaterThanOrEqual(48)
+        expect(sequence.keys[7]).toBeLessThanOrEqual(72)
+        expect(sequence.written.map(keyOf)).toEqual(sequence.keys)
+        expect(at(id).scales).toContain(sequence.scale!.kind)
+      }
+    }
+  })
+
+  it('offers a key with its relative key among the choices', () => {
+    for (let seed = 0; seed < 60; seed++) {
+      const choice = nextTask(at(4), null, seeded(seed)).keyChoice!
+      expect(choice.options).toContain(choice.answer)
+      expect(choice.options).toHaveLength(4)
+      expect(new Set(choice.options).size).toBe(4)
+      // The last bar ends on the tonic.
+      expect(keyOf(choice.written[3]!) % 12).toBe(keyOf(KEY_INFO[choice.answer].tonic) % 12)
+    }
+  })
+
+  it('asks where an unstable degree resolves, on a stable one', () => {
+    for (let seed = 0; seed < 60; seed++) {
+      const task = nextTask(at(5), null, seeded(seed))
+      const resolution = task.resolution!
+      const tonic = keyOf(KEY_INFO[resolution.key].tonic)
+      expect([0, 4, 7, 12]).toContain(task.key - tonic)
+      expect(Math.abs(task.key - keyOf(resolution.written[2]!))).toBeLessThanOrEqual(2)
+    }
+  })
+
+  it('moves a known melody up a semitone or a tone, staying inside C3-C5', () => {
+    for (let seed = 0; seed < 60; seed++) {
+      const sequence = nextTask(at(6), null, seeded(seed)).sequence!
+      expect([1, 2]).toContain(sequence.shift)
+      expect(sequence.keys).toEqual(sequence.written.map((note) => keyOf(note) + sequence.shift!))
+      expect(Math.max(...sequence.keys)).toBeLessThanOrEqual(72)
     }
   })
 })

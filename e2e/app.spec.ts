@@ -3,7 +3,7 @@ import { expect, test } from '@playwright/test'
 import { open, scrollSize } from './helpers'
 
 // Main screens fill a landscape Tab S10 without scrolling (plan 8.2, landscape only).
-for (const path of ['/', '/train', '/train/chords', '/train/theory', '/train/theory?section=notes', '/train/theory?section=accidentals', '/train/theory?section=intervals', '/lab', '/rhythm']) {
+for (const path of ['/', '/train', '/train/chords', '/train/theory', '/train/theory?section=notes', '/train/theory?section=accidentals', '/train/theory?section=intervals', '/train/theory?section=scales', '/lab', '/rhythm']) {
   test(`${path} fits the screen without scrolling`, async ({ page }) => {
     await open(page, path)
     const viewport = page.viewportSize()!

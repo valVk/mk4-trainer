@@ -115,3 +115,21 @@ export function barVexSpelling(key: KeySignature, notes: readonly BarNote[]): { 
     return { key: name, accidental: note.sign === null ? null : note.sign === 'natural' ? 'n' : VEX_ACCIDENTAL[note.sign] }
   })
 }
+
+/** Letters altered by a key signature: sharps (positive) F C G D A E B, flats (negative) B E A D G C F. */
+export function signatureAlters(signature: number): Partial<Record<Letter, Alter>> {
+  const sharps: Letter[] = [3, 0, 4, 1, 5, 2, 6]
+  const flats: Letter[] = [6, 2, 5, 1, 4, 0, 3]
+  const letters = signature >= 0 ? sharps.slice(0, signature) : flats.slice(0, -signature)
+  return Object.fromEntries(letters.map((letter) => [letter, signature >= 0 ? 1 : -1]))
+}
+
+/**
+ * A written note for VexFlow under a key signature: the sign is printed only where the note differs from the
+ * signature (C♯ in D minor gets its sharp, F♯ in G major none; B in F major a natural).
+ */
+export function vexInKey(note: Spelled, signature: number): { key: string, accidental: string | null } {
+  const inKey = signatureAlters(signature)[note.letter] ?? 0
+  const written = vexSpelling({ ...note, natural: false })
+  return { key: written.key, accidental: note.alter === inKey ? null : note.alter === 0 ? 'n' : VEX_ACCIDENTAL[note.alter] }
+}
