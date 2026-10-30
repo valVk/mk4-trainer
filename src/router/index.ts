@@ -10,10 +10,21 @@ const router = createRouter({
       component: () => import('@/pages/Home.vue'),
     },
     {
+      // One entry from Home: chords and theory are two separate places behind it.
       path: '/train',
       name: 'train',
+      component: () => import('@/pages/TrainChoice.vue'),
+    },
+    {
+      path: '/train/chords',
+      name: 'train-chords',
       meta: { sound: true },
       component: () => import('@/pages/Train.vue'),
+    },
+    {
+      path: '/train/theory',
+      name: 'train-theory',
+      component: () => import('@/pages/Theory.vue'),
     },
     {
       path: '/lab',

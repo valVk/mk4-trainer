@@ -3,7 +3,7 @@ import { expect, test } from '@playwright/test'
 import { open, scrollSize } from './helpers'
 
 // Main screens fill a landscape Tab S10 without scrolling (plan 8.2, landscape only).
-for (const path of ['/', '/train', '/lab', '/rhythm']) {
+for (const path of ['/', '/train', '/train/chords', '/train/theory', '/lab', '/rhythm']) {
   test(`${path} fits the screen without scrolling`, async ({ page }) => {
     await open(page, path)
     const viewport = page.viewportSize()!
@@ -22,6 +22,7 @@ test('asks for sound once, and «Пока без звука» holds for the visi
   // Moving to another screen with sound inside the app does not ask again.
   await page.getByRole('link', { name: 'Главная' }).first().click()
   await page.getByRole('link', { name: 'Тренировка' }).click()
+  await page.getByRole('link', { name: 'Аккорды' }).click()
   await page.locator('main.train').waitFor()
   await expect(page.getByRole('button', { name: 'Включить звук' })).toBeHidden()
   await expect(page.getByRole('button', { name: 'Звук выключен' })).toBeVisible()

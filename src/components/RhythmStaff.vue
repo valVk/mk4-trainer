@@ -15,6 +15,8 @@ const props = defineProps<{
   current?: number | null
   /** Result per note index after an attempt. */
   marks?: Readonly<Record<number, TimingVerdict>>
+  /** Drawing scale; bigger where the rhythm is the whole task. */
+  scale?: number
 }>()
 
 const host = ref<HTMLDivElement | null>(null)
@@ -40,7 +42,7 @@ function colourOf(index: number): string | null {
 function draw() {
   const element = host.value
   if (!element) return
-  const { context, width } = staffContext(element, STAFF_HEIGHT)
+  const { context, width } = staffContext(element, STAFF_HEIGHT, props.scale)
 
   const bars = splitBars(props.rhythm)
   const { numerator, denominator } = props.rhythm.meter
@@ -118,7 +120,7 @@ onMounted(() => {
   if (host.value) observer.observe(host.value)
 })
 onBeforeUnmount(() => observer?.disconnect())
-watch(() => [props.rhythm, props.current, props.marks], draw, { deep: true })
+watch(() => [props.rhythm, props.current, props.marks, props.scale], draw, { deep: true })
 </script>
 
 <template>

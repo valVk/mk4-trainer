@@ -243,7 +243,7 @@ const levelItems = computed(() => LEVELS.map((item) => ({ label: String(item.id)
 
 <template>
   <main class="page page--fill train">
-    <PageHeader :title="t('train.title')">
+    <PageHeader :title="t('trainChoice.chords')" back="/train" :back-label="t('train.title')">
       <SoundControl />
       <MidiStatus />
     </PageHeader>

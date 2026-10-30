@@ -37,3 +37,14 @@ async function answerSoundWindow(page: Page): Promise<void> {
 export async function scrollSize(page: Page): Promise<{ width: number, height: number }> {
   return page.evaluate(() => ({ width: document.documentElement.scrollWidth, height: document.documentElement.scrollHeight }))
 }
+
+/** A setting of the current profile as stored in IndexedDB (database «chord-trainer», table «setting»). */
+export async function storedSetting(page: Page, key: string): Promise<unknown> {
+  return page.evaluate((wanted) => new Promise((resolve) => {
+    const request = indexedDB.open('chord-trainer')
+    request.onsuccess = () => {
+      const all = request.result.transaction('setting').objectStore('setting').getAll()
+      all.onsuccess = () => resolve((all.result as { key: string, value: unknown }[]).find((row) => row.key === wanted)?.value)
+    }
+  }), key)
+}

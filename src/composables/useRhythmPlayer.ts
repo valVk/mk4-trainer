@@ -34,8 +34,11 @@ export function useRhythmPlayer() {
     frame = requestAnimationFrame(follow)
   }
 
-  /** Plays the rhythm at `bpm` (beats of its meter, like the metronome) after `countInBars` bars of clicks. */
-  function play(rhythm: Rhythm, bpm: number, countInBars = 1) {
+  /**
+   * Plays the rhythm at `bpm` (beats of its meter, like the metronome) after `countInBars` bars of clicks.
+   * With `notes: false` only the clicks sound: the child plays the notes.
+   */
+  function play(rhythm: Rhythm, bpm: number, { countInBars = 1, notes = true }: { countInBars?: number, notes?: boolean } = {}) {
     stop()
     const audio = metronome.audioContext()
     void audio.resume()
@@ -50,8 +53,10 @@ export function useRhythmPlayer() {
     firstNoteAt.value = start + countInBars * beats * beat - pickup
     const clicks = Math.round((firstNoteAt.value - start + length) / beat)
     for (let i = 0; i < clicks; i++) scheduled.push(...metronome.clickAt(start + i * beat, accentOf(i % beats, beats)))
-    for (const item of heard) {
-      if (!item.rest) scheduled.push(...metronome.noteAt(firstNoteAt.value + item.start, item.length))
+    if (notes) {
+      for (const item of heard) {
+        if (!item.rest) scheduled.push(...metronome.noteAt(firstNoteAt.value + item.start, item.length))
+      }
     }
     playing.value = true
     frame = requestAnimationFrame(follow)
@@ -74,5 +79,8 @@ export function useRhythmPlayer() {
 
   onScopeDispose(stop)
 
-  return { play, stop, playing: readonly(playing), current: readonly(current), firstNoteAt: readonly(firstNoteAt) }
+  /** Song-like time of the rhythm as heard now: seconds from its first note (negative during the count-in). */
+  const heardPosition = () => metronome.heardTime() - firstNoteAt.value
+
+  return { play, stop, heardPosition, playing: readonly(playing), current: readonly(current), firstNoteAt: readonly(firstNoteAt) }
 }
