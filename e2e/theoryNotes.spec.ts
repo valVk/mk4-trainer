@@ -52,9 +52,11 @@ async function openReading(page: Page) {
   })
   await page.getByRole('tab', { name: 'Н9' }).click()
   await page.getByRole('button', { name: 'Понятно' }).click()
+  // The keys start at C3 like the MK4; the melodies lie on C4-G4: one Octave + (X on the computer keyboard).
+  await page.keyboard.press('x')
 }
 
-/** Plays the melody on the screen-window keys (C4 up), every note at its heard time; `wrongAt` plays one note a step too high. */
+/** Plays the melody on the computer keys after Octave + (C4 up), every note at its heard time; `wrongAt` plays one note a step too high. */
 async function playMelody(page: Page, wrongAt: number | null = null) {
   const notes = await page.evaluate(() => {
     const s = (document.querySelector('.task') as unknown as { __vueParentComponent: { setupState: { bpm: number, melody: { notes: { duration: string, rest?: boolean, key?: number }[] } } } }).__vueParentComponent.setupState

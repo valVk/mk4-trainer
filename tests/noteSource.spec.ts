@@ -69,8 +69,9 @@ describe('virtual keyboard', () => {
   })
 
   it('shifts octaves within the MIDI range', () => {
-    expect(shiftBaseNote(DEFAULT_BASE_NOTE, 1)).toBe(72)
-    expect(shiftBaseNote(DEFAULT_BASE_NOTE, -1)).toBe(48)
+    expect(DEFAULT_BASE_NOTE).toBe(48)
+    expect(shiftBaseNote(DEFAULT_BASE_NOTE, 1)).toBe(60)
+    expect(shiftBaseNote(DEFAULT_BASE_NOTE, -1)).toBe(36)
     expect(shiftBaseNote(MIN_BASE_NOTE, -1)).toBe(MIN_BASE_NOTE)
     expect(shiftBaseNote(MAX_BASE_NOTE, 1)).toBe(MAX_BASE_NOTE)
   })

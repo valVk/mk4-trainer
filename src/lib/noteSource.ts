@@ -102,7 +102,8 @@ export const VIRTUAL_CHANNEL = 1
 // Same span as MK4 octave buttons: base C stays inside the MIDI range with the top key.
 export const MIN_BASE_NOTE = 24
 export const MAX_BASE_NOTE = 96
-export const DEFAULT_BASE_NOTE = 60
+/** Where the keys start: C3, as the MK4 out of the box (the small and first octaves, C3-C5). */
+export const DEFAULT_BASE_NOTE = 48
 
 export function shiftBaseNote(base: number, octaves: number): number {
   return Math.min(MAX_BASE_NOTE, Math.max(MIN_BASE_NOTE, base + octaves * 12))
