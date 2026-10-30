@@ -92,7 +92,9 @@ function fits(value: Value, at: number, room: number, meter: TimeSignature): boo
   const compound = meter.denominator === 8
   const beat = compound ? 6 : 4
   const align = value.slots <= 2 ? value.slots : value.slots === 3 ? 2 : value.slots >= bar ? bar : beat
-  if (at % align !== 0) return false
+  // The 16-8-16 figure: an eighth may start on the second sixteenth of a beat in a simple meter.
+  const syncopated = !compound && value.slots === 2 && value.dots === 0 && at % beat === 1
+  if (at % align !== 0 && !syncopated) return false
   // Values shorter than a beat stay inside one beat, so the beat stays visible.
   if (value.slots < beat && Math.floor(at / beat) !== Math.floor((at + value.slots - 1) / beat)) return false
   const middle = meter.numerator === 4 && meter.denominator === 4 ? 8 : meter.numerator === 6 && meter.denominator === 8 ? 6 : null

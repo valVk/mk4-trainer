@@ -310,9 +310,16 @@ async function togglePlay() {
             :aria-label="t('songs.practiceLabel', { name: row.label })"
           />
           <button type="button" class="row__lane" :aria-label="t('songs.seekLabel', { name: row.label })" @click="seekFromEvent">
-            <svg :viewBox="`0 0 ${barCount} 1`" preserveAspectRatio="none" class="lane" aria-hidden="true">
-              <rect v-for="run in row.runs" :key="run.start" :x="run.start" y="0.15" :width="run.length" height="0.7" rx="0.3" class="lane__block" :class="{ 'lane__block--drum': row.part.isDrum }" />
-            </svg>
+            <!-- Blocks in percent with CSS corners: a stretched SVG would stretch the corners into ellipses. -->
+            <span class="lane" aria-hidden="true">
+              <span
+                v-for="run in row.runs"
+                :key="run.start"
+                class="lane__block"
+                :class="{ 'lane__block--drum': row.part.isDrum }"
+                :style="{ left: `${(run.start / barCount) * 100}%`, width: `${(run.length / barCount) * 100}%` }"
+              />
+            </span>
             <span class="playhead" aria-hidden="true" />
           </button>
         </li>
@@ -484,22 +491,26 @@ async function togglePlay() {
 }
 
 .lane {
-  width: 100%;
-  height: 100%;
+  position: absolute;
+  inset: 15% 0;
   display: block;
 }
 
 .lane__block {
-  fill: var(--color-pad-sky);
-  transition: fill 150ms ease;
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  border-radius: 0.3125rem;
+  background: var(--color-pad-sky);
+  transition: background-color 150ms ease;
 }
 
 .lane__block--drum {
-  fill: var(--color-pad-sun);
+  background: var(--color-pad-sun);
 }
 
 .row--off .lane__block {
-  fill: var(--rubber-edge);
+  background: var(--rubber-edge);
 }
 
 .playhead {

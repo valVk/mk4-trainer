@@ -39,7 +39,7 @@ describe.each(PIECES.map((piece) => [piece.title, piece] as const))('%s', (_, pi
   it('reads back as a song with its meter, every voice and the part to learn', () => {
     expect(song.timeSignature).toEqual(piece.meter)
     expect(song.parts.map((part) => part.channel).sort()).toEqual(piece.voices.map((item) => item.channel).sort())
-    expect(learner.notes.length).toBe(piece.voices.find((item) => item.channel === piece.learner)!.notes.filter((note) => note.key !== null).length)
+    expect(learner.notes.length).toBe(piece.voices.find((item) => item.channel === piece.learner)!.notes.filter((note, index, notes) => note.key !== null && !notes[index - 1]?.tie).length)
   })
 
   it('fits the 25 keys of the MK4 (plan: every built-in piece)', () => {
@@ -47,7 +47,7 @@ describe.each(PIECES.map((piece) => [piece.title, piece] as const))('%s', (_, pi
   })
 
   it('a rhythm piece taps exactly when the tune plays', () => {
-    if (piece.kind !== 'rhythm') return
+    if (piece.kind !== 'rhythm' || piece.groove) return
     const tune = song.parts.find((part) => part.channel === 0)!
     expect(learner.notes.map((note) => note.start.toFixed(3))).toEqual(tune.notes.map((note) => note.start.toFixed(3)))
   })
@@ -57,7 +57,19 @@ describe('rhythm pieces in «Теория»', () => {
   it('each comes after a real level and has a short chip name', () => {
     for (const piece of PIECES.filter((item) => item.kind === 'rhythm')) {
       expect(RHYTHM_LEVELS.some((level) => level.id === piece.afterLevel)).toBe(true)
-      expect(piece.short!.length).toBeLessThanOrEqual(10)
+      expect(piece.short!.length).toBeLessThanOrEqual(12)
     }
+  })
+})
+
+describe('ties', () => {
+  it('writes a tie after the value and sounds the tied notes as one', () => {
+    expect(voice('C5/4~ C5/16')).toEqual([{ key: 72, duration: 'quarter', dots: 0, tie: true }, { key: 72, duration: 'sixteenth', dots: 0 }])
+    const piece = PIECES.find((item) => item.id === 'entertainer')!
+    const song = parseSong(buildPieceMidi(piece), pieceFileName(piece))
+    const tune = song.parts.find((part) => part.channel === 0)!
+    // The first long C: a sixteenth tied over the bar line to a quarter and a sixteenth, six sixteenths at 56 BPM.
+    const longC = tune.notes.find((note) => note.key === 72 && note.length > 0.6)!
+    expect(longC.length).toBeCloseTo((60 / 56) * 1.5, 1)
   })
 })

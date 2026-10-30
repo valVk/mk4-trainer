@@ -177,6 +177,7 @@
     "tempoPractice": "Темп {bpm} (тренировка)",
     "tempoLevel": "По уровню: {bpm}",
     "pieceLocked": "Пьеса «{name}» откроется после трёх звёзд в Р{n}",
+    "playPiece": "Пьеса: {name}",
     "tempoNote": "Медленнее {bpm} — тренировка, без звезды. {bpm} и быстрее — для звёзд.",
     "practicePassed": "Получилось в темпе {bpm}! Для звезды нужно {need}",
     "atTempoOf": "Теперь в темпе {bpm}",

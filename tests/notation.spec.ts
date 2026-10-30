@@ -22,6 +22,15 @@ describe('spellSpan', () => {
     expect(spellSpan(2, 4, FOUR).map((p) => p.duration)).toEqual(['eighth', 'eighth'])
   })
 
+  it('writes sixteenth, eighth, sixteenth inside one beat, as ragtime is written', () => {
+    expect(spellSpan(1, 2, FOUR).map((p) => p.duration)).toEqual(['eighth'])
+    expect(spellSpan(5, 2, { numerator: 2, denominator: 4 }).map((p) => p.duration)).toEqual(['eighth'])
+    // Not over the beat: the off-beat eighth still splits there.
+    expect(spellSpan(3, 2, FOUR).map((p) => p.duration)).toEqual(['sixteenth', 'sixteenth'])
+    // Not in 6/8, where the beat is three eighths.
+    expect(spellSpan(1, 2, { numerator: 6, denominator: 8 }).map((p) => p.duration)).toEqual(['sixteenth', 'sixteenth'])
+  })
+
   it('knows the bar of each meter', () => {
     expect(slotsPerBar(FOUR)).toBe(16)
     expect(slotsPerBar({ numerator: 3, denominator: 4 })).toBe(12)

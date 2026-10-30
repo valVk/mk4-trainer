@@ -399,11 +399,10 @@ const levelTabs = computed(() => RHYTHM_LEVELS.map((item) => ({ id: item.id, ope
           </button>
           <!-- The piece that ends this group of levels: open once the level has all its stars (plan step 18). -->
           <template v-for="piece in piecesAfter(tab.id)" :key="piece.id">
-            <RouterLink v-if="piece.to && tab.stars === 3" :to="piece.to" class="level level--piece">
-              <UIcon name="i-lucide-music" class="size-3.5" />
-              {{ piece.title }}
+            <RouterLink v-if="piece.to && tab.stars === 3" :to="piece.to" class="level level--piece" :aria-label="t('theory.playPiece', { name: piece.title })">
+              <UIcon name="i-lucide-music" class="size-4" />
             </RouterLink>
-            <span v-else class="level level--piece level--closed" :aria-label="t('theory.pieceLocked', { name: piece.title, n: tab.id })">
+            <span v-else class="level level--piece level--closed" role="img" :aria-label="t('theory.pieceLocked', { name: piece.title, n: tab.id })">
               <UIcon name="i-lucide-music" class="size-3.5" />
               <UIcon name="i-lucide-lock" class="size-3" />
             </span>
@@ -505,6 +504,12 @@ const levelTabs = computed(() => RHYTHM_LEVELS.map((item) => ({ id: item.id, ope
           <UButton icon="i-lucide-play" size="xl" :label="t('theory.atTempoOf', { bpm: levelBpm })" @click="pickTempo(null); startAttempt()" />
         </template>
         <template v-else-if="phase === 'result' && attemptPassed">
+          <!-- A piece that has just opened is named here, the moment it opens; the chip in the row stays small. -->
+          <template v-if="levelDone">
+            <template v-for="piece in piecesAfter(level)" :key="piece.id">
+              <UButton v-if="piece.to" :to="piece.to" icon="i-lucide-music" size="xl" color="success" :label="t('theory.playPiece', { name: piece.title })" />
+            </template>
+          </template>
           <UButton v-if="levelDone && isOpen(level + 1, passed)" icon="i-lucide-arrow-right" size="xl" :label="t('theory.nextLevel')" @click="openLevel(level + 1)" />
           <UButton v-else icon="i-lucide-arrow-right" size="xl" :label="t('theory.next')" @click="nextTask" />
           <UButton icon="i-lucide-rotate-ccw" color="neutral" variant="soft" size="xl" :label="t('theory.again')" @click="startAttempt" />
@@ -616,6 +621,8 @@ const levelTabs = computed(() => RHYTHM_LEVELS.map((item) => ({ id: item.id, ope
 }
 
 .level--piece {
+  gap: 0.125rem;
+  padding: 0 0.5rem;
   color: var(--color-pad-sky);
   box-shadow: 0 0 0 1.5px color-mix(in oklab, var(--color-pad-sky) 50%, transparent) inset;
 }
