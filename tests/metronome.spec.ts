@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest'
 import {
   CALIBRATION_TAPS,
   DEFAULT_METRONOME,
+  METRONOME_SCALE,
   accentOf,
   beatSeconds,
   beatsPerBar,
@@ -13,6 +14,7 @@ import {
   parseLatencyHistories,
   parseLatencyHistory,
   parseMetronomeSettings,
+  scaleGroups,
   songBeats,
   tapInputOf,
   tempoName,
@@ -141,5 +143,21 @@ describe('tapInputOf', () => {
     expect(tapInputOf({ source: 'midi' })).toBe('midi')
     expect(tapInputOf({ source: 'virtual', onScreen: true })).toBe('screen')
     expect(tapInputOf({ source: 'virtual' })).toBe('keys')
+  })
+})
+
+describe('metronome scale', () => {
+  it('is the classic scale, slow to fast, with the ladder steps on it', () => {
+    expect(METRONOME_SCALE[0]).toBe(40)
+    expect(METRONOME_SCALE[METRONOME_SCALE.length - 1]).toBe(208)
+    expect([...METRONOME_SCALE].sort((a, b) => a - b)).toEqual([...METRONOME_SCALE])
+    for (const step of [60, 80, 100, 120, 160, 200]) expect(METRONOME_SCALE).toContain(step)
+  })
+
+  it('groups the marks by tempo name', () => {
+    const groups = scaleGroups(40, 120)
+    expect(groups.map((group) => group.name)).toEqual(['largo', 'larghetto', 'adagio', 'andante', 'moderato', 'allegro'])
+    expect(groups[0]!.marks).toEqual([40, 42, 44, 46, 48, 50, 52, 54, 56, 58])
+    expect(groups.flatMap((group) => group.marks).every((mark) => mark <= 120)).toBe(true)
   })
 })

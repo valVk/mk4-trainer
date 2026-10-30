@@ -284,3 +284,32 @@ export function generateCellBar(meter: TimeSignature, cells: readonly RhythmCell
   }
   return notes
 }
+
+/**
+ * What a child says when a note starts at `position` (quarter notes from the start of the bar), so the
+ * staff can show it under the note: the beat number on a beat («1», «2»…; in 6/8 the eighths 1-6),
+ * «и» halfway between beats, nothing for finer places (sixteenths, triplets), which the beat shows anyway.
+ */
+export function countLabel(position: number, meter: TimeSignature): string {
+  const beat = meter.denominator === 8 ? 0.5 : 4 / meter.denominator
+  const count = position / beat
+  if (isMultiple(count, 1)) return String(Math.round(count) + 1)
+  if (isMultiple(count, 0.5)) return 'и'
+  return ''
+}
+
+/** The count label of every written note, by its index; rests get none. */
+export function countLabels(rhythm: Rhythm): Map<number, string> {
+  const labels = new Map<number, string>()
+  const full = barQuarters(rhythm.meter)
+  splitBars(rhythm).forEach((bar, b) => {
+    const length = bar.reduce((sum, item) => sum + noteQuarters(item.note), 0)
+    // A pickup bar ends on the bar line: its notes are counted from the end of a full bar.
+    let position = b === 0 && (rhythm.pickup ?? 0) > 0 ? full - length : 0
+    for (const { note, index } of bar) {
+      if (!note.rest) labels.set(index, countLabel(position, rhythm.meter))
+      position += noteQuarters(note)
+    }
+  })
+  return labels
+}

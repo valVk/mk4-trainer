@@ -197,3 +197,22 @@ export function estimateLatency(taps: readonly number[], clicks: readonly number
     taps: offsets.length,
   }
 }
+
+/**
+ * The classic metronome scale (Maelzel), as printed on a mechanical metronome: tempos are picked from
+ * it with one tap instead of stepping +/- many times.
+ */
+export const METRONOME_SCALE = [40, 42, 44, 46, 48, 50, 52, 54, 56, 58, 60, 63, 66, 69, 72, 76, 80, 84, 88, 92, 96, 100, 104, 108, 112, 116, 120, 126, 132, 138, 144, 152, 160, 168, 176, 184, 192, 200, 208] as const
+
+/** The marks of the scale between `low` and `high`, grouped by tempo name, slowest first. */
+export function scaleGroups(low = 40, high = 208): { name: TempoName, marks: number[] }[] {
+  const groups: { name: TempoName, marks: number[] }[] = []
+  for (const mark of METRONOME_SCALE) {
+    if (mark < low || mark > high) continue
+    const name = tempoName(mark)
+    const last = groups[groups.length - 1]
+    if (last?.name === name) last.marks.push(mark)
+    else groups.push({ name, marks: [mark] })
+  }
+  return groups
+}

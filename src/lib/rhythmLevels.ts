@@ -194,7 +194,7 @@ export function passes(score: RhythmScore): boolean {
   return missed === 0 && score.extra <= 1 && score.onTime >= Math.ceil(score.total * 0.75)
 }
 
-export type RhythmHint = 'rushing' | 'dragging' | 'missed' | 'extra' | 'holdLonger' | 'letGo' | 'accent' | 'slowDown' | 'great'
+export type RhythmHint = 'rushing' | 'dragging' | 'missed' | 'extra' | 'holdLonger' | 'letGo' | 'accent' | 'slowDown' | 'noTaps' | 'great'
 
 /**
  * One or two things to tell the child, most important first, in the order a teacher would:

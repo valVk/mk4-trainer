@@ -3,6 +3,8 @@ import { describe, expect, it } from 'vitest'
 import {
   DURATIONS,
   barQuarters,
+  countLabel,
+  countLabels,
   fillsBars,
   generateBar,
   holdVerdict,
@@ -172,5 +174,24 @@ describe('splitBars', () => {
     const rhythm: Rhythm = { meter: THREE, pickup: 1, notes: [{ duration: 'quarter' }, { duration: 'half', dots: 1 }, { duration: 'quarter' }, { duration: 'half' }] }
     expect(splitBars(rhythm).map((bar) => bar.map((item) => item.index))).toEqual([[0], [1], [2, 3]])
     expect(splitBars({ meter: FOUR, notes: [{ duration: 'whole' }, { duration: 'half' }, { duration: 'half' }] }).length).toBe(2)
+  })
+})
+
+describe('counting under the notes', () => {
+  it('says the beat number on a beat and «и» between beats', () => {
+    expect([0, 1, 2, 3].map((position) => countLabel(position, FOUR))).toEqual(['1', '2', '3', '4'])
+    expect(countLabel(1.5, FOUR)).toBe('и')
+    expect(countLabel(0.25, FOUR)).toBe('')
+  })
+
+  it('counts eighths in 6/8', () => {
+    expect([0, 0.5, 1, 1.5, 2, 2.5].map((position) => countLabel(position, SIX_EIGHT))).toEqual(['1', '2', '3', '4', '5', '6'])
+  })
+
+  it('labels every note of a rhythm, not the rests, and counts a pickup from the end of its bar', () => {
+    const labels = countLabels({ meter: FOUR, notes: [{ duration: 'quarter' }, { duration: 'quarter', rest: true }, { duration: 'eighth' }, { duration: 'eighth' }, { duration: 'quarter' }] })
+    expect([...labels.entries()]).toEqual([[0, '1'], [2, '3'], [3, 'и'], [4, '4']])
+    const pickup = countLabels({ meter: FOUR, pickup: 1, notes: [{ duration: 'quarter' }, { duration: 'whole' }] })
+    expect([...pickup.values()]).toEqual(['4', '1'])
   })
 })

@@ -203,9 +203,16 @@ function heardTime(audio = context()): number {
   return audio.currentTime - (audio.outputLatency || audio.baseLatency || 0)
 }
 
+/**
+ * A tempo and bar for this run only (a theory task), leaving the saved settings alone. Not limited to
+ * the metronome's 40-160: 6/8 in theory is counted in eighths and goes up to 200.
+ */
+let oneOff: { bpm: number, beats: number } | null = null
+
 function scheduleFree(audio: AudioContext): void {
-  const bpm = calibrating.value ? CALIBRATION_BPM : settings.value.bpm
-  const beats = calibrating.value ? 4 : beatsPerBar(settings.value.meter)
+  const bpm = calibrating.value ? CALIBRATION_BPM : oneOff?.bpm ?? settings.value.bpm
+  const beats = calibrating.value ? 4 : oneOff?.beats ?? beatsPerBar(settings.value.meter)
+  const seconds = oneOff && !calibrating.value ? 60 / oneOff.bpm : beatSeconds(bpm)
   beatCount.value = beats
   while (nextTime < audio.currentTime + LOOKAHEAD_S) {
     const current = nextBeat % beats
@@ -219,7 +226,7 @@ function scheduleFree(audio: AudioContext): void {
     }
     if (countInLeft > 0) countInLeft--
     nextBeat = current + 1
-    nextTime += beatSeconds(bpm)
+    nextTime += seconds
   }
 }
 
@@ -293,10 +300,12 @@ function stopLoop(): void {
 }
 
 /** Starts at the set tempo; `countInBars` bars of count-in come first. Must run from a tap or click. */
-function start(options: { countInBars?: number } = {}): void {
+/** Starts clicking; `bpm` and `beats` set a tempo and bar for this run only (see `oneOff`). */
+function start(options: { countInBars?: number, bpm?: number, beats?: number } = {}): void {
   const audio = context()
   void audio.resume()
   follow = null
+  oneOff = options.bpm ? { bpm: options.bpm, beats: options.beats ?? beatsPerBar(settings.value.meter) } : null
   nextTime = audio.currentTime + 0.1
   nextBeat = 0
   countInLeft = (options.countInBars ?? 0) * beatsPerBar(settings.value.meter)
@@ -306,6 +315,7 @@ function start(options: { countInBars?: number } = {}): void {
 function stop(): void {
   if (calibrating.value) cancelCalibration()
   follow = null
+  oneOff = null
   stopLoop()
 }
 

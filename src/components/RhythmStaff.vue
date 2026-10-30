@@ -1,10 +1,10 @@
 <script setup lang="ts">
 import { onBeforeUnmount, onMounted, ref, watch } from 'vue'
-import { Articulation, Beam, Dot, Formatter, ModifierPosition, Stave, StaveNote, StaveTie, Tuplet, Voice } from 'vexflow/bravura'
+import { Annotation, AnnotationVerticalJustify, Articulation, Beam, Dot, Formatter, ModifierPosition, Stave, StaveNote, StaveTie, Tuplet, Voice } from 'vexflow/bravura'
 
 import { STAFF_COLOURS, staffContext } from '@/components/staffDrawing'
 
-import { barQuarters, noteQuarters, splitBars, type Duration, type Rhythm, type TimingVerdict } from '@/lib/rhythm'
+import { barQuarters, countLabels, noteQuarters, splitBars, type Duration, type Rhythm, type TimingVerdict } from '@/lib/rhythm'
 
 // A rhythm on a one-line staff (plan step 16): time signature, bars, beams, rests, dots, ties, triplets.
 // VexFlow draws it with the Bravura music font built into the bundle, so it works offline.
@@ -21,6 +21,8 @@ const props = defineProps<{
   lower?: Rhythm | null
   /** Result per note index of the lower line. */
   lowerMarks?: Readonly<Record<number, TimingVerdict>>
+  /** The count to press on under every note («1», «и», «4»…), for reading a rhythm. */
+  counts?: boolean
 }>()
 
 const host = ref<HTMLDivElement | null>(null)
@@ -60,6 +62,7 @@ function draw() {
   const { context, width } = staffContext(element, STAFF_HEIGHT + (lines.length - 1) * LINE_GAP, props.scale)
 
   const barsOf = lines.map((line) => splitBars(line.rhythm))
+  const labelsOf = lines.map((line) => (props.counts ? countLabels(line.rhythm) : new Map<number, string>()))
   const { numerator, denominator } = props.rhythm.meter
   const signature = `${numerator}/${denominator}`
   const full = barQuarters(props.rhythm.meter)
@@ -99,6 +102,12 @@ function draw() {
         if (note.dots) Dot.buildAndAttach([staveNote], { all: true })
         // Accent (>) always above the staff, where children look for it.
         if (note.accent && !note.rest) staveNote.addModifier(new Articulation('a>').setPosition(ModifierPosition.ABOVE), 0)
+        const label = labelsOf[l]!.get(index)
+        if (label) {
+          const count = new Annotation(label).setVerticalJustification(AnnotationVerticalJustify.BOTTOM)
+          count.setFont({ family: 'sans-serif', size: 13, weight: 'bold' })
+          staveNote.addModifier(count, 0)
+        }
         const colour = colourOf(index, line.marks, line.current)
         if (colour) staveNote.setStyle({ fillStyle: colour, strokeStyle: colour })
         staveNotes[l]!.set(index, staveNote)
@@ -154,7 +163,7 @@ onMounted(() => {
   if (host.value) observer.observe(host.value)
 })
 onBeforeUnmount(() => observer?.disconnect())
-watch(() => [props.rhythm, props.current, props.marks, props.scale, props.lower, props.lowerMarks], draw, { deep: true })
+watch(() => [props.rhythm, props.current, props.marks, props.scale, props.lower, props.lowerMarks, props.counts], draw, { deep: true })
 </script>
 
 <template>

@@ -12,7 +12,7 @@ import { useProgress } from '@/composables/useProgress'
 import { useRhythmPlayer } from '@/composables/useRhythmPlayer'
 import { useSynth } from '@/composables/useSynth'
 import { useWakeLock } from '@/composables/useWakeLock'
-import { tapInputOf, type TapInput } from '@/lib/metronome'
+import { scaleGroups, tapInputOf, type TapInput } from '@/lib/metronome'
 import { quarterSeconds, scoreRhythm, sounds, type Rhythm, type RhythmPress, type RhythmScore, type TimingVerdict } from '@/lib/rhythm'
 import {
   RHYTHM_LEVELS,
@@ -66,12 +66,29 @@ const levelPasses = computed(() => passed.value[level.value]?.passes ?? 0)
 const levelBpm = computed(() => (kind.value === 'twoHands' ? tempoOf(levelPasses.value) : levelTempo(info.value, levelPasses.value)))
 /** «Медленнее»: one practice attempt at three quarters of the tempo; it is not counted for stars. */
 const slow = ref(false)
-const bpm = computed(() => (slow.value ? slowTempo(levelBpm.value) : levelBpm.value))
+/** A tempo picked on the metronome scale; null follows the level's step. */
+const chosenBpm = ref<number | null>(null)
+const baseBpm = computed(() => chosenBpm.value ?? levelBpm.value)
+const bpm = computed(() => (slow.value ? slowTempo(baseBpm.value) : baseBpm.value))
+/** Slower than the level's step: practice, fine to play, but no star (the ladder only goes up). */
+const practicing = computed(() => bpm.value < levelBpm.value)
+/** The scale offered: 6/8 counts eighths and may go up to 208, the rest up to 160. */
+const tempoGroups = computed(() => scaleGroups(40, kind.value !== 'twoHands' && info.value.tempoScale ? 208 : 160))
+const tempoOpen = ref(false)
+function pickTempo(mark: number | null) {
+  chosenBpm.value = mark
+  slow.value = false
+  tempoOpen.value = false
+}
 /** Wrong notes of each failed attempt of this task, to spot a hard place. */
 let troubleHistory: number[][] = []
 const offerSlow = ref(false)
 /** The last attempt was the slow practice. */
 const wasSlowAttempt = ref(false)
+/** The last attempt was below the level's step (slow practice or a slower picked tempo): passing it gives no star. */
+const wasPractice = ref(false)
+/** Its tempo, to say «получилось в темпе 72, для звезды нужно 80». */
+const practiceBpm = ref(0)
 const stars = computed(() => starsOf(levelPasses.value))
 
 /** Tasks alternate: read the notes, then hear and repeat (the notes show after the attempt). */
@@ -108,6 +125,8 @@ function openLevel(id: number) {
 }
 
 watch(level, () => {
+  // A new level starts on its own ladder.
+  chosenBpm.value = null
   levelDone.value = false
   taskNumber.value = 0
   newTask()
@@ -153,8 +172,32 @@ function stopAttempt() {
 /** «Послушать»: the rhythm with its notes, after the count-in. */
 function listen() {
   if (phase.value === 'playing') return
+  metronome.stop()
   player.play(task.value, bpm.value, { lower: lowerTask.value })
 }
+
+/**
+ * The metronome button: steady clicks at the task's tempo and meter between attempts, to count along and
+ * tap the beat before trying. An attempt has its own count-in and clicks, so «Играть» and «Послушать» stop it.
+ */
+const metronomeOn = computed(() => metronome.running.value)
+/** Counts the beats heard, to restart the beat light on each one (also when the same beat number comes again). */
+const beatCount = ref(0)
+watch(() => metronome.beat.value, () => {
+  beatCount.value++
+})
+function startMetronome() {
+  const { meter } = task.value
+  metronome.start({ bpm: bpm.value, beats: meter.numerator })
+}
+function toggleMetronome() {
+  if (metronomeOn.value) metronome.stop()
+  else startMetronome()
+}
+// A new task or tempo while it clicks: go on at the new one.
+watch([bpm, () => task.value.meter.numerator], () => {
+  if (metronomeOn.value) startMetronome()
+})
 
 /** «Медленнее»: the next attempt of this task at the slow practice tempo. */
 function startSlow() {
@@ -167,6 +210,7 @@ function startSlow() {
 function startAttempt() {
   if (phase.value === 'intro') closeIntro()
   stopAttempt()
+  metronome.stop()
   presses = []
   score.value = null
   hints.value = []
@@ -196,25 +240,30 @@ async function finishAttempt() {
   const both = [...hintsFor(result, task.value), ...(left && lower ? hintsFor(left, lower) : [])]
   const real = [...new Set(both)].filter((hint) => hint !== 'great')
   hints.value = real.length ? real.slice(0, 2) : ['great']
+  // Not one press: the child did not know what to press, or the MK4 is not connected.
+  if (presses.length === 0) hints.value = ['noTaps']
   attemptPassed.value = passes(result) && (!left || passes(left))
   phase.value = 'result'
   const wasSlow = slow.value
   wasSlowAttempt.value = wasSlow
+  wasPractice.value = practicing.value
+  practiceBpm.value = bpm.value
+  const practice = wasPractice.value
   // Back to the level's tempo after a slow practice: the ladder only goes up.
   slow.value = false
-  if (!wasSlow) {
+  if (!practice) {
     void progress.addRhythmStats(task.value, result)
     if (left && lower) void progress.addRhythmStats(lower, left)
   }
   if (!attemptPassed.value) {
-    if (!wasSlow) troubleHistory.push(troubleNotes(result))
+    if (!practice) troubleHistory.push(troubleNotes(result))
     offerSlow.value = troubleSpot(troubleHistory) !== null
     if (offerSlow.value) hints.value = ['slowDown', ...hints.value.slice(0, 1)]
     return
   }
   troubleHistory = []
   offerSlow.value = false
-  if (wasSlow || taskCounted) return
+  if (practice || taskCounted) return
   taskCounted = true
   const before = starsOf(levelPasses.value)
   await progress.addRhythmPass(level.value)
@@ -272,7 +321,10 @@ usePadActions({
   levelUp: () => openLevel(level.value + 1),
 })
 
-onBeforeUnmount(() => stopAttempt())
+onBeforeUnmount(() => {
+  stopAttempt()
+  metronome.stop()
+})
 
 /** Colour of each note after an attempt. */
 const marks = computed<Record<number, TimingVerdict>>(() => Object.fromEntries((score.value?.results ?? []).map((result) => [result.index, result.verdict])))
@@ -329,7 +381,46 @@ const levelTabs = computed(() => RHYTHM_LEVELS.map((item) => ({ id: item.id, ope
         </button>
       </div>
       <span class="stars" :aria-label="t('train.stars', { n: stars })">{{ '★'.repeat(stars) }}<span class="stars__off">{{ '★'.repeat(3 - stars) }}</span></span>
-      <span class="text-muted tabular-nums">{{ slow ? t('theory.tempoSlow', { bpm }) : t('theory.tempo', { bpm }) }}</span>
+      <!-- Tempo from the metronome scale, one tap, like a mechanical metronome. -->
+      <UPopover v-model:open="tempoOpen" :content="{ side: 'bottom', align: 'start' }">
+        <UButton
+          color="neutral"
+          variant="soft"
+          size="lg"
+          trailing-icon="i-lucide-chevron-down"
+          class="tabular-nums"
+          :disabled="phase === 'playing'"
+          :label="slow ? t('theory.tempoSlow', { bpm }) : practicing ? t('theory.tempoPractice', { bpm }) : t('theory.tempo', { bpm })"
+        />
+        <template #content>
+          <div class="scale">
+            <UButton
+              :color="chosenBpm === null ? 'primary' : 'neutral'"
+              :variant="chosenBpm === null ? 'solid' : 'soft'"
+              size="md"
+              icon="i-lucide-trending-up"
+              :label="t('theory.tempoLevel', { bpm: levelBpm })"
+              @click="pickTempo(null)"
+            />
+            <p class="scale__note text-muted">{{ t('theory.tempoNote', { bpm: levelBpm }) }}</p>
+            <div v-for="group in tempoGroups" :key="group.name" class="scale__group">
+              <span class="scale__name text-muted">{{ t(`rhythm.tempo.${group.name}`) }}</span>
+              <div class="scale__marks">
+                <button
+                  v-for="mark in group.marks"
+                  :key="mark"
+                  type="button"
+                  class="mark tabular-nums"
+                  :class="{ 'mark--on': mark === bpm && chosenBpm !== null, 'mark--practice': mark < levelBpm }"
+                  @click="pickTempo(mark === levelBpm ? null : mark)"
+                >
+                  {{ mark }}
+                </button>
+              </div>
+            </div>
+          </div>
+        </template>
+      </UPopover>
     </div>
 
     <section class="task">
@@ -337,19 +428,24 @@ const levelTabs = computed(() => RHYTHM_LEVELS.map((item) => ({ id: item.id, ope
         <p class="prompt text-highlighted">{{ t('theory.intro.title') }}</p>
         <div class="intro">
           <div v-for="item in introRhythms" :key="item.id" class="intro__item">
-            <RhythmStaff :rhythm="item.rhythm" />
+            <RhythmStaff :rhythm="item.rhythm" counts />
             <p class="text-toned">{{ t(`theory.intro.${item.id}`) }}</p>
             <UButton icon="i-lucide-ear" color="neutral" variant="soft" size="md" class="self-start" :label="t('theory.listen')" @click="player.play(item.rhythm, bpm)" />
           </div>
         </div>
       </template>
       <template v-else>
-        <p class="prompt text-highlighted">{{ t(`theory.kind.${kind}`) }}</p>
+        <div>
+          <p class="prompt text-highlighted">{{ t(`theory.kind.${kind}`) }}</p>
+          <!-- What to press: the notes sit on one line and have no pitch, so any key will do. -->
+          <p class="how text-toned">{{ lowerTask ? t('theory.howTwoHands') : t('theory.how') }}</p>
+        </div>
         <div class="staff-box">
           <RhythmStaff
             v-if="showNotes"
             :scale="lowerTask ? 1.7 : 2.2"
             :rhythm="task"
+            counts
             :lower="lowerTask"
             :current="phase === 'playing' && kind === 'read' ? player.current.value : null"
             :marks="phase === 'result' ? marks : undefined"
@@ -361,7 +457,13 @@ const levelTabs = computed(() => RHYTHM_LEVELS.map((item) => ({ id: item.id, ope
       </template>
 
       <div v-if="phase === 'result' && score" class="result" :class="attemptPassed ? 'result--passed' : 'result--again'" role="status">
-        <p class="result__title">{{ levelDone ? t('theory.levelDone', { n: level }) : attemptPassed ? (wasSlowAttempt ? t('theory.slowPassed') : t('theory.passed')) : t('theory.again') }}</p>
+        <p class="result__title">
+          {{ levelDone ? t('theory.levelDone', { n: level })
+            : !attemptPassed ? t('theory.again')
+              : wasSlowAttempt ? t('theory.slowPassed')
+                : wasPractice ? t('theory.practicePassed', { bpm: practiceBpm, need: levelBpm })
+                  : t('theory.passed') }}
+        </p>
         <p class="text-toned">{{ hints.map((hint) => t(`theory.hints.${hint}`)).join(' ') }}</p>
       </div>
     </section>
@@ -369,8 +471,8 @@ const levelTabs = computed(() => RHYTHM_LEVELS.map((item) => ({ id: item.id, ope
     <div class="controls">
       <UButton v-if="phase === 'intro'" icon="i-lucide-check" size="xl" :label="t('theory.intro.ok')" @click="closeIntro" />
       <template v-else>
-        <template v-if="phase === 'result' && attemptPassed && wasSlowAttempt">
-          <UButton icon="i-lucide-play" size="xl" :label="t('theory.atTempo')" @click="startAttempt" />
+        <template v-if="phase === 'result' && attemptPassed && wasPractice">
+          <UButton icon="i-lucide-play" size="xl" :label="t('theory.atTempoOf', { bpm: levelBpm })" @click="pickTempo(null); startAttempt()" />
         </template>
         <template v-else-if="phase === 'result' && attemptPassed">
           <UButton v-if="levelDone && isOpen(level + 1, passed)" icon="i-lucide-arrow-right" size="xl" :label="t('theory.nextLevel')" @click="openLevel(level + 1)" />
@@ -387,6 +489,22 @@ const levelTabs = computed(() => RHYTHM_LEVELS.map((item) => ({ id: item.id, ope
         />
         <UButton icon="i-lucide-ear" color="neutral" variant="soft" size="xl" :disabled="phase === 'playing'" :label="phase === 'result' ? t('theory.listenRight') : t('theory.listen')" @click="listen" />
         <UButton icon="i-lucide-shuffle" color="neutral" variant="ghost" size="xl" :label="t('theory.other')" @click="nextTask" />
+        <UButton
+          icon="i-lucide-timer"
+          :color="metronomeOn ? 'primary' : 'neutral'"
+          :variant="metronomeOn ? 'solid' : 'soft'"
+          size="xl"
+          class="metronome"
+          :disabled="phase === 'playing'"
+          :aria-pressed="metronomeOn"
+          :aria-label="t('songs.metronome')"
+          @click="toggleMetronome"
+        >
+          <template #trailing>
+            <!-- The beat, so it can be seen as well as heard; the strong beat is bigger. -->
+            <span v-if="metronomeOn && metronome.beat.value >= 0" :key="beatCount" class="beat" :class="{ 'beat--strong': metronome.beat.value === 0 }" aria-hidden="true" />
+          </template>
+        </UButton>
 
         <!-- For playing without the MK4: a big pad on the screen, two for two hands. -->
         <div class="taps">
@@ -503,6 +621,11 @@ const levelTabs = computed(() => RHYTHM_LEVELS.map((item) => ({ id: item.id, ope
   background: var(--ui-bg-muted);
 }
 
+.how {
+  margin-top: 0.25rem;
+  font-size: 1.0625rem;
+}
+
 .prompt {
   font-family: var(--font-display);
   font-size: clamp(1.25rem, 2.4vw, 1.75rem);
@@ -578,6 +701,95 @@ const levelTabs = computed(() => RHYTHM_LEVELS.map((item) => ({ id: item.id, ope
   align-items: center;
   gap: 0.75rem;
   margin-top: 1rem;
+}
+
+.beat {
+  width: 0.5rem;
+  height: 0.5rem;
+  border-radius: 50%;
+  background: currentColor;
+  opacity: 0.35;
+  /* Restarted on every beat (new key): bright at the click, then fading. */
+  animation: beat-flash 220ms ease-out;
+}
+
+.beat--strong {
+  width: 0.75rem;
+  height: 0.75rem;
+}
+
+@keyframes beat-flash {
+  from {
+    opacity: 1;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .beat {
+    animation: none;
+    opacity: 1;
+  }
+}
+
+.scale {
+  display: flex;
+  flex-direction: column;
+  gap: 0.625rem;
+  width: min(30rem, 90vw);
+  /* The whole scale is tall: on a short tablet it scrolls inside the panel, not the page. */
+  max-height: min(70vh, 38rem);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: 0.875rem 1rem 1rem;
+}
+
+.scale__note {
+  font-size: 0.875rem;
+  line-height: 1.4;
+}
+
+.scale__group {
+  display: grid;
+  grid-template-columns: 6.5rem minmax(0, 1fr);
+  align-items: start;
+  gap: 0.5rem;
+}
+
+.scale__name {
+  padding-top: 0.5rem;
+  font-size: 0.875rem;
+}
+
+.scale__marks {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.375rem;
+}
+
+.mark {
+  min-width: 2.75rem;
+  min-height: 2.5rem;
+  border-radius: 0.5rem;
+  font-weight: 600;
+  color: var(--ui-text-highlighted);
+  background: var(--ui-bg-elevated);
+  box-shadow: 0 0 0 1px var(--ui-border) inset;
+  transition: transform 100ms ease-out;
+}
+
+.mark:active {
+  transform: scale(0.94);
+}
+
+/* Slower than the level's step: fine for practice, no star. */
+.mark--practice {
+  color: var(--ui-text-muted);
+}
+
+.mark--on {
+  color: #fff;
+  background: var(--color-pad-sky);
+  box-shadow: none;
 }
 
 .taps {
