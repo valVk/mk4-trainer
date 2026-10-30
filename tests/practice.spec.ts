@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
-import { chooseWindow, coversStep, followWindow, octaveHint, stepIndexAt, upcomingKeys } from '@/lib/practice'
+import { chooseWindow, coversStep, followWindow, octaveHint, parseSongView, stepIndexAt, upcomingKeys } from '@/lib/practice'
 import type { Step } from '@/lib/song'
 
 const step = (time: number, ...keys: number[]): Step => ({ time, keys })
@@ -90,5 +90,14 @@ describe('octaveHint', () => {
     expect(octaveHint(riffStep, [65, 68])).toBeNull()
     expect(octaveHint(riffStep, [66, 69])).toBeNull()
     expect(octaveHint(riffStep, [])).toBeNull()
+  })
+})
+
+describe('parseSongView', () => {
+  it('keeps a known view and falls back to the falling notes', () => {
+    expect(parseSongView('staff')).toBe('staff')
+    expect(parseSongView('both')).toBe('both')
+    expect(parseSongView('cards')).toBe('fall')
+    expect(parseSongView(undefined)).toBe('fall')
   })
 })

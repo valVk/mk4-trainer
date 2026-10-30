@@ -44,6 +44,8 @@ const software = [
   { name: 'Workbox', license: 'MIT', href: 'https://github.com/GoogleChrome/workbox' },
   { name: 'Lucide icons', license: 'ISC', href: 'https://github.com/lucide-icons/lucide' },
   { name: 'Unbounded, Golos Text', license: 'SIL Open Font License 1.1', href: 'https://fontsource.org' },
+  { name: 'VexFlow', license: 'MIT', href: 'https://github.com/vexflow/vexflow' },
+  { name: 'Bravura, Academico (VexFlow music fonts)', license: 'SIL Open Font License 1.1', href: 'https://github.com/vexflow/vexflow-fonts' },
 ]
 </script>
 

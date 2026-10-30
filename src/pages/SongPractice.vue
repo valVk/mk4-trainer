@@ -9,6 +9,7 @@ import PageHeader from '@/components/PageHeader.vue'
 import PianoKeyboard from '@/components/PianoKeyboard.vue'
 import ResultCard from '@/components/ResultCard.vue'
 import RungLadder from '@/components/RungLadder.vue'
+import SongStaff from '@/components/SongStaff.vue'
 import SoundControl from '@/components/SoundControl.vue'
 import UnitList from '@/components/UnitList.vue'
 import { useMetronome } from '@/composables/useMetronome'
@@ -37,9 +38,10 @@ import {
   type WaitPress,
 } from '@/lib/ladder'
 import { parseMix } from '@/lib/mix'
+import { MIDDLE_C, clefFor, markPlayed, needsGrandStaff, writePart, writePlayed, type PlayedKey } from '@/lib/notation'
 import { drumKind, PAD_NOTE_MIN_S, padLayout } from '@/lib/padLayout'
 import { partPhrases, songSections, type Phrase } from '@/lib/phrases'
-import { chooseWindow, coversStep, followWindow, octaveHint, stepIndexAt, upcomingKeys } from '@/lib/practice'
+import { SONG_VIEWS, chooseWindow, coversStep, followWindow, octaveHint, stepIndexAt, upcomingKeys, type SongView } from '@/lib/practice'
 import { parseSong, type Part, type Song } from '@/lib/song'
 import { chordSymbol, identifyChord, midiName, noteName } from '@/lib/theory'
 
@@ -157,6 +159,44 @@ const fallNotes = computed(() => {
   if (!guided.value || !current) return notes
   return notes.filter((note) => note.start >= current.start - 1e-6 && note.start < current.end - 1e-6)
 })
+/** How the part is shown above the keys (saved per player). Drums read from the percussion staff. */
+const view = computed({
+  get: () => progress.songView.value,
+  set: (value: SongView) => void progress.setSongView(value),
+})
+const showStaff = computed(() => view.value !== 'fall')
+const showFall = computed(() => !showStaff.value || view.value === 'both')
+/** A wide melodic part reads from a grand staff: middle C and up on the treble staff, the rest on the bass staff. */
+const grand = computed(() => Boolean(part.value && !part.value.isDrum && needsGrandStaff(part.value.notes)))
+/** The shown notes as written music; outside the unit everything is rest. */
+const written = computed(() => {
+  if (!song.value || !showStaff.value) return []
+  const notes = grand.value ? fallNotes.value.filter((note) => note.key >= MIDDLE_C) : fallNotes.value
+  return writePart(notes, song.value.bars, song.value.timeSignature, part.value?.isDrum)
+})
+const writtenLow = computed(() => (song.value && showStaff.value && grand.value
+  ? writePart(fallNotes.value.filter((note) => note.key < MIDDLE_C), song.value.bars, song.value.timeSignature)
+  : null))
+const clef = computed(() => (part.value?.isDrum ? 'percussion' : grand.value ? 'treble' : clefFor(part.value?.notes ?? [])))
+
+/** The child's keys in this attempt, in song time as heard; shown on the staff under the part. */
+const played = shallowRef<(PlayedKey & { input: TapInput })[]>([])
+/** Song time for keys still held: moves while a key is down, so the note grows as it is held. */
+const heldUntil = ref(0)
+/**
+ * The child's line under the part, in «Ноты» only: in «Оба» the falling notes and the lit keys already
+ * show what is pressed, and two staves would not fit above the keys (the same for a grand staff).
+ * Pads have no length and listening has nothing to show.
+ */
+const showPlayed = computed(() => view.value === 'staff' && showStaff.value && !grand.value && !onPads.value && mode.value !== 'listen')
+const playedBars = computed(() => (song.value && showPlayed.value
+  ? writePlayed(played.value, song.value.bars, song.value.timeSignature, heldUntil.value)
+  : null))
+const playedMarks = computed(() => (playedBars.value ? markPlayed(written.value, playedBars.value, anyOctave.value) : {}))
+/** How often a held note grows on the staff, ms: often enough to see, rare enough not to redraw every frame. */
+const HELD_REDRAW_MS = 100
+let heldRedrawAt = 0
+
 const endTime = computed(() => {
   const last = fallNotes.value.reduce((end, note) => Math.max(end, note.start + note.length), 0)
   return guided.value && unit.value ? Math.max(unit.value.end, last) : last
@@ -184,6 +224,7 @@ function prepare() {
   result.value = null
   presses = []
   waitPresses = []
+  played.value = []
   recent.value = []
   applyMode()
   if (player.loaded.value) resetTo(startTime.value)
@@ -239,6 +280,10 @@ function handlePress(key: number, input: TapInput) {
   // The song time the child was hearing when pressing: sound and press are both a little late.
   const now = player.currentTime() - metronome.pressDelay(input) * rate.value
   recent.value = [...recent.value.slice(-5), key]
+  if (showPlayed.value) {
+    played.value = [...played.value, { key, start: now, end: null, input }]
+    heldUntil.value = now
+  }
   if (mode.value === 'tempo') {
     presses.push({ key, time: now })
     return
@@ -265,7 +310,18 @@ onEvent((event) => {
     return
   }
   if (event.type === 'noteOn') handlePress(event.note, tapInputOf(event))
+  else if (event.type === 'noteOff') handleRelease(event.note)
 })
+
+/** A key let go: its note on the child's staff gets its final length. */
+function handleRelease(key: number) {
+  let index = played.value.length - 1
+  while (index >= 0 && !(played.value[index]!.key === key && played.value[index]!.end === null)) index--
+  if (index === -1) return
+  const item = played.value[index]!
+  const end = player.currentTime() - metronome.pressDelay(item.input) * rate.value
+  played.value = played.value.map((entry, i) => (i === index ? { ...entry, end: Math.max(entry.start, end) } : entry))
+}
 
 async function finishAttempt() {
   player.pause()
@@ -307,6 +363,10 @@ function loop() {
   const current = part.value
   if (!current || !player.loaded.value || result.value) return
   const now = player.currentTime()
+  if (played.value.some((item) => item.end === null) && performance.now() - heldRedrawAt > HELD_REDRAW_MS) {
+    heldRedrawAt = performance.now()
+    heldUntil.value = now
+  }
   // Guided: only the unit's notes move the window, not the phrases after it.
   const next = followWindow(windowStart.value, steps.value, now)
   if (next !== windowStart.value) windowStart.value = next
@@ -653,7 +713,15 @@ const nextLabel = computed(() => {
               {{ t(`songs.octave.${hint}`) }}
             </p>
             <ResultCard v-if="result" :result="result" :guided="guided" :unit-done="unitFinished && !hasNextRung" :next-label="nextLabel" @next="nextRung" @again="startAttempt" />
-            <NoteFall class="stage__fall" :notes="fallNotes" :start="windowStart" :get-time="player.currentTime" :pending="pendingKeys" :pad-keys="onPads ? layout!.padKeys : undefined" />
+            <div class="view-switch segmented" role="radiogroup" :aria-label="t('songs.viewLabel')">
+              <button v-for="item in SONG_VIEWS" :key="item" type="button" role="radio" class="segment" :class="{ 'segment--on': view === item }" :aria-checked="view === item" @click="view = item">
+                {{ t(`songs.view.${item}`) }}
+              </button>
+            </div>
+            <div v-if="showStaff" class="stage__staff" :class="{ 'stage__staff--alone': !showFall }">
+              <SongStaff :bars="written" :clef="clef" :meter="song!.timeSignature" :get-time="player.currentTime" :lower="writtenLow" :played="playedBars" :marks="playedMarks" :scale="showFall ? (grand || onPads ? 0.85 : 1.1) : undefined" />
+            </div>
+            <NoteFall v-if="showFall" class="stage__fall" :class="{ 'stage__fall--short': showStaff, 'stage__fall--shortest': showStaff && (grand || onPads) }" :notes="fallNotes" :start="windowStart" :get-time="player.currentTime" :pending="pendingKeys" :pad-keys="onPads ? layout!.padKeys : undefined" />
             <template v-if="onPads">
               <PadStrip :labels="padLabels" :lit="litPads" :hit="hitPads" @press="pressPad" />
               <p class="window text-muted">{{ t('songs.padsLayout') }}</p>
@@ -903,11 +971,44 @@ const nextLabel = computed(() => {
   margin-inline: auto;
 }
 
+.view-switch {
+  position: absolute;
+  z-index: 1;
+  top: 0.5rem;
+  right: 0.5rem;
+  box-shadow: 0 4px 14px -6px rgb(0 0 0 / 0.35);
+}
+
+.stage__staff {
+  padding: 0.5rem 0.75rem 0;
+  border-radius: 0.75rem 0.75rem 0 0;
+  background: var(--ui-bg-muted);
+}
+
+/* Staff alone: it takes the falling notes' place and sits in the middle of it. */
+.stage__staff--alone {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  min-height: 9rem;
+}
+
 .stage__fall {
   flex: 1;
   min-height: 9rem;
   border-radius: 0.75rem 0.75rem 0 0;
   background: var(--ui-bg-muted);
+}
+
+.stage__fall--short {
+  /* Under the staff in «Оба»: the falling notes may get short on a small tablet. */
+  min-height: 5rem;
+  border-radius: 0;
+}
+
+/* Under a grand staff or above the pad board (taller than the keys) even shorter. */
+.stage__fall--shortest {
+  min-height: 3rem;
 }
 
 .window {

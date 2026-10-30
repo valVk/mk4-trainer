@@ -134,7 +134,7 @@ function tone(audio: AudioContext, type: OscillatorType, frequency: number, time
 }
 
 /** Short click, wood block or cowbell; the strong beat is higher and louder. */
-function playClick(time: number, accent: Accent): void {
+function playClick(time: number, accent: Accent): AudioScheduledSourceNode[] {
   const audio = context()
   const pitch = PITCH[accent]
   const level = LEVEL[accent]
@@ -161,6 +161,28 @@ function playClick(time: number, accent: Accent): void {
   }
   pending = pending.filter((item) => item.time > audio.currentTime)
   pending.push({ time, sources })
+  return sources
+}
+
+/** Pitch of a rhythm note: a soft C5, clearly apart from the clicks. */
+const NOTE_HZ = 523.25
+
+/**
+ * One note of a rhythm exercise. It sounds for the note's length, so a half note is heard as long as
+ * it is, and fades a little before the end so repeated notes stay apart.
+ */
+function playNote(time: number, length: number): AudioScheduledSourceNode[] {
+  const audio = context()
+  const gain = audio.createGain()
+  const end = time + Math.max(0.06, length * 0.9)
+  gain.gain.setValueAtTime(0.0001, time)
+  gain.gain.exponentialRampToValueAtTime(0.5, time + 0.008)
+  gain.gain.setTargetAtTime(0.3, time + 0.05, 0.1)
+  gain.gain.setTargetAtTime(0.0001, end - 0.04, 0.015)
+  gain.connect(output(audio))
+  const sources = [tone(audio, 'triangle', NOTE_HZ, time, end - time + 0.05, gain)]
+  pending.push({ time, sources })
+  return sources
 }
 
 /** Silences clicks that have not started yet. */
@@ -422,6 +444,10 @@ export function useMetronome() {
     cancelCalibration,
     /** Audio clock time being heard now, for scoring taps (step 16). */
     heardTime: (): number => heardTime(),
+    /** Schedules one click or one rhythm note on the audio clock; returns the sounds, so a player can stop them. */
+    clickAt: (time: number, accent: Accent): AudioScheduledSourceNode[] => playClick(time, accent),
+    noteAt: (time: number, length: number): AudioScheduledSourceNode[] => playNote(time, length),
+    audioContext: context,
     /**
      * How long ago, in real seconds, the child heard the moment a press from this input stands for:
      * the sound is still on its way to the speakers, and the press arrives late by the input's delay.

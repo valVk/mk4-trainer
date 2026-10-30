@@ -44,7 +44,8 @@ The on-screen keyboard works by touch. On a computer, the keyboard acts as a vir
 ## Tech
 
 Vue 3 (`<script setup>`, TypeScript), Nuxt UI 4, Vue Router, vue-i18n, Dexie (IndexedDB), Web MIDI,
-`spessasynth_lib` (SoundFont synth and MIDI sequencer in an AudioWorklet), vite-plugin-pwa.
+`spessasynth_lib` (SoundFont synth and MIDI sequencer in an AudioWorklet), VexFlow 5 (music notation, with the Bravura
+font built in so it works offline), vite-plugin-pwa.
 
 ```
 src/

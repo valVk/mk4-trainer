@@ -1,14 +1,18 @@
 <script setup lang="ts">
-import { computed, onBeforeUnmount } from 'vue'
+import { computed, onBeforeUnmount, ref, shallowRef, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 
 import PageHeader from '@/components/PageHeader.vue'
+import RhythmStaff from '@/components/RhythmStaff.vue'
 import { useMetronome } from '@/composables/useMetronome'
 import { usePadActions } from '@/composables/usePadActions'
+import { useRhythmPlayer } from '@/composables/useRhythmPlayer'
 import { useWakeLock } from '@/composables/useWakeLock'
 import { BPM_MAX, BPM_MIN, CALIBRATION_TAPS, METERS, METRONOME_SOUNDS, TAP_INPUTS, accentOf, tempoName } from '@/lib/metronome'
+import { DURATIONS, generateBar, type Duration, type Rhythm } from '@/lib/rhythm'
 
-// «Ритм» (plan step 15): the metronome and the tap-latency check. Rhythm levels come in step 17.
+// «Ритм»: the metronome and the tap-latency check (step 15), rhythms drawn and played (step 16).
+// Rhythm levels with tapping and scoring come in step 17.
 
 const { t, tm, rt } = useI18n()
 useWakeLock()
@@ -56,6 +60,55 @@ const latencyLines = computed(() => TAP_INPUTS
     return { input, text: `${t(`rhythm.inputs.${input}`)}: ${value}` }
   }))
 const anyLatency = computed(() => TAP_INPUTS.some((input) => latencyHistories.value[input].length))
+
+/** Right card: rhythms to look at and listen to, or the latency check (always shown while it runs). */
+const sideTab = ref<'rhythms' | 'latency'>('rhythms')
+watch(calibrating, (on) => {
+  if (on) sideTab.value = 'latency'
+})
+const sideTabs = computed(() => [
+  { label: t('rhythm.tabs.rhythms'), value: 'rhythms' },
+  { label: t('rhythm.tabs.latency'), value: 'latency' },
+])
+
+/** Bars in an example: two, so the rhythm is heard as a phrase and not a single bar. */
+const EXAMPLE_BARS = 2
+const values = ref<Duration[]>(['half', 'quarter', 'eighth'])
+const withRests = ref(false)
+const rhythmPlayer = useRhythmPlayer()
+
+function makeExample(): Rhythm {
+  const [numerator, denominator] = settings.value.meter.split('/').map(Number) as [number, number]
+  const meter = { numerator, denominator }
+  const notes = Array.from({ length: EXAMPLE_BARS }, () => generateBar(meter, { durations: values.value, rests: withRests.value })).flat()
+  return { meter, notes }
+}
+
+const example = shallowRef<Rhythm>(makeExample())
+
+function newExample() {
+  rhythmPlayer.stop()
+  example.value = makeExample()
+}
+
+watch([() => settings.value.meter, values, withRests], newExample, { deep: true })
+
+/** At least one value always stays on: a rhythm needs something to be made of. */
+function toggleValue(value: Duration) {
+  const on = values.value.includes(value)
+  if (on && values.value.length === 1) return
+  values.value = on ? values.value.filter((item) => item !== value) : DURATIONS.filter((item) => item === value || values.value.includes(item))
+}
+
+function listenExample() {
+  if (rhythmPlayer.playing.value) {
+    rhythmPlayer.stop()
+    return
+  }
+  // One clock at a time: the metronome on the left stops while the example plays its own clicks.
+  metronome.stop()
+  rhythmPlayer.play(example.value, settings.value.bpm)
+}
 </script>
 
 <template>
@@ -142,9 +195,34 @@ const anyLatency = computed(() => TAP_INPUTS.some((input) => latencyHistories.va
 
       <UCard variant="subtle" class="side">
         <template #header>
-          <h2 class="subtitle text-highlighted">{{ t('rhythm.calibrationTitle') }}</h2>
+          <UTabs v-model="sideTab" :items="sideTabs" :content="false" size="lg" />
         </template>
-        <div class="flex flex-col gap-4">
+        <div v-if="sideTab === 'rhythms'" class="flex flex-col gap-4">
+          <RhythmStaff :rhythm="example" :current="rhythmPlayer.current.value" />
+          <div class="flex flex-wrap gap-2" role="group" :aria-label="t('rhythm.valuesLabel')">
+            <UButton
+              v-for="value in DURATIONS"
+              :key="value"
+              :color="values.includes(value) ? 'primary' : 'neutral'"
+              :variant="values.includes(value) ? 'solid' : 'soft'"
+              size="md"
+              :aria-pressed="values.includes(value)"
+              :label="t(`rhythm.values.${value}`)"
+              @click="toggleValue(value)"
+            />
+            <USwitch v-model="withRests" size="lg" class="ml-2" :label="t('rhythm.rests')" />
+          </div>
+          <div class="flex flex-wrap gap-3">
+            <UButton
+              :icon="rhythmPlayer.playing.value ? 'i-lucide-square' : 'i-lucide-ear'"
+              size="lg"
+              :label="rhythmPlayer.playing.value ? t('rhythm.stopExample') : t('rhythm.listenExample')"
+              @click="listenExample"
+            />
+            <UButton icon="i-lucide-shuffle" color="neutral" variant="soft" size="lg" :label="t('rhythm.newExample')" @click="newExample" />
+          </div>
+        </div>
+        <div v-else class="flex flex-col gap-4">
           <p class="text-toned leading-relaxed">{{ t('rhythm.calibrationLead', { n: CALIBRATION_TAPS }) }}</p>
           <ul class="flex flex-col gap-1 text-muted">
             <li v-for="line in latencyLines" :key="line.input">{{ line.text }}</li>

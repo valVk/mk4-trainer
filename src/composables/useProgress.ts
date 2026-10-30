@@ -25,6 +25,7 @@ import { parseInstrument } from '@/lib/instruments'
 import { parseLatencyHistories, parseMetronomeSettings } from '@/lib/metronome'
 import { startLevel, starsFor } from '@/lib/levels'
 import { isValidPadMap, type PadMap } from '@/lib/noteSource'
+import { parseSongView, type SongView } from '@/lib/practice'
 import { parseSong, songNameFromFile } from '@/lib/song'
 
 // The only door to the database: pages never touch Dexie, so the storage can change later (plan 7).
@@ -36,6 +37,8 @@ const DECLINED_KEY = 'declinedLevels'
 const METRONOME_KEY = 'metronome'
 /** The «Тренировка» level the child was on, so a reload or the next day starts there. */
 const TRAIN_LEVEL_KEY = 'trainLevel'
+/** Song practice view the child chose last: falling notes, staff or both. */
+const SONG_VIEW_KEY = 'songView'
 /** How late this child's taps arrive after the click, per input: the last checks on the «Ритм» page (median is used). */
 const LATENCY_KEY = 'tapLatencyMs'
 /** Where step 5 kept the pad map before the database existed. */
@@ -54,6 +57,7 @@ const levels = ref<Record<number, LevelProgress>>({})
 const declinedLevels = ref<number[]>([])
 /** Null until the profile's data is loaded. */
 const trainLevel = ref<number | null>(null)
+const songView = ref<SongView>('fall')
 const songs = shallowRef<SongSummary[]>([])
 // Applying stored settings must not write them straight back.
 let applying = false
@@ -110,6 +114,7 @@ async function loadProfileData(database: TrainerDb, current: Profile): Promise<v
   declinedLevels.value = (await getSetting<number[]>(database, current.id, DECLINED_KEY)) ?? []
   const level = await getSetting<unknown>(database, current.id, TRAIN_LEVEL_KEY)
   trainLevel.value = startLevel(level, (id) => levels.value[id]?.correct ?? 0)
+  songView.value = parseSongView(await getSetting<unknown>(database, current.id, SONG_VIEW_KEY))
   const instrument = await getSetting<unknown>(database, current.id, INSTRUMENT_KEY)
   const bank = await getSetting<BankId>(database, current.id, BANK_KEY)
   const metronome = await getSetting<unknown>(database, current.id, METRONOME_KEY)
@@ -200,6 +205,14 @@ async function declineLevel(level: number): Promise<void> {
   if (profileId === undefined) return
   const list = [...declinedLevels.value]
   await safely((database) => setSetting(database, profileId, DECLINED_KEY, list))
+}
+
+async function setSongView(view: SongView): Promise<void> {
+  if (songView.value === view) return
+  songView.value = view
+  const profileId = profile.value?.id
+  if (profileId === undefined) return
+  await safely((database) => setSetting(database, profileId, SONG_VIEW_KEY, view))
 }
 
 async function setTrainLevel(level: number): Promise<void> {
@@ -330,11 +343,13 @@ export function useProgress() {
     levels: readonly(levels),
     declinedLevels: readonly(declinedLevels),
     trainLevel: readonly(trainLevel),
+    songView: readonly(songView),
     songs: readonly(songs),
     init,
     record,
     declineLevel,
     setTrainLevel,
+    setSongView,
     switchProfile,
     addProfile,
     renameProfile,

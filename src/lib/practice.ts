@@ -88,3 +88,12 @@ export function octaveHint(step: Step, pressed: readonly number[]): OctaveHint {
   const played = pressed.reduce((sum, key) => sum + key, 0) / pressed.length
   return played > wanted ? 'down' : 'up'
 }
+
+/** How a part is shown above the keys: falling notes, notes on a staff, or both. */
+export const SONG_VIEWS = ['fall', 'staff', 'both'] as const
+export type SongView = (typeof SONG_VIEWS)[number]
+
+/** A stored view; falling notes when nothing (or something unknown) was saved. */
+export function parseSongView(value: unknown): SongView {
+  return SONG_VIEWS.includes(value as SongView) ? (value as SongView) : 'fall'
+}
