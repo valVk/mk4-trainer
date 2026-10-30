@@ -2,7 +2,8 @@
 import { onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { Accidental, Annotation, AnnotationVerticalJustify, Formatter, GhostNote, Stave, StaveConnector, StaveNote, Voice, type Note } from 'vexflow/bravura'
 
-import { paintNote, staffContext } from '@/components/staffDrawing'
+import { paintNote, STAFF_COLOURS, staffContext } from '@/components/staffDrawing'
+import { useNoteSource } from '@/composables/useNoteSource'
 
 import { vexSpelling, type Spelled } from '@/lib/accidentals'
 import { spellBar } from '@/lib/notation'
@@ -31,7 +32,23 @@ const props = defineProps<{
   keySignature?: string
   /** Fill the height the parent gives (a flex child), scaled up to `scale` at most. */
   fit?: boolean
+  /** A note turns green once its very key is pressed, and stays so until the notes change (owner's rule). */
+  playable?: boolean
 }>()
+
+const { heldNotes } = useNoteSource()
+/** Keys of the notes already found on the keyboard. */
+const found = ref<number[]>([])
+watch(() => props.notes.map((item) => item.key).join(), () => {
+  found.value = []
+})
+watch(heldNotes, (held) => {
+  if (!props.playable) return
+  const hit = props.notes.map((item) => item.key).filter((key) => held.includes(key) && !found.value.includes(key))
+  if (hit.length) found.value = [...found.value, ...hit]
+})
+/** The note's own colour, else green once found. */
+const colourOf = (item: StaffNote) => item.colour ?? (found.value.includes(item.key) ? STAFF_COLOURS.onTime : undefined)
 
 const host = ref<HTMLDivElement | null>(null)
 
@@ -57,7 +74,7 @@ function staveNote(item: StaffNote, clef: StaffClef, alone: boolean): StaveNote 
   if (item.label) {
     note.addModifier(new Annotation(item.label).setVerticalJustification(AnnotationVerticalJustify.BOTTOM).setFont('sans-serif', 13, 'bold'), 0)
   }
-  paintNote(note, item.colour)
+  paintNote(note, colourOf(item))
   return note
 }
 
@@ -95,7 +112,7 @@ onMounted(() => {
   if (host.value) observer.observe(host.value)
 })
 onBeforeUnmount(() => observer?.disconnect())
-watch(() => [props.notes, props.show, props.scale, props.keySignature], draw, { deep: true })
+watch(() => [props.notes, props.show, props.scale, props.keySignature, found.value], draw, { deep: true })
 </script>
 
 <template>

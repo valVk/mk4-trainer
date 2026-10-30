@@ -54,6 +54,7 @@ function start() {
   timed.reset()
   score.value = null
   phase.value = 'playing'
+  liveRight.value = {}
   player.play(melody.value, bpm.value, { notes: false })
 }
 
@@ -97,6 +98,20 @@ const marks = computed(() => (score.value ? readMarks(melody.value, score.value)
 /** The staff colours: green, yellow, red. */
 const COLOUR_OF: Record<ReadMark, TimingVerdict> = { right: 'onTime', off: 'late', wrongKey: 'missed', missed: 'missed' }
 const staffMarks = computed(() => Object.fromEntries(Object.entries(marks.value).map(([index, mark]) => [index, COLOUR_OF[mark]])))
+
+/** While playing, a note turns green as soon as its key is pressed near its time (owner's rule); the full result comes after. */
+const liveRight = ref<Record<number, TimingVerdict>>({})
+/** A press counts for the nearest note within this many seconds, as in the scoring. */
+const LIVE_WINDOW_S = 0.25
+watch(heldNotes, (held, before) => {
+  if (phase.value !== 'playing') return
+  const now = player.heardPosition()
+  const notes = sounds(melody.value, bpm.value).filter((item) => !item.rest)
+  for (const key of held.filter((item) => !before.includes(item))) {
+    const nearest = notes.reduce<typeof notes[number] | null>((best, item) => (!best || Math.abs(item.start - now) < Math.abs(best.start - now) ? item : best), null)
+    if (nearest && Math.abs(nearest.start - now) <= LIVE_WINDOW_S && nearest.key === key) liveRight.value = { ...liveRight.value, [nearest.index]: 'onTime' }
+  }
+})
 /** What to fix first: a wrong key, then a note not played, then the time. */
 const advice = computed(() => {
   const all = Object.values(marks.value)
@@ -133,7 +148,7 @@ onBeforeUnmount(() => cancelAnimationFrame(countFrame))
         :scale="short ? 1.35 : 1.7"
         counts
         :current="phase === 'playing' ? player.current.value : null"
-        :marks="phase === 'result' ? staffMarks : undefined"
+        :marks="phase === 'result' ? staffMarks : phase === 'playing' ? liveRight : undefined"
       />
       <span v-if="countIn !== null" class="count-in" aria-live="assertive">{{ countIn }}</span>
     </div>

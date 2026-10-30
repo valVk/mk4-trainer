@@ -61,11 +61,13 @@ export function enharmonic(a: Spelled, b: Spelled): boolean {
   return keyOf(a) === keyOf(b) && (a.letter !== b.letter || a.octave !== b.octave)
 }
 
-/** One step on the keyboard: a semitone (half step) or a tone (whole step), up or down. */
+/** A step on the keyboard from a key, up or down: a semitone or a tone (step 20), or any interval (step 21). */
 export interface StepTask {
   from: number
-  semitones: 1 | 2
+  semitones: number
   up: boolean
+  /** The interval asked for (plan step 21), when the step is one: «большая терция вверх». */
+  interval?: string
 }
 
 export function stepTarget(task: StepTask): number {

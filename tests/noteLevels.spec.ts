@@ -1,7 +1,10 @@
 import { describe, expect, it } from 'vitest'
 
+import { keyOf } from '@/lib/accidentals'
+import { interval, intervalBetween, type IntervalId } from '@/lib/intervals'
+
 import { KEYBOARD_KEYS } from '@/lib/keyboard'
-import { NOTE_LEVELS, type NoteTask, checkNote, countsForStars, makeMelody, noteStars, readMarks, readingPasses, currentNoteLevel, isNoteLevelOpen, nextTask, makeKeyBar, ACCIDENTAL_LEVELS, parseNoteProgress } from '@/lib/noteLevels'
+import { INTERVAL_LEVELS, NOTE_LEVELS, makeChoice, type NoteTask, checkNote, countsForStars, makeMelody, noteStars, readMarks, readingPasses, currentNoteLevel, isNoteLevelOpen, nextTask, makeKeyBar, ACCIDENTAL_LEVELS, parseNoteProgress } from '@/lib/noteLevels'
 import { octaveShift } from '@/lib/staff'
 
 const level = (id: number) => NOTE_LEVELS.find((item) => item.id === id)!
@@ -195,5 +198,49 @@ describe('«Полутоны и знаки»', () => {
     expect(isNoteLevelOpen(2, { 1: { correct: 20 } }, ACCIDENTAL_LEVELS)).toBe(true)
     expect(isNoteLevelOpen(6, { 5: { correct: 10 } }, ACCIDENTAL_LEVELS)).toBe(false)
     expect(currentNoteLevel({ 1: { correct: 20 } }, ACCIDENTAL_LEVELS)).toBe(2)
+  })
+})
+
+describe('«Интервалы»', () => {
+  const at = (id: number) => INTERVAL_LEVELS.find((item) => item.id === id)!
+  const mixed = (seed: number) => {
+    let state = seed * 2654435761
+    return () => {
+      state = (state + 0x6d2b79f5) | 0
+      let x = Math.imul(state ^ (state >>> 15), 1 | state)
+      x = (x + Math.imul(x ^ (x >>> 7), 61 | x)) ^ x
+      return ((x ^ (x >>> 14)) >>> 0) / 4294967296
+    }
+  }
+
+  it('builds every interval of a level from a key, landing on C4-C5', () => {
+    for (const level of INTERVAL_LEVELS.filter((item) => item.show === 'step')) {
+      const tasks = Array.from({ length: 200 }, (_, seed) => nextTask(level, null, mixed(seed)))
+      expect(tasks.every((task) => task.key >= 60 && task.key <= 72)).toBe(true)
+      expect(tasks.every((task) => Math.abs(task.key - task.step!.from) === interval(task.step!.interval as IntervalId).semitones)).toBe(true)
+      expect(new Set(tasks.map((task) => task.step!.interval))).toEqual(new Set(level.intervals))
+    }
+  })
+
+  it('offers the answer once among other sizes, and writes it with the right letters', () => {
+    for (const id of [4, 5, 6]) {
+      for (let seed = 0; seed < 100; seed++) {
+        const choice = makeChoice(at(id), null, mixed(seed))
+        expect(choice.options).toContain(choice.answer)
+        expect(choice.options).toHaveLength(at(id).options!)
+        expect(new Set(choice.options.map((option) => interval(option).semitones)).size).toBe(choice.options.length)
+        expect(intervalBetween(choice.low, choice.high)?.id).toBe(choice.answer)
+        expect(keyOf(choice.high)).toBeLessThanOrEqual(72)
+      }
+    }
+  })
+
+  it('never asks the same interval twice in a row', () => {
+    let previous: IntervalId | null = null
+    for (let seed = 0; seed < 50; seed++) {
+      const choice = makeChoice(at(5), previous, mixed(seed))
+      expect(choice.answer).not.toBe(previous)
+      previous = choice.answer
+    }
   })
 })

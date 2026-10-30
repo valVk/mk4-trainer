@@ -33,7 +33,7 @@ export interface PieceVoice {
 export type PieceKind = 'melody' | 'rhythm'
 
 /** Sections of «Теория» that end their level groups with pieces. */
-export type TheorySection = 'rhythm' | 'notes' | 'accidentals'
+export type TheorySection = 'rhythm' | 'notes' | 'accidentals' | 'intervals'
 
 export interface Piece {
   /** Stable id; the version goes up whenever the notes change, so saved copies are refreshed. */

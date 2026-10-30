@@ -6,15 +6,18 @@ import { isGraze, type Press } from './ladder'
 import type { Rhythm, RhythmScore } from './rhythm'
 import { RHYTHM_LEVELS, makeTask, passes } from './rhythmLevels'
 import { STAR_THRESHOLDS, starsFor } from './levels'
-import { barKeys, keyOf, spelled, stepTarget, type BarNote, type KeySignature, type Letter, type Spelled, type StepTask } from './accidentals'
+import { barKeys, keyOf, spelled, stepTarget, type Alter, type BarNote, type KeySignature, type Letter, type Spelled, type StepTask } from './accidentals'
+import { interval, type IntervalId } from './intervals'
 import { pitch } from './staff'
 import { pitchClass } from './theory'
 
 export type NoteIntroId = 'keyboard' | 'names' | 'treble' | 'bass' | 'grand' | 'ledgers' | 'timed' | 'reading'
   | 'semitone' | 'sharpFlat' | 'natural' | 'double' | 'enharmonic' | 'keySignature'
+  | 'perfect' | 'thirds' | 'sixths' | 'byEar' | 'harmonic' | 'byNotes'
 
 /** How the task is shown: the note's name only, a step from a key on the keyboard, or the note on a staff. */
-export type NoteShow = 'name' | 'step' | 'bar' | 'treble' | 'bass' | 'grand'
+/** `ear` and `read`: an interval to name with buttons, heard or read from the staff (plan step 21). */
+export type NoteShow = 'name' | 'step' | 'bar' | 'ear' | 'read' | 'treble' | 'bass' | 'grand'
 
 export interface NoteLevel {
   id: number
@@ -31,10 +34,16 @@ export interface NoteLevel {
   stars?: readonly [number, number, number]
   /** Notes written with accidentals (plan step 20): the staff shows the writing, the key is where it sounds. */
   written?: readonly Spelled[]
+  /** Intervals of the level (plan step 21): built from a key (`step`), heard (`ear`) or read (`read`). */
+  intervals?: readonly IntervalId[]
+  /** Heard together, not one after the other. */
+  harmonic?: boolean
+  /** Buttons to choose from on `ear` and `read` levels, the right one among them. */
+  options?: number
 }
 
 /** Sections of «Теория» built from note-finding levels. */
-export type NoteSectionId = 'notes' | 'accidentals'
+export type NoteSectionId = 'notes' | 'accidentals' | 'intervals'
 
 const keys = (names: string) => names.trim().split(/\s+/).map(pitch)
 const writtenAs = (names: string) => names.trim().split(/\s+/).map(spelled)
@@ -104,7 +113,19 @@ export function makeKeyBar(random: () => number = Math.random): KeyBar {
   return { key, notes, keys: barKeys(key, notes) }
 }
 
-export const NOTE_SECTIONS: Readonly<Record<NoteSectionId, readonly NoteLevel[]>> = { notes: NOTE_LEVELS, accidentals: ACCIDENTAL_LEVELS }
+// «Теория» → «Интервалы» (plan step 21): build from a key, then hear, then read. Built intervals land on C4-C5, inside
+// the 25 keys of the MK4 out of the box; heard ones are played from C4-G4.
+const WHITE_KEYS = keys('C4 D4 E4 F4 G4 A4 B4 C5')
+export const INTERVAL_LEVELS: readonly NoteLevel[] = [
+  { id: 1, show: 'step', keys: WHITE_KEYS, anyOctave: false, introduces: ['perfect'], intervals: ['P4', 'P5', 'P8'] },
+  { id: 2, show: 'step', keys: WHITE_KEYS, anyOctave: false, introduces: ['thirds'], intervals: ['m2', 'M2', 'm3', 'M3'] },
+  { id: 3, show: 'step', keys: WHITE_KEYS, anyOctave: false, introduces: ['sixths'], intervals: ['m6', 'M6', 'm7', 'M7', 'A4'] },
+  { id: 4, show: 'ear', keys: WHITE_KEYS, anyOctave: false, introduces: ['byEar'], intervals: ['M2', 'M3', 'P5', 'P8'], options: 3 },
+  { id: 5, show: 'ear', keys: WHITE_KEYS, anyOctave: false, introduces: ['harmonic'], intervals: ['m2', 'M2', 'm3', 'M3', 'P4', 'P5', 'm6', 'M6', 'P8'], options: 4, harmonic: true },
+  { id: 6, show: 'read', keys: WHITE_KEYS, anyOctave: false, introduces: ['byNotes'], intervals: ['m2', 'M2', 'm3', 'M3', 'P4', 'A4', 'P5', 'm6', 'M6', 'm7', 'M7', 'P8'], options: 4 },
+]
+
+export const NOTE_SECTIONS: Readonly<Record<NoteSectionId, readonly NoteLevel[]>> = { notes: NOTE_LEVELS, accidentals: ACCIDENTAL_LEVELS, intervals: INTERVAL_LEVELS }
 
 /** The rhythm level the melodies of «Читаем с ритмом» take their values from: halves, quarters, eighths, rests. */
 const READING_RHYTHM = RHYTHM_LEVELS.find((item) => item.id === 4)!
@@ -194,17 +215,59 @@ export interface NoteTask {
   step?: StepTask
   /** A bar under a key signature: its keys are played one after the other; `key` is the first. */
   bar?: KeyBar
+  /** An interval to name with buttons: the two notes (lower first), heard or read, and the choices. */
+  choice?: IntervalChoice
+}
+
+export interface IntervalChoice {
+  answer: IntervalId
+  options: IntervalId[]
+  low: Spelled
+  high: Spelled
+  harmonic: boolean
+}
+
+/**
+ * An interval to name: the answer (never the one before), a few other choices, and two notes for it — the lower on
+ * a white key of C4-G4, the upper written with the letter the interval needs (a third above D is F♯, not G♭).
+ */
+export function makeChoice(level: NoteLevel, previous: IntervalId | null, random: () => number = Math.random): IntervalChoice {
+  const pick = <T>(items: readonly T[]): T => items[Math.floor(random() * items.length)]!
+  const pool = level.intervals ?? []
+  const answer = pick(pool.filter((id) => id !== previous))
+  const others = pool.filter((id) => id !== answer && interval(id).semitones !== interval(answer).semitones)
+  const chosen: IntervalId[] = []
+  while (chosen.length < Math.min((level.options ?? 3) - 1, others.length)) {
+    const next = pick(others.filter((id) => !chosen.includes(id)))
+    chosen.push(next)
+  }
+  const options = [answer, ...chosen].sort((a, b) => interval(a).semitones - interval(b).semitones)
+  const { steps, semitones } = interval(answer)
+  // Lower notes whose upper note needs at most one sharp or flat and stays inside C4-C5.
+  const lows = (['C4', 'D4', 'E4', 'F4', 'G4'] as const).map(spelled).filter((low) => {
+    const letter = (low.letter + steps - 1) % 7
+    const octave = low.octave + Math.floor((low.letter + steps - 1) / 7)
+    const alter = keyOf(low) + semitones - keyOf({ letter: letter as Letter, octave, alter: 0 })
+    return Math.abs(alter) <= 1 && keyOf(low) + semitones <= 72
+  })
+  const low = pick(lows)
+  const letter = ((low.letter + steps - 1) % 7) as Letter
+  const octave = low.octave + Math.floor((low.letter + steps - 1) / 7)
+  const high: Spelled = { letter, octave, alter: (keyOf(low) + semitones - keyOf({ letter, octave, alter: 0 })) as Alter }
+  return { answer, options, low, high, harmonic: Boolean(level.harmonic) }
 }
 
 /** The next task: never the same as the one before, so the child sees that the task changed. */
 export function nextTask(level: NoteLevel, previous: NoteTask | null, random: () => number = Math.random): NoteTask {
   const pick = <T>(items: readonly T[]): T => items[Math.floor(random() * items.length)] ?? items[0]!
+  if (level.show === 'ear' || level.show === 'read') return { key: 0, choice: makeChoice(level, previous?.choice?.answer ?? null, random) }
   if (level.show === 'step') {
-    // A half or a whole step up or down from a key, landing between the lowest key and the C above the highest
-    // (C4-C5): inside the 25 keys both of the MK4 out of the box and of the screen.
+    // A step or an interval up or down from a key, landing between the lowest key and the highest (C4-C5 at most):
+    // inside the 25 keys both of the MK4 out of the box and of the screen.
     const low = Math.min(...level.keys)
-    const high = Math.max(...level.keys) + 1
-    const steps = level.keys.filter((from) => from !== previous?.step?.from).flatMap((from) => ([1, 2] as const).flatMap((semitones) => [true, false].map((up): StepTask => ({ from, semitones, up }))))
+    const high = Math.max(...level.keys) + (level.intervals ? 0 : 1)
+    const sizes: { semitones: number, interval?: IntervalId }[] = level.intervals ? level.intervals.map((id) => ({ semitones: interval(id).semitones, interval: id })) : [{ semitones: 1 }, { semitones: 2 }]
+    const steps = level.keys.filter((from) => from !== previous?.step?.from).flatMap((from) => sizes.flatMap((size) => [true, false].map((up): StepTask => ({ from, up, ...size }))))
     const step = pick(steps.filter((item) => stepTarget(item) >= low && stepTarget(item) <= high))
     return { key: stepTarget(step), step }
   }
