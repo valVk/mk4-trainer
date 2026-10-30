@@ -11,7 +11,7 @@ import { OCTAVE_NAMES, PIANO_HIGH, PIANO_LOW, octaveOf } from '@/lib/staff'
 const props = defineProps<{
   /** First key of the MK4 window. */
   windowStart: number
-  /** Where the window usually is (the first and second octave): drawn as a calm outline, to see how far it moved. */
+  /** Where the window usually is (C3-C5, the small and first octaves, as the MK4 starts): a calm outline, to see how far it moved. */
   homeStart?: number
 }>()
 
