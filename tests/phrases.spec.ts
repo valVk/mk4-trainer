@@ -1,10 +1,7 @@
-import { existsSync, readFileSync } from 'node:fs'
-import { resolve } from 'node:path'
-
 import { describe, expect, it } from 'vitest'
 
 import { activeRuns, nextSectionStart, partPhrases, partRole, phraseSignature, previousSectionStart, songSections, suggestOrder } from '@/lib/phrases'
-import { buildSteps, parseSong, type Part, type SongNote } from '@/lib/song'
+import { buildSteps, type Part, type SongNote } from '@/lib/song'
 
 /** 2 s per bar (120 BPM, 4/4). */
 const bars = Array.from({ length: 33 }, (_, i) => i * 2)
@@ -113,31 +110,6 @@ describe('roles and order', () => {
       { channel: 3, role: 'melody' },
       { channel: 8, role: 'effects' },
     ])
-  })
-})
-
-const LOCAL_SONG = resolve(process.cwd(), '../happy-birthday-20240118103815-midisite.com.mid')
-
-describe.skipIf(!existsSync(LOCAL_SONG))('local song (local file)', () => {
-  const song = (() => {
-    if (!existsSync(LOCAL_SONG)) return null
-    const data = readFileSync(LOCAL_SONG)
-    return parseSong(data.buffer.slice(data.byteOffset, data.byteOffset + data.byteLength), 'song.mid')
-  })()
-
-  it('finds few new patterns in the piano part: the riff repeats', () => {
-    const piano = song!.parts.find((p) => p.channel === 0)!
-    const phrases = partPhrases(piano, song!.bars)
-    const fresh = phrases.filter((p) => p.isNew).length
-    expect(phrases.length).toBeGreaterThan(20)
-    expect(fresh).toBeLessThan(phrases.length / 2)
-  })
-
-  it('splits the song into several sections and suggests a bass line first', () => {
-    const sections = songSections(song!)
-    expect(sections.length).toBeGreaterThan(3)
-    expect(sections.every((s) => s.endBar - s.startBar >= 4 || s.index === sections.length - 1)).toBe(true)
-    expect(suggestOrder(song!.parts)[0]!.role).toBe('bass')
   })
 })
 

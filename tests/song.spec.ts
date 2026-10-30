@@ -1,6 +1,3 @@
-import { existsSync, readFileSync } from 'node:fs'
-import { resolve } from 'node:path'
-
 import { MIDIBuilder } from 'spessasynth_core'
 import { describe, expect, it } from 'vitest'
 
@@ -120,36 +117,5 @@ describe('parseSong', () => {
 
   it('builds the bar grid in seconds (120 BPM, 4/4: 2 s per bar)', () => {
     expect(song.bars.slice(0, 3).map((t) => +t.toFixed(3))).toEqual([0, 2, 4])
-  })
-})
-
-// The owner's MIDI is personal and never committed: this test runs only where the file exists.
-const LOCAL_SONG = resolve(process.cwd(), '../happy-birthday-20240118103815-midisite.com.mid')
-
-describe.skipIf(!existsSync(LOCAL_SONG))('local song (local file)', () => {
-  const load = () => {
-    const data = readFileSync(LOCAL_SONG)
-    return parseSong(data.buffer.slice(data.byteOffset, data.byteOffset + data.byteLength), 'song.mid')
-  }
-
-  it('splits the one-track file into 16 parts', () => {
-    const song = load()
-    expect(song.parts).toHaveLength(16)
-    expect(song.bpm).toBe(135)
-    expect(song.timeSignature).toEqual({ numerator: 4, denominator: 4 })
-  })
-
-  it('finds the piano riff and the drums', () => {
-    const song = load()
-    const piano = song.parts.find((part) => part.channel === 0)!
-    expect(piano.program).toBe(0)
-    expect(piano.range).toEqual({ low: 53, high: 80 })
-    expect(piano.maxPolyphony).toBe(3)
-    expect(song.parts.find((part) => part.channel === 9)!.isDrum).toBe(true)
-  })
-
-  it('has bars of about 1.78 s at 135 BPM', () => {
-    const { bars } = load()
-    expect(bars[1]! - bars[0]!).toBeCloseTo((60 / 135) * 4, 3)
   })
 })

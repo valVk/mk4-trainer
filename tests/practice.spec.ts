@@ -17,7 +17,7 @@ describe('chooseWindow', () => {
   })
 
   it('keeps as many keys as possible when the notes span more than 25 keys', () => {
-    // A riff spans F3-G#5 (53-80, 28 keys): one window holds all but the edge.
+    // A riff spanning F3-G#5 (53-80, 28 keys): one window holds all but the edge.
     const riff = [53, 56, 60, 65, 68, 72, 75, 77, 80, 80, 77]
     const start = chooseWindow(36, riff)
     const inside = riff.filter((key) => key >= start && key < start + 25).length

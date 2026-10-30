@@ -1,10 +1,7 @@
-import { existsSync, readFileSync } from 'node:fs'
-import { resolve } from 'node:path'
-
 import { describe, expect, it } from 'vitest'
 
 import { barAt, clefFor, drumPlace, markPlayed, needsGrandStaff, slotsPerBar, spellBar, spellSpan, writePart, writePlayed, type WrittenBar } from '@/lib/notation'
-import { parseSong, type SongNote } from '@/lib/song'
+import type { SongNote } from '@/lib/song'
 
 const FOUR = { numerator: 4, denominator: 4 }
 // 4/4 at 120: two seconds a bar, a quarter is 0.5 s, a sixteenth 0.125 s.
@@ -89,33 +86,6 @@ describe('clef and accidentals', () => {
   })
 })
 
-const LOCAL_SONG = resolve(process.cwd(), '../happy-birthday-20240118103815-midisite.com.mid')
-
-describe.skipIf(!existsSync(LOCAL_SONG))('local song (local file)', () => {
-  const buffer = readFileSync(LOCAL_SONG)
-  const song = parseSong(buffer.buffer.slice(buffer.byteOffset, buffer.byteOffset + buffer.byteLength), 'song.mid')
-  const piano = song.parts.find((part) => part.channel === 0)!
-
-  it('writes the piano part as whole bars of known values', () => {
-    const written = writePart(piano.notes, song.bars, song.timeSignature)
-    expect(written.length).toBe(song.bars.length - 1)
-    expect(written.every((bar) => barSlots(bar, slotsPerBar(song.timeSignature)) === slotsPerBar(song.timeSignature))).toBe(true)
-  })
-
-  it('keeps every note of the piano part', () => {
-    const written = writePart(piano.notes, song.bars, song.timeSignature)
-    const writtenKeys = new Set(written.flatMap((bar) => bar.notes.flatMap((item) => item.keys)))
-    expect(new Set(piano.notes.map((item) => item.key))).toEqual(writtenKeys)
-  })
-
-  it('writes the piano in the treble clef and the bass in the bass clef', () => {
-    expect(needsGrandStaff(piano.notes)).toBe(false)
-    expect(clefFor(piano.notes)).toBe('treble')
-    const bass = song.parts.find((part) => part.channel === 6)!
-    expect(clefFor(bass.notes)).toBe('bass')
-  })
-})
-
 describe('what the child played', () => {
   // The part: C quarter, D quarter, rest half.
   const part = writePart([note(60, 0, 0.5), note(62, 0.5, 0.5)], bars, FOUR)
@@ -157,5 +127,16 @@ describe('drums on the percussion staff', () => {
     expect(drumPlace(42)).toBe('g/5/x2')
     expect(drumPlace(49)).toBe('a/5/x2')
     expect([drumPlace(50), drumPlace(45), drumPlace(41)]).toEqual(['e/5', 'd/5', 'a/4'])
+  })
+})
+
+describe('a whole part', () => {
+  it('writes every bar full, with every key kept', () => {
+    // Uneven notes across three bars: a tie over the bar line, a dotted value, a rest, a short chord.
+    const notes = [note(60, 0, 0.75), note(64, 0.75, 1.6), note(67, 2.5, 0.25), note(65, 3, 1.5), note(60, 4.5, 0.125), note(64, 4.5, 0.125)]
+    const written = writePart(notes, bars, FOUR)
+    expect(written).toHaveLength(bars.length - 1)
+    expect(written.every((bar) => barSlots(bar, slotsPerBar(FOUR)) === slotsPerBar(FOUR))).toBe(true)
+    expect(new Set(written.flatMap((bar) => bar.notes.flatMap((item) => item.keys)))).toEqual(new Set(notes.map((item) => item.key)))
   })
 })
