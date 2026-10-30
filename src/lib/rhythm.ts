@@ -18,6 +18,8 @@ export interface RhythmNote {
   tie?: boolean
   /** Tuplet as «actual in the time of normal»: a triplet is 3 in the time of 2, a duplet 2 in the time of 3. */
   tuplet?: { actual: number, normal: number }
+  /** Accent (>): played louder than the notes around it. */
+  accent?: boolean
 }
 
 export interface Rhythm {
@@ -142,6 +144,8 @@ export interface RhythmPress {
   time: number
   /** Release time; null when the key is still held or for pads (they have no length). */
   end: number | null
+  /** How hard the key or pad was hit (1-127); null when the input has no velocity (screen, computer keys). */
+  velocity?: number | null
 }
 
 export type TimingVerdict = 'onTime' | 'early' | 'late' | 'missed'
@@ -156,6 +160,8 @@ export interface SoundResult {
   hold: HoldVerdict | null
   /** How long the key was held, seconds. */
   held: number | null
+  /** Velocity of the press that played the note, when the input has one. */
+  velocity: number | null
 }
 
 export interface RhythmScore {
@@ -205,13 +211,13 @@ export function scoreRhythm(all: readonly Sound[], presses: readonly RhythmPress
       if (offset < -before || offset > after) return
       if (pick === -1 || Math.abs(offset) < Math.abs(presses[pick]!.time - note.start)) pick = p
     })
-    if (pick === -1) return { index: note.index, verdict: 'missed', offset: null, hold: null, held: null }
+    if (pick === -1) return { index: note.index, verdict: 'missed', offset: null, hold: null, held: null, velocity: null }
     used.add(pick)
     const press = presses[pick]!
     const offset = press.time - note.start
     const verdict: TimingVerdict = Math.abs(offset) <= window ? 'onTime' : offset < 0 ? 'early' : 'late'
     const held = press.end === null ? null : press.end - press.time
-    return { index: note.index, verdict, offset, hold: checkHold && held !== null ? holdVerdict(held, note.length) : null, held }
+    return { index: note.index, verdict, offset, hold: checkHold && held !== null ? holdVerdict(held, note.length) : null, held, velocity: press.velocity ?? null }
   })
   const first = notes[0]?.start ?? 0
   // Warming up before the first note does not count as extra.
@@ -239,4 +245,42 @@ export function splitBars(rhythm: Rhythm): { index: number, note: RhythmNote }[]
     room -= noteQuarters(note)
   })
   return bars
+}
+
+/**
+ * A rhythm cell: a short figure as music books teach it (a dotted quarter with its eighth, a
+ * syncopation, a triplet), to be placed whole. `starts` are the bar positions (quarter notes) where it
+ * reads naturally; any beat when missing.
+ */
+export interface RhythmCell {
+  notes: RhythmNote[]
+  starts?: number[]
+}
+
+export function cellQuarters(cell: RhythmCell): number {
+  return totalQuarters(cell)
+}
+
+/**
+ * One bar made of cells, always exactly one bar. A cell goes only where it reads naturally and fits;
+ * when nothing fits, the rest of the bar is filled with the longest plain or dotted value.
+ */
+export function generateCellBar(meter: TimeSignature, cells: readonly RhythmCell[], random: () => number = Math.random): RhythmNote[] {
+  const bar = barQuarters(meter)
+  // Beats of the meter in quarter notes: a quarter in x/4, a dotted quarter in 6/8.
+  const beat = meter.denominator === 8 ? 1.5 : 1
+  const notes: RhythmNote[] = []
+  let position = 0
+  while (position < bar - EPS) {
+    const fits = cells.filter((cell) => {
+      const length = cellQuarters(cell)
+      if (position + length > bar + EPS) return false
+      return cell.starts ? cell.starts.some((start) => Math.abs(start - position) < EPS) : isMultiple(position, beat)
+    })
+    const cell = fits[Math.floor(random() * fits.length)]
+    const piece = cell ? cell.notes.map((note) => ({ ...note })) : [filler(bar - position)]
+    notes.push(...piece)
+    position += totalQuarters({ notes: piece })
+  }
+  return notes
 }

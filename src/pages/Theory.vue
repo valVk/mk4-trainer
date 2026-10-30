@@ -13,7 +13,7 @@ import { useRhythmPlayer } from '@/composables/useRhythmPlayer'
 import { useSynth } from '@/composables/useSynth'
 import { useWakeLock } from '@/composables/useWakeLock'
 import { tapInputOf, type TapInput } from '@/lib/metronome'
-import { barQuarters, noteQuarters, scoreRhythm, sounds, type Duration, type Rhythm, type RhythmPress, type RhythmScore, type TimingVerdict } from '@/lib/rhythm'
+import { quarterSeconds, scoreRhythm, sounds, type Rhythm, type RhythmPress, type RhythmScore, type TimingVerdict } from '@/lib/rhythm'
 import {
   RHYTHM_LEVELS,
   RHYTHM_TEMPOS,
@@ -24,7 +24,8 @@ import {
   passes,
   rhythmLevel,
   starsOf,
-  tempoOf,
+  introRhythm,
+  levelTempo,
   type RhythmHint,
 } from '@/lib/rhythmLevels'
 
@@ -53,7 +54,7 @@ watch(() => progress.ready.value, () => {
 })
 const info = computed(() => rhythmLevel(level.value))
 const levelPasses = computed(() => passed.value[level.value]?.passes ?? 0)
-const bpm = computed(() => tempoOf(levelPasses.value))
+const bpm = computed(() => levelTempo(info.value, levelPasses.value))
 const stars = computed(() => starsOf(levelPasses.value))
 
 /** Tasks alternate: read the notes, then hear and repeat (the notes show after the attempt). */
@@ -142,7 +143,7 @@ async function finishAttempt() {
   const checkHold = presses.length > 0 && presses.every((press) => press.end !== null)
   const result = scoreRhythm(sounds(task.value, bpm.value), presses, checkHold)
   score.value = result
-  hints.value = hintsFor(result)
+  hints.value = hintsFor(result, task.value)
   attemptPassed.value = passes(result)
   phase.value = 'result'
   if (!attemptPassed.value || taskCounted) return
@@ -157,9 +158,10 @@ function pressTime(input: TapInput) {
   return player.heardPosition() - metronome.latency.value[input] / 1000
 }
 
-function press(input: TapInput) {
+/** A tap; `velocity` only from the MK4 (the screen and computer keys always send the same). */
+function press(input: TapInput, velocity: number | null = null) {
   if (phase.value !== 'playing') return
-  presses.push({ time: pressTime(input), end: null, input })
+  presses.push({ time: pressTime(input), end: null, input, velocity: input === 'midi' ? velocity : null })
   // Keys sound through the synth when it is on; everything else gets a soft tick, so a tap is heard.
   if (input !== 'midi' && input !== 'keys') metronome.noteAt(metronome.audioContext().currentTime, 0.12)
   else if (useSynth().status.value !== 'ready') metronome.noteAt(metronome.audioContext().currentTime, 0.12)
@@ -177,10 +179,10 @@ function release(input: TapInput) {
 }
 
 onEvent((event) => {
-  if (event.type === 'noteOn') press(tapInputOf(event))
+  if (event.type === 'noteOn') press(tapInputOf(event), event.velocity)
   else if (event.type === 'noteOff') release(event.source === 'midi' ? 'midi' : 'keys')
   // Pad 1 is the drum; pads have no length, so a pad press never gets a release and is not checked for hold.
-  else if (event.type === 'pad' && event.pad === 1) press(tapInputOf(event))
+  else if (event.type === 'pad' && event.pad === 1) press(tapInputOf(event), event.velocity)
 })
 
 usePadActions({
@@ -207,8 +209,10 @@ const countIn = ref<number | null>(null)
 let countFrame = 0
 function followCountIn() {
   const position = player.heardPosition()
-  const beat = 60 / bpm.value
-  const beats = info.value.meter.numerator
+  // One beat of the meter: a quarter in x/4, an eighth in 6/8 (the metronome counts eighths there).
+  const { meter } = task.value
+  const beat = quarterSeconds(bpm.value, meter) * (4 / meter.denominator)
+  const beats = meter.numerator
   countIn.value = phase.value === 'playing' && position < 0 ? beats - Math.floor(-position / beat) : null
   countFrame = requestAnimationFrame(followCountIn)
 }
@@ -216,11 +220,8 @@ countFrame = requestAnimationFrame(followCountIn)
 onBeforeUnmount(() => cancelAnimationFrame(countFrame))
 
 /** The intro: one bar of each new value, to look at and listen to. */
-const introRhythms = computed(() => info.value.introduces.map((duration: Duration) => {
-  const count = Math.round(barQuarters(info.value.meter) / noteQuarters({ duration }))
-  return { duration, rhythm: { meter: info.value.meter, notes: Array.from({ length: count }, () => ({ duration })) } satisfies Rhythm }
-}))
-const levelTabs = computed(() => RHYTHM_LEVELS.map((item) => ({ id: item.id, open: isOpen(item.id, passed.value), stars: starsOf(passed.value[item.id]?.passes ?? 0), soon: item.soon })))
+const introRhythms = computed(() => info.value.introduces.map((id) => ({ id, rhythm: introRhythm(id) })))
+const levelTabs = computed(() => RHYTHM_LEVELS.map((item) => ({ id: item.id, open: isOpen(item.id, passed.value), stars: starsOf(passed.value[item.id]?.passes ?? 0) })))
 </script>
 
 <template>
@@ -261,9 +262,9 @@ const levelTabs = computed(() => RHYTHM_LEVELS.map((item) => ({ id: item.id, ope
       <template v-if="phase === 'intro'">
         <p class="prompt text-highlighted">{{ t('theory.intro.title') }}</p>
         <div class="intro">
-          <div v-for="item in introRhythms" :key="item.duration" class="intro__item">
+          <div v-for="item in introRhythms" :key="item.id" class="intro__item">
             <RhythmStaff :rhythm="item.rhythm" />
-            <p class="text-toned">{{ t(`theory.intro.${item.duration}`) }}</p>
+            <p class="text-toned">{{ t(`theory.intro.${item.id}`) }}</p>
             <UButton icon="i-lucide-ear" color="neutral" variant="soft" size="md" class="self-start" :label="t('theory.listen')" @click="player.play(item.rhythm, bpm)" />
           </div>
         </div>

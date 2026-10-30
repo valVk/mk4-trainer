@@ -2,34 +2,92 @@
 // when an attempt passes, and what to tell the child about it. Pure code, no Vue, no UI text
 // (hints are ids for the i18n file).
 
-import { generateBar, type Duration, type Rhythm, type RhythmNote, type RhythmScore } from './rhythm'
+import { barQuarters, generateBar, generateCellBar, noteQuarters, type Duration, type Rhythm, type RhythmCell, type RhythmNote, type RhythmScore } from './rhythm'
 import type { TimeSignature } from './song'
+
+/** What a level shows first: a new value or a new idea, with a small example to look at and hear. */
+export type IntroId = Duration | 'dottedHalf' | 'dottedQuarter' | 'tie' | 'meters' | 'accent' | 'pickup' | 'syncopation' | 'triplet' | 'sixEight'
 
 export interface RhythmLevel {
   id: number
-  /** Values the bars are made of. */
+  /** Plain values for the free generator. */
   durations: Duration[]
-  /** The value this level brings in; shown first, before the tasks. */
-  introduces: Duration[]
+  /** Ready-made figures instead of plain values, where free values would not read well. */
+  cells?: RhythmCell[]
   rests: boolean
-  meter: TimeSignature
-  /** Not built yet: needs dots, ties, syncopation or triplets in the generator. */
-  soon?: boolean
+  /** Meters to choose from for each task. */
+  meters: TimeSignature[]
+  /** Sometimes tie the last note of the first bar to the first note of the second. */
+  ties?: boolean
+  /** Sometimes start with a pickup quarter before the first bar. */
+  pickup?: boolean
+  /** The strong beat of each bar is accented; on the MK4 it should be played louder. */
+  accents?: boolean
+  /** 6/8 is counted in eighths: the tempo steps are twice as fast in beats per minute. */
+  tempoScale?: number
+  introduces: IntroId[]
 }
 
 const FOUR: TimeSignature = { numerator: 4, denominator: 4 }
+const THREE: TimeSignature = { numerator: 3, denominator: 4 }
+const TWO: TimeSignature = { numerator: 2, denominator: 4 }
+const SIX_EIGHT: TimeSignature = { numerator: 6, denominator: 8 }
+
+const q = (extra: Partial<RhythmNote> = {}): RhythmNote => ({ duration: 'quarter', ...extra })
+const e = (extra: Partial<RhythmNote> = {}): RhythmNote => ({ duration: 'eighth', ...extra })
+const h = (extra: Partial<RhythmNote> = {}): RhythmNote => ({ duration: 'half', ...extra })
+const TRIPLET = { actual: 3, normal: 2 }
+
+/** Cells of 4/4 every level from Р6 on may use. */
+const BASIC_CELLS: RhythmCell[] = [{ notes: [q()] }, { notes: [e(), e()] }, { notes: [h()], starts: [0, 2] }]
 
 export const RHYTHM_LEVELS: readonly RhythmLevel[] = [
-  { id: 1, durations: ['whole', 'half'], introduces: ['whole', 'half'], rests: false, meter: FOUR },
-  { id: 2, durations: ['whole', 'half', 'quarter'], introduces: ['quarter'], rests: false, meter: FOUR },
-  { id: 3, durations: ['whole', 'half', 'quarter'], introduces: [], rests: true, meter: FOUR },
-  { id: 4, durations: ['half', 'quarter', 'eighth'], introduces: ['eighth'], rests: true, meter: FOUR },
-  { id: 5, durations: ['quarter', 'eighth', 'sixteenth'], introduces: ['sixteenth'], rests: false, meter: FOUR },
-  { id: 6, durations: ['half', 'quarter', 'eighth'], introduces: [], rests: true, meter: FOUR, soon: true },
-  { id: 7, durations: ['half', 'quarter', 'eighth'], introduces: [], rests: true, meter: { numerator: 3, denominator: 4 }, soon: true },
-  { id: 8, durations: ['quarter', 'eighth'], introduces: [], rests: true, meter: FOUR, soon: true },
-  { id: 9, durations: ['quarter', 'eighth'], introduces: [], rests: false, meter: FOUR, soon: true },
-  { id: 10, durations: ['quarter', 'eighth'], introduces: [], rests: false, meter: { numerator: 6, denominator: 8 }, soon: true },
+  { id: 1, durations: ['whole', 'half'], introduces: ['whole', 'half'], rests: false, meters: [FOUR] },
+  { id: 2, durations: ['whole', 'half', 'quarter'], introduces: ['quarter'], rests: false, meters: [FOUR] },
+  { id: 3, durations: ['whole', 'half', 'quarter'], introduces: [], rests: true, meters: [FOUR] },
+  { id: 4, durations: ['half', 'quarter', 'eighth'], introduces: ['eighth'], rests: true, meters: [FOUR] },
+  { id: 5, durations: ['quarter', 'eighth', 'sixteenth'], introduces: ['sixteenth'], rests: false, meters: [FOUR] },
+  {
+    id: 6,
+    durations: ['half', 'quarter', 'eighth'],
+    cells: [...BASIC_CELLS, { notes: [h({ dots: 1 }), q()], starts: [0] }, { notes: [q({ dots: 1 }), e()], starts: [0, 2] }],
+    ties: true,
+    introduces: ['dottedHalf', 'dottedQuarter', 'tie'],
+    rests: false,
+    meters: [FOUR],
+  },
+  { id: 7, durations: ['half', 'quarter', 'eighth'], introduces: ['meters', 'accent'], rests: true, meters: [TWO, THREE], accents: true },
+  {
+    id: 8,
+    durations: ['quarter', 'eighth'],
+    cells: [...BASIC_CELLS, { notes: [e(), q(), e()], starts: [0, 2] }, { notes: [q(), h(), q()], starts: [0] }],
+    pickup: true,
+    introduces: ['pickup', 'syncopation'],
+    rests: false,
+    meters: [FOUR],
+  },
+  {
+    id: 9,
+    durations: ['quarter', 'eighth'],
+    cells: [...BASIC_CELLS, { notes: [e({ tuplet: TRIPLET }), e({ tuplet: TRIPLET }), e({ tuplet: TRIPLET })] }],
+    introduces: ['triplet'],
+    rests: false,
+    meters: [FOUR],
+  },
+  {
+    id: 10,
+    durations: ['quarter', 'eighth'],
+    cells: [
+      { notes: [q({ dots: 1 })], starts: [0, 1.5] },
+      { notes: [q(), e()], starts: [0, 1.5] },
+      { notes: [e(), e(), e()], starts: [0, 1.5] },
+      { notes: [h({ dots: 1 })], starts: [0] },
+    ],
+    tempoScale: 2,
+    introduces: ['sixEight'],
+    rests: false,
+    meters: [SIX_EIGHT],
+  },
 ]
 
 export function rhythmLevel(id: number): RhythmLevel {
@@ -68,10 +126,9 @@ export function tempoOf(passes: number): number {
   return RHYTHM_TEMPOS[Math.min(RHYTHM_TEMPOS.length - 1, Math.floor(passes / PASSES_PER_TEMPO))]!
 }
 
-/** Levels open one by one: the next after all stars in the one before; levels not built yet stay closed. */
+/** Levels open one by one: the next after all stars in the one before. */
 export function isOpen(id: number, progress: Readonly<Record<number, RhythmLevelProgress>>): boolean {
-  const level = rhythmLevel(id)
-  if (level.soon) return false
+  if (!RHYTHM_LEVELS.some((level) => level.id === id)) return false
   if (id === 1) return true
   return starsOf(progress[id - 1]?.passes ?? 0) >= RHYTHM_TEMPOS.length
 }
@@ -82,11 +139,49 @@ export function currentLevel(progress: Readonly<Record<number, RhythmLevelProgre
   return (open.find((level) => starsOf(progress[level.id]?.passes ?? 0) < RHYTHM_TEMPOS.length) ?? open[open.length - 1] ?? RHYTHM_LEVELS[0]!).id
 }
 
-/** A task: TASK_BARS bars of the level's values. */
+/** The tempo of a level at this many passed rhythms (6/8 counts eighths, so its steps are doubled). */
+export function levelTempo(level: RhythmLevel, passes: number): number {
+  return tempoOf(passes) * (level.tempoScale ?? 1)
+}
+
+/**
+ * A task: TASK_BARS bars of the level's values or cells, in one of its meters. Ties, a pickup and
+ * accents come in only on the levels that teach them.
+ */
 export function makeTask(level: RhythmLevel, random: () => number = Math.random): Rhythm {
-  const notes: RhythmNote[] = []
-  for (let bar = 0; bar < TASK_BARS; bar++) notes.push(...generateBar(level.meter, { durations: level.durations, rests: level.rests, random }))
-  return { meter: level.meter, notes }
+  const meter = level.meters[Math.floor(random() * level.meters.length)]!
+  const bars: RhythmNote[][] = []
+  for (let bar = 0; bar < TASK_BARS; bar++) {
+    bars.push(level.cells ? generateCellBar(meter, level.cells, random) : generateBar(meter, { durations: level.durations, rests: level.rests, random }))
+  }
+  if (level.accents) {
+    for (const bar of bars) if (bar[0] && !bar[0].rest) bar[0] = { ...bar[0], accent: true }
+  }
+  if (level.ties && random() < 0.5) {
+    const last = bars[0]![bars[0]!.length - 1]!
+    if (!last.rest && !bars[1]![0]!.rest) bars[0]![bars[0]!.length - 1] = { ...last, tie: true }
+  }
+  const pickup = level.pickup && random() < 0.5
+  return { meter, notes: [...(pickup ? [q()] : []), ...bars.flat()], pickup: pickup ? 1 : 0 }
+}
+
+/** The example shown for a new value or idea. */
+export function introRhythm(id: IntroId): Rhythm {
+  switch (id) {
+    case 'dottedHalf': return { meter: FOUR, notes: [h({ dots: 1 }), q()] }
+    case 'dottedQuarter': return { meter: FOUR, notes: [q({ dots: 1 }), e(), q({ dots: 1 }), e()] }
+    case 'tie': return { meter: FOUR, notes: [h(), h({ tie: true }), h(), h()] }
+    case 'meters': return { meter: THREE, notes: [q({ accent: true }), q(), q(), q({ accent: true }), q(), q()] }
+    case 'accent': return { meter: FOUR, notes: [q({ accent: true }), q(), q(), q(), q({ accent: true }), q(), q(), q()] }
+    case 'pickup': return { meter: FOUR, pickup: 1, notes: [q(), h(), h(), h({ dots: 1 }), q()] }
+    case 'syncopation': return { meter: FOUR, notes: [e(), q(), e(), e(), q(), e()] }
+    case 'triplet': return { meter: FOUR, notes: [...Array.from({ length: 3 }, () => e({ tuplet: TRIPLET })), q(), ...Array.from({ length: 3 }, () => e({ tuplet: TRIPLET })), q()] }
+    case 'sixEight': return { meter: SIX_EIGHT, notes: [e(), e(), e(), q({ dots: 1 })] }
+    default: {
+      const count = Math.round(barQuarters(FOUR) / noteQuarters({ duration: id }))
+      return { meter: FOUR, notes: Array.from({ length: count }, () => ({ duration: id })) }
+    }
+  }
 }
 
 /** An attempt passes with no note missed, at most one extra tap, and three quarters of the notes on time. */
@@ -95,13 +190,30 @@ export function passes(score: RhythmScore): boolean {
   return missed === 0 && score.extra <= 1 && score.onTime >= Math.ceil(score.total * 0.75)
 }
 
-export type RhythmHint = 'rushing' | 'dragging' | 'missed' | 'extra' | 'holdLonger' | 'letGo' | 'great'
+export type RhythmHint = 'rushing' | 'dragging' | 'missed' | 'extra' | 'holdLonger' | 'letGo' | 'accent' | 'great'
 
 /**
  * One or two things to tell the child, most important first, in the order a teacher would:
  * a missed note, taps in a rest, then hurrying or dragging, then how long notes are held.
  */
-export function hintsFor(score: RhythmScore): RhythmHint[] {
+/** An accented note should be this much louder (velocity) than the others, on average. */
+const ACCENT_MARGIN = 12
+
+/** Whether accents were played louder; null when there is nothing to tell (no accents, or no velocity). */
+export function accentsPlayed(score: RhythmScore, rhythm: Rhythm): boolean | null {
+  const accented: number[] = []
+  const others: number[] = []
+  for (const result of score.results) {
+    if (result.velocity === null) continue
+    if (rhythm.notes[result.index]?.accent) accented.push(result.velocity)
+    else others.push(result.velocity)
+  }
+  if (accented.length === 0 || others.length === 0) return null
+  const mean = (values: number[]) => values.reduce((sum, value) => sum + value, 0) / values.length
+  return mean(accented) >= mean(others) + ACCENT_MARGIN
+}
+
+export function hintsFor(score: RhythmScore, rhythm?: Rhythm): RhythmHint[] {
   const hints: RhythmHint[] = []
   const results = score.results
   if (results.some((result) => result.verdict === 'missed')) hints.push('missed')
@@ -112,5 +224,6 @@ export function hintsFor(score: RhythmScore): RhythmHint[] {
   else if (late > early) hints.push('dragging')
   if (results.some((result) => result.hold === 'short')) hints.push('holdLonger')
   else if (results.some((result) => result.hold === 'long')) hints.push('letGo')
+  if (rhythm && accentsPlayed(score, rhythm) === false) hints.push('accent')
   return hints.length ? hints.slice(0, 2) : ['great']
 }

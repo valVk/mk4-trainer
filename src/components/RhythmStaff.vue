@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { onBeforeUnmount, onMounted, ref, watch } from 'vue'
-import { Beam, Dot, Formatter, Stave, StaveNote, StaveTie, Tuplet, Voice } from 'vexflow/bravura'
+import { Articulation, Beam, Dot, Formatter, ModifierPosition, Stave, StaveNote, StaveTie, Tuplet, Voice } from 'vexflow/bravura'
 
 import { STAFF_COLOURS, staffContext } from '@/components/staffDrawing'
 
@@ -69,6 +69,8 @@ function draw() {
         type: note.rest ? 'r' : undefined,
       })
       if (note.dots) Dot.buildAndAttach([staveNote], { all: true })
+      // Accent (>) always above the staff, where children look for it.
+      if (note.accent && !note.rest) staveNote.addModifier(new Articulation('a>').setPosition(ModifierPosition.ABOVE), 0)
       const colour = colourOf(index)
       if (colour) staveNote.setStyle({ fillStyle: colour, strokeStyle: colour })
       staveNotes.set(index, staveNote)
