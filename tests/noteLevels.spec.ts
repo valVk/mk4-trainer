@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 
 import { KEYBOARD_KEYS } from '@/lib/keyboard'
-import { NOTE_LEVELS, checkNote, countsForStars, makeMelody, noteStars, readMarks, readingPasses, currentNoteLevel, isNoteLevelOpen, nextNote, parseNoteProgress } from '@/lib/noteLevels'
+import { NOTE_LEVELS, type NoteTask, checkNote, countsForStars, makeMelody, noteStars, readMarks, readingPasses, currentNoteLevel, isNoteLevelOpen, nextTask, ACCIDENTAL_LEVELS, parseNoteProgress } from '@/lib/noteLevels'
 import { octaveShift } from '@/lib/staff'
 
 const level = (id: number) => NOTE_LEVELS.find((item) => item.id === id)!
@@ -26,10 +26,10 @@ describe('note levels', () => {
 
   it('never asks for the same note twice in a row', () => {
     const first = level(3)
-    let previous: number | null = null
+    let previous: NoteTask | null = null
     for (let i = 0; i < 50; i++) {
-      const next = nextNote(first, previous, () => (i * 0.37) % 1)
-      expect(next).not.toBe(previous)
+      const next: NoteTask = nextTask(first, previous, () => (i * 0.37) % 1)
+      expect(next.key).not.toBe(previous?.key)
       previous = next
     }
   })
@@ -146,5 +146,44 @@ describe('reading melodies in rhythm', () => {
   it('gives stars for 3, 6 and 9 melodies', () => {
     expect([2, 3, 6, 9].map((correct) => noteStars({ 9: { correct } }, 9))).toEqual([0, 1, 2, 3])
     expect(noteStars({ 3: { correct: 5 } }, 3)).toBe(1)
+  })
+})
+
+describe('«Полутоны и знаки»', () => {
+  const accidental = (id: number) => ACCIDENTAL_LEVELS.find((item) => item.id === id)!
+  // Mulberry32: well mixed from the very first number, whatever the seed.
+  const random = (seed: number) => {
+    let state = seed * 2654435761
+    return () => {
+      state = (state + 0x6d2b79f5) | 0
+      let x = Math.imul(state ^ (state >>> 15), 1 | state)
+      x = (x + Math.imul(x ^ (x >>> 7), 61 | x)) ^ x
+      return ((x ^ (x >>> 14)) >>> 0) / 4294967296
+    }
+  }
+
+  it('asks for a half or whole step that lands on C4-C5, both ways, both sizes', () => {
+    const tasks = Array.from({ length: 200 }, (_, seed) => nextTask(accidental(1), null, random(seed)))
+    expect(tasks.every((task) => task.key >= 60 && task.key <= 72)).toBe(true)
+    expect(tasks.every((task) => task.key === task.step!.from + (task.step!.up ? task.step!.semitones : -task.step!.semitones))).toBe(true)
+    expect(new Set(tasks.map((task) => `${task.step!.semitones}${task.step!.up}`)).size).toBe(4)
+  })
+
+  it('writes the notes with signs, and each sounds on its key', () => {
+    const task = nextTask(accidental(3), null, () => 0.3)
+    expect(task.written).toBeDefined()
+    expect(accidental(3).keys).toContain(task.key)
+    // F double sharp is G, B double flat is A.
+    expect(accidental(3).keys).toEqual(expect.arrayContaining([67, 69]))
+  })
+
+  it('stays inside the 25 keys of the MK4 out of the box (C3-C5)', () => {
+    expect(ACCIDENTAL_LEVELS.flatMap((item) => item.keys).every((key) => octaveShift(key, MK4_START) === 0)).toBe(true)
+  })
+
+  it('opens and counts on its own levels', () => {
+    expect(isNoteLevelOpen(2, { 1: { correct: 20 } }, ACCIDENTAL_LEVELS)).toBe(true)
+    expect(isNoteLevelOpen(5, { 4: { correct: 20 } }, ACCIDENTAL_LEVELS)).toBe(false)
+    expect(currentNoteLevel({ 1: { correct: 20 } }, ACCIDENTAL_LEVELS)).toBe(2)
   })
 })

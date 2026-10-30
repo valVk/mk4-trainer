@@ -2,6 +2,7 @@
 import { computed, onBeforeUnmount, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 
+import ChordDiagram from '@/components/ChordDiagram.vue'
 import NoteStaff, { type StaffNote } from '@/components/NoteStaff.vue'
 import OctaveMap from '@/components/OctaveMap.vue'
 import NoteReading from '@/pages/theory/NoteReading.vue'
@@ -19,14 +20,18 @@ import { useTheoryPieces } from '@/composables/useTheoryPieces'
 import { useWakeLock } from '@/composables/useWakeLock'
 import { KEYBOARD_KEYS } from '@/lib/keyboard'
 import { STAR_THRESHOLDS } from '@/lib/levels'
-import { NOTE_LEVELS, checkNote, countsForStars, currentNoteLevel, isNoteLevelOpen, nextNote, noteStars, type NoteIntroId } from '@/lib/noteLevels'
+import { keyOf, spelled, type Spelled } from '@/lib/accidentals'
+import { NOTE_SECTIONS, checkNote, countsForStars, currentNoteLevel, isNoteLevelOpen, nextTask, noteStars, type NoteIntroId, type NoteSectionId, type NoteTask } from '@/lib/noteLevels'
 import { KEY_HINT_DELAY_MS } from '@/lib/practice'
 import { octaveShift, pitch, windowOctaves } from '@/lib/staff'
 import { pitchClass } from '@/lib/theory'
 
-// «Теория» → «Ноты» (plan step 19): a note on the staff (or its name on the first level) → press the key.
-// Praise at once; «not this one» only after the fingers have settled; the key lights up only after the
-// child has had time to look for it. Exact-octave levels say which octave button the MK4 needs.
+// «Теория» → «Ноты» (plan step 19) and «Полутоны и знаки» (step 20): a note on the staff (or its name, or a
+// step from a key) → press the key. Praise at once; «not this one» only after the fingers have settled; the
+// key lights up only after the child has had time to look for it. Exact-octave levels say which octave button
+// the MK4 needs. Each section brings its own levels, progress and intros; the loop is the same.
+
+const props = withDefaults(defineProps<{ section?: NoteSectionId }>(), { section: 'notes' })
 
 /** Pause after a right note before the next one, once the keys are up. */
 const NEXT_DELAY_MS = 700
@@ -34,30 +39,35 @@ const NEXT_DELAY_MS = 700
 const { t } = useI18n()
 useWakeLock()
 const progress = useProgress()
-const { heldNotes, pressNote, releaseNote, shiftOctave } = useNoteSource()
+const { heldNotes, pressNote, releaseNote } = useNoteSource()
 const { playCue } = useSynth()
 const { localName } = useNoteNames()
 const windowStart = useKeyboardWindow()
-const { piecesAfter } = useTheoryPieces('notes')
+const { piecesAfter } = useTheoryPieces(props.section)
+const levels = NOTE_SECTIONS[props.section]
 const short = useShortScreen()
 
-const passed = computed(() => progress.noteProgress.value)
-const level = ref(currentNoteLevel(passed.value))
-const info = computed(() => NOTE_LEVELS.find((item) => item.id === level.value)!)
-const stars = computed(() => noteStars(passed.value, level.value))
-const levelTabs = computed(() => NOTE_LEVELS.map((item) => ({ id: item.id, open: isNoteLevelOpen(item.id, passed.value), stars: noteStars(passed.value, item.id) })))
+const passed = computed(() => progress.noteProgress.value[props.section])
+const level = ref(currentNoteLevel(passed.value, levels))
+const info = computed(() => levels.find((item) => item.id === level.value)!)
+const stars = computed(() => noteStars(passed.value, level.value, levels))
+const levelTabs = computed(() => levels.map((item) => ({ id: item.id, open: isNoteLevelOpen(item.id, passed.value, levels), stars: noteStars(passed.value, item.id, levels) })))
+/** «Н3», «П2»: the level's short name in this section. */
+const tabName = (id: number) => t(`theory.sectionTab.${props.section}`, { n: id })
+const isOpenHere = (id: number) => isNoteLevelOpen(id, passed.value, levels)
 
 // Progress comes from the database a moment after the page opens: start on the child's level then.
 let settledLevel = false
 watch(passed, (value) => {
   if (settledLevel) return
   settledLevel = true
-  level.value = currentNoteLevel(value)
+  level.value = currentNoteLevel(value, levels)
 })
 
 const introSeen = ref(new Set<number>())
 const phase = ref<'intro' | 'task'>('task')
-const target = ref(nextNote(info.value, null))
+const task = ref<NoteTask>(nextTask(info.value, null))
+const target = computed(() => task.value.key)
 const solved = ref(false)
 const levelDone = ref(false)
 const keyHint = ref(false)
@@ -69,10 +79,10 @@ let shownAt = performance.now()
 let hintTimer: ReturnType<typeof setTimeout> | undefined
 let nextTimer: ReturnType<typeof setTimeout> | undefined
 
-function newTask(previous: number | null) {
+function newTask(previous: NoteTask | null) {
   clearTimeout(nextTimer)
   clearTimeout(hintTimer)
-  target.value = nextNote(info.value, previous)
+  task.value = nextTask(info.value, previous)
   solved.value = false
   slowAnswer.value = false
   keyHint.value = false
@@ -87,7 +97,7 @@ function newTask(previous: number | null) {
 }
 
 function openLevel(id: number) {
-  if (!isNoteLevelOpen(id, passed.value)) return
+  if (!isOpenHere(id)) return
   level.value = id
 }
 
@@ -128,9 +138,9 @@ watch(check, (status) => {
     playCue('success')
     return
   }
-  const before = noteStars(passed.value, level.value)
-  void progress.addNoteCorrect(level.value).then(() => {
-    const done = before < STAR_THRESHOLDS.length && noteStars(passed.value, level.value) === STAR_THRESHOLDS.length
+  const before = noteStars(passed.value, level.value, levels)
+  void progress.addNoteCorrect(level.value, props.section).then(() => {
+    const done = before < STAR_THRESHOLDS.length && noteStars(passed.value, level.value, levels) === STAR_THRESHOLDS.length
     levelDone.value = done
     playCue(done ? 'levelDone' : 'success')
   })
@@ -140,7 +150,7 @@ watch(check, (status) => {
 watch([solved, () => heldNotes.value.length, levelDone], ([isSolved, count, done]) => {
   if (!isSolved || count > 0 || done) return
   clearTimeout(nextTimer)
-  nextTimer = setTimeout(() => newTask(target.value), NEXT_DELAY_MS)
+  nextTimer = setTimeout(() => newTask(task.value), NEXT_DELAY_MS)
 })
 
 onBeforeUnmount(() => {
@@ -162,9 +172,9 @@ const reading = computed(() => info.value.readingBpm !== undefined && phase.valu
 
 /** One more melody read right: it counts like a note found, and may finish the level. */
 async function onMelodyPassed() {
-  const before = noteStars(passed.value, level.value)
-  await progress.addNoteCorrect(level.value)
-  const done = before < STAR_THRESHOLDS.length && noteStars(passed.value, level.value) === STAR_THRESHOLDS.length
+  const before = noteStars(passed.value, level.value, levels)
+  await progress.addNoteCorrect(level.value, props.section)
+  const done = before < STAR_THRESHOLDS.length && noteStars(passed.value, level.value, levels) === STAR_THRESHOLDS.length
   levelDone.value = done
   playCue(done ? 'levelDone' : 'success')
 }
@@ -173,14 +183,36 @@ async function onMelodyPassed() {
 const keysShown = computed(() => phase.value === 'task' || info.value.introduces.includes('ledgers'))
 
 const name = (key: number) => localName(pitchClass(key))
-const staffNotes = computed<StaffNote[]>(() => [{ key: target.value, label: solved.value ? name(target.value) : undefined, colour: solved.value ? STAFF_COLOURS.onTime : undefined }])
+/** «фа-диез», «си-дубль-бемоль»: the name of a note as written. */
+const LETTER_KEYS = [60, 62, 64, 65, 67, 69, 71]
+const writtenName = (note: Spelled) => {
+  const base = name(LETTER_KEYS[note.letter]!)
+  return note.alter === 0 ? base : t(`theory.accidentals.alter.${note.alter}`, { name: base })
+}
+const staffNotes = computed<StaffNote[]>(() => [{
+  key: target.value,
+  written: task.value.written,
+  label: solved.value ? (task.value.written ? writtenName(task.value.written) : name(target.value)) : undefined,
+  colour: solved.value ? STAFF_COLOURS.onTime : undefined,
+}])
+/** A step task in words: «на полутон выше», «на тон ниже». */
+const stepWords = computed(() => {
+  const step = task.value.step
+  return step ? t(`theory.accidentals.step.${step.semitones === 1 ? 'semitone' : 'tone'}${step.up ? 'Up' : 'Down'}`) : ''
+})
 const underHands = computed(() => windowOctaves(windowStart.value).map((item) => t(`theory.octaves.${item}`)).join(t('theory.notes.and')))
 
 const NAMES = 'C4 D4 E4 F4 G4 A4 B4'.split(' ').map(pitch)
 const LETTERS = ['C', 'D', 'E', 'F', 'G', 'A', 'B']
 /** Landmarks shown in the intros, with their names. */
 const landmarks = (names: string): StaffNote[] => names.split(' ').map(pitch).map((key) => ({ key, label: name(key) }))
+/** Written notes for the intros of «Полутоны и знаки», each with its name. */
+const writtenNotes = (names: string): StaffNote[] => names.split(' ').map(spelled).map((note) => ({ key: keyOf(note), written: note, label: writtenName(note) }))
 const INTRO_NOTES: Partial<Record<NoteIntroId, { show: 'treble' | 'bass' | 'grand', notes: () => StaffNote[] }>> = {
+  sharpFlat: { show: 'treble', notes: () => writtenNotes('F4 F#4 B4 Bb4') },
+  natural: { show: 'treble', notes: () => writtenNotes('F#4 Fn4') },
+  double: { show: 'treble', notes: () => writtenNotes('Fx4 Bbb4') },
+  enharmonic: { show: 'treble', notes: () => writtenNotes('C#4 Db4 E#4 F4') },
   treble: { show: 'treble', notes: () => landmarks('C4 G4 G5') },
   bass: { show: 'bass', notes: () => landmarks('F2 F3 C4') },
   grand: { show: 'grand', notes: () => landmarks('C3 F3 C4 G4 C5') },
@@ -201,7 +233,7 @@ const INTRO_NOTES: Partial<Record<NoteIntroId, { show: 'treble' | 'bass' | 'gran
           :disabled="!tab.open"
           @click="openLevel(tab.id)"
         >
-          <span>{{ t('theory.notes.levelTab', { n: tab.id }) }}</span>
+          <span>{{ tabName(tab.id) }}</span>
           <UIcon v-if="!tab.open" name="i-lucide-lock" class="size-3" />
         </button>
         <!-- The piece after this group of levels, open with the level's last star (as in «Ритм»). -->
@@ -209,7 +241,7 @@ const INTRO_NOTES: Partial<Record<NoteIntroId, { show: 'treble' | 'bass' | 'gran
           <RouterLink v-if="piece.to && tab.stars === 3" :to="piece.to" class="level level--piece" :aria-label="t('theory.playPiece', { name: piece.title })">
             <UIcon name="i-lucide-music" class="size-4" />
           </RouterLink>
-          <span v-else class="level level--piece level--closed" role="img" :aria-label="t('theory.notes.pieceLocked', { name: piece.title, n: tab.id })">
+          <span v-else class="level level--piece level--closed" role="img" :aria-label="t('theory.notes.pieceLocked', { name: piece.title, tab: tabName(tab.id) })">
             <UIcon name="i-lucide-music" class="size-3.5" />
             <UIcon name="i-lucide-lock" class="size-3" />
           </span>
@@ -217,7 +249,11 @@ const INTRO_NOTES: Partial<Record<NoteIntroId, { show: 'treble' | 'bass' | 'gran
       </template>
     </div>
     <span class="stars" :aria-label="t('train.stars', { n: stars })">{{ '★'.repeat(stars) }}<span class="stars__off">{{ '★'.repeat(3 - stars) }}</span></span>
-    <!-- «Читаем с ритмом» puts its play and listen buttons here. -->
+    <!-- Where the keys are, in the row. The octave moves with the MK4's Octave buttons or Z and X (owner's choice). -->
+    <span v-if="keysShown && !reading" class="hands">
+      <span class="hands__label text-toned">{{ t('theory.notes.underHands', { octaves: underHands }) }}</span>
+    </span>
+    <!-- «Читаем с ритмом» puts its play and listen buttons here, after the octave buttons: the main action last. -->
     <span id="notes-actions" class="row-actions" />
   </div>
 
@@ -227,7 +263,7 @@ const INTRO_NOTES: Partial<Record<NoteIntroId, { show: 'treble' | 'bass' | 'gran
       <template v-for="piece in piecesAfter(level)" :key="piece.id">
         <UButton v-if="piece.to" :to="piece.to" icon="i-lucide-music" size="xl" color="success" :label="t('theory.playPiece', { name: piece.title })" />
       </template>
-      <UButton v-if="isNoteLevelOpen(level + 1, passed)" icon="i-lucide-arrow-right" size="xl" :label="t('theory.nextLevel')" @click="openLevel(level + 1)" />
+      <UButton v-if="isOpenHere(level + 1)" icon="i-lucide-arrow-right" size="xl" :label="t('theory.nextLevel')" @click="openLevel(level + 1)" />
     </template>
   </NoteReading>
   <template v-else>
@@ -236,7 +272,12 @@ const INTRO_NOTES: Partial<Record<NoteIntroId, { show: 'treble' | 'bass' | 'gran
         <p class="prompt text-highlighted">{{ t('theory.intro.title') }}</p>
         <div class="intro">
           <div v-for="id in info.introduces" :key="id" class="intro__item" :class="{ 'intro__item--wide': id === 'keyboard' || id === 'names' || id === 'ledgers' }">
-            <PianoMap v-if="id === 'keyboard'" :window-start="windowStart" class="intro__map" />
+            <!-- Half step and whole step, counted in keys. -->
+          <div v-if="id === 'semitone'" class="steps-pictures">
+            <ChordDiagram :lit="[64, 65]" :from="60" :to="72" />
+            <ChordDiagram :lit="[60, 62]" :from="60" :to="72" />
+          </div>
+          <PianoMap v-else-if="id === 'keyboard'" :window-start="windowStart" class="intro__map" />
             <!-- Live: press Octave + or − and keys, and watch the band and the notes move. -->
             <OctaveMap v-else-if="id === 'ledgers'" :window-start="windowStart" :held="heldNotes" :scale="short ? 0.7 : 0.9" />
             <div v-else-if="id === 'names'" class="names">
@@ -253,10 +294,15 @@ const INTRO_NOTES: Partial<Record<NoteIntroId, { show: 'treble' | 'bass' | 'gran
 
       <template v-else>
         <p class="prompt text-highlighted">
-          {{ info.show === 'name' ? t('theory.notes.pressName') : info.anyOctave ? t('theory.notes.findAny') : t('theory.notes.findExact') }}
+          {{ info.show === 'name' ? t('theory.notes.pressName') : info.show === 'step' ? t('theory.accidentals.stepPrompt') : info.anyOctave ? t('theory.notes.findAny') : t('theory.notes.findExact') }}
         </p>
         <p v-if="info.show === 'name'" class="big-name" :class="{ 'big-name--right': solved }">{{ name(target) }}</p>
-        <NoteStaff v-else :notes="staffNotes" :show="info.show" :scale="info.show === 'grand' ? 1.7 : 2.2" fit class="task__staff" />
+        <!-- A step: from the key with the dot, by a half or a whole step; the answer's name shows once it is found. -->
+        <p v-else-if="info.show === 'step' && task.step" class="big-name big-name--step" :class="{ 'big-name--right': solved }">
+          {{ t('theory.accidentals.stepFrom', { name: name(task.step.from), step: stepWords }) }}
+          <span v-if="solved" class="big-name__answer">→ {{ name(target) }}</span>
+        </p>
+        <NoteStaff v-else-if="info.show !== 'step'" :notes="staffNotes" :show="info.show" :scale="info.show === 'grand' ? 1.7 : 2.2" fit class="task__staff" />
         <!-- Calm pills over the card, never pushing the layout. -->
         <!-- Time for a star: a calm bar that empties, no countdown numbers and nothing red. -->
         <span v-if="info.timed && !solved" :key="taskNumber" class="timer" :style="{ animationDuration: `${info.timed}ms` }" aria-hidden="true" />
@@ -269,11 +315,11 @@ const INTRO_NOTES: Partial<Record<NoteIntroId, { show: 'treble' | 'bass' | 'gran
       </template>
 
       <div v-if="levelDone" class="result result--passed" role="status">
-        <p class="result__title">{{ t('theory.notes.levelDone', { n: level }) }}</p>
+        <p class="result__title">{{ t('theory.notes.levelDone', { tab: tabName(level) }) }}</p>
       </div>
     </section>
 
-    <div class="controls">
+    <div v-if="phase === 'intro' || levelDone" class="controls">
       <UButton v-if="phase === 'intro'" icon="i-lucide-check" size="xl" :label="t('theory.intro.ok')" @click="closeIntro" />
       <template v-else>
         <UButton v-if="levelDone" icon="i-lucide-rotate-ccw" color="neutral" variant="soft" size="xl" :label="t('theory.notes.stay')" @click="levelDone = false" />
@@ -282,13 +328,7 @@ const INTRO_NOTES: Partial<Record<NoteIntroId, { show: 'treble' | 'bass' | 'gran
             <UButton v-if="piece.to" :to="piece.to" icon="i-lucide-music" size="xl" color="success" :label="t('theory.playPiece', { name: piece.title })" />
           </template>
         </template>
-        <UButton v-if="levelDone && isNoteLevelOpen(level + 1, passed)" icon="i-lucide-arrow-right" size="xl" :label="t('theory.nextLevel')" @click="openLevel(level + 1)" />
-      </template>
-      <template v-if="keysShown">
-        <span class="hands text-toned">{{ t('theory.notes.underHands', { octaves: underHands }) }}</span>
-        <!-- The same as the Octave buttons of the MK4, for the keys on the screen. -->
-        <UButton icon="i-lucide-minus" color="neutral" variant="soft" size="lg" :aria-label="t('theory.notes.screenOctaveDown')" @click="shiftOctave(-1)" />
-        <UButton icon="i-lucide-plus" color="neutral" variant="soft" size="lg" :aria-label="t('theory.notes.screenOctaveUp')" @click="shiftOctave(1)" />
+        <UButton v-if="levelDone && isOpenHere(level + 1)" icon="i-lucide-arrow-right" size="xl" :label="t('theory.nextLevel')" @click="openLevel(level + 1)" />
       </template>
     </div>
 
@@ -299,6 +339,7 @@ const INTRO_NOTES: Partial<Record<NoteIntroId, { show: 'treble' | 'bass' | 'gran
       :start="windowStart"
       :held="heldNotes"
       :hint="phase === 'task' && keyHint && !solved && hintKey !== null ? [hintKey] : []"
+    :mark="phase === 'task' ? task.step?.from ?? null : null"
       @press="pressNote"
       @release="releaseNote"
     />
@@ -316,7 +357,8 @@ const INTRO_NOTES: Partial<Record<NoteIntroId, { show: 'treble' | 'bass' | 'gran
 }
 
 .intro__staff {
-  width: min(100%, 26rem);
+  /* The whole column: long names («фа-дубль-диез») need the room between the notes. */
+  width: 100%;
 }
 
 .intro__item--wide {
@@ -370,6 +412,21 @@ const INTRO_NOTES: Partial<Record<NoteIntroId, { show: 'treble' | 'bass' | 'gran
   transition: color 150ms ease;
 }
 
+.big-name--step {
+  font-size: clamp(2rem, 7vh, 3.5rem);
+  text-align: center;
+}
+
+.big-name__answer {
+  color: var(--color-pad-aqua);
+}
+
+.steps-pictures {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 1.5rem;
+}
+
 .big-name--right {
   color: var(--color-pad-aqua);
 }
@@ -416,8 +473,20 @@ const INTRO_NOTES: Partial<Record<NoteIntroId, { show: 'treble' | 'bass' | 'gran
 }
 
 .hands {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
   margin-left: auto;
+}
+
+.hands__label {
   font-weight: 600;
+  white-space: nowrap;
+}
+
+/* After the octave buttons the play and listen buttons follow; the push to the right is the group's. */
+.hands + .row-actions {
+  margin-left: 0;
 }
 
 .note-keys {

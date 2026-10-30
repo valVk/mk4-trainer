@@ -4,6 +4,7 @@ import { Accidental, Annotation, AnnotationVerticalJustify, Formatter, GhostNote
 
 import { paintNote, staffContext } from '@/components/staffDrawing'
 
+import { vexSpelling, type Spelled } from '@/lib/accidentals'
 import { spellBar } from '@/lib/notation'
 import { clefOf, type StaffClef } from '@/lib/staff'
 
@@ -12,6 +13,8 @@ import { clefOf, type StaffClef } from '@/lib/staff'
 
 export interface StaffNote {
   key: number
+  /** How the note is written (plan step 20): D♭ stays D♭ on the staff although it is the key of C♯. */
+  written?: Spelled
   /** Written under the note, e.g. «соль». */
   label?: string
   /** CSS colour: right and wrong answers. */
@@ -44,9 +47,9 @@ const LABEL_ROOM = 18
 
 /** A whole note; a single one sits in the middle of the staff. */
 function staveNote(item: StaffNote, clef: StaffClef, alone: boolean): StaveNote {
-  const [spelled] = spellBar([[item.key]])[0]!
-  const note = new StaveNote({ keys: [spelled!.key], duration: 'w', clef, alignCenter: alone })
-  if (spelled!.accidental) note.addModifier(new Accidental(spelled!.accidental), 0)
+  const spelled = item.written ? vexSpelling(item.written) : spellBar([[item.key]])[0]![0]!
+  const note = new StaveNote({ keys: [spelled.key], duration: 'w', clef, alignCenter: alone })
+  if (spelled.accidental) note.addModifier(new Accidental(spelled.accidental), 0)
   if (item.label) {
     note.addModifier(new Annotation(item.label).setVerticalJustification(AnnotationVerticalJustify.BOTTOM).setFont('sans-serif', 13, 'bold'), 0)
   }

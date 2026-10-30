@@ -11,11 +11,14 @@ const props = withDefaults(defineProps<{
   held?: readonly number[]
   /** Notes to suggest, drawn as an outline (for hints in training). */
   hint?: readonly number[]
+  /** A key to start from (a step task): a dot on it, not a hint. */
+  mark?: number | null
   showNames?: boolean
   showIntervals?: boolean
 }>(), {
   held: () => [],
   hint: () => [],
+  mark: null,
   showNames: false,
   showIntervals: false,
 })
@@ -121,6 +124,7 @@ onBeforeUnmount(() => {
           :style="{ width: `${whiteWidth}%` }"
           :data-note="key.note"
         >
+          <span v-if="key.note === mark" class="key__mark" aria-hidden="true" />
           <span v-if="showNames" class="key__name">
             {{ noteName(key.note) }}
             <span v-if="localName(key.note, true)" class="key__local">{{ localName(key.note, true) }}</span>
@@ -136,6 +140,7 @@ onBeforeUnmount(() => {
           :style="{ left: `${(key.whiteIndex - 0.32) * whiteWidth}%`, width: `${whiteWidth * 0.64}%` }"
           :data-note="key.note"
         >
+          <span v-if="key.note === mark" class="key__mark" aria-hidden="true" />
           <span v-if="showNames" class="key__name key__name--black">
             {{ noteName(key.note) }}
             <span v-if="localName(key.note, true)" class="key__local">{{ localName(key.note, true) }}</span>
@@ -233,6 +238,19 @@ onBeforeUnmount(() => {
 .key--black.key--hint:not(.key--held) {
   background: color-mix(in oklab, var(--hint) 70%, var(--key-black));
   box-shadow: 0 0 0 2px var(--hint) inset, 0 4px 0 var(--rubber-edge);
+}
+
+.key__mark {
+  position: absolute;
+  left: 50%;
+  top: 18%;
+  width: 0.875rem;
+  height: 0.875rem;
+  translate: -50% 0;
+  border-radius: 50%;
+  background: var(--lit);
+  box-shadow: 0 0 0 3px color-mix(in oklab, var(--lit) 30%, transparent);
+  pointer-events: none;
 }
 
 .key__name {

@@ -20,7 +20,7 @@ import { buildChord, chordSymbol, identifyChord, intervalsBetween, midiName, not
 
 const { t } = useI18n()
 useWakeLock()
-const { heldNotes, pressNote, releaseNote, shiftOctave } = useNoteSource()
+const { heldNotes, pressNote, releaseNote } = useNoteSource()
 const { status: soundStatus, playChord } = useSynth()
 const { localName, withLocal } = useNoteNames()
 // Lifting a chord key by key would read it as an interval, then a note: the name stays
@@ -120,11 +120,8 @@ const rangeLabel = computed(() => `${midiName(start.value)} – ${midiName(start
         @release="releaseNote"
       />
       <div class="controls">
-        <div class="flex items-center gap-2">
-          <UButton icon="i-lucide-minus" color="neutral" variant="soft" size="xl" :aria-label="t('lab.octaveDown')" @click="shiftOctave(-1)" />
-          <span class="range text-highlighted">{{ rangeLabel }}</span>
-          <UButton icon="i-lucide-plus" color="neutral" variant="soft" size="xl" :aria-label="t('lab.octaveUp')" @click="shiftOctave(1)" />
-        </div>
+        <!-- The octave moves with the MK4's Octave buttons or Z and X; the range just says where the keys are. -->
+        <span class="range text-highlighted">{{ rangeLabel }}</span>
         <p class="text-muted text-sm">{{ t('lab.keysHint') }}</p>
       </div>
     </section>

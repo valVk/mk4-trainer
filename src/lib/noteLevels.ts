@@ -6,13 +6,15 @@ import { isGraze, type Press } from './ladder'
 import type { Rhythm, RhythmScore } from './rhythm'
 import { RHYTHM_LEVELS, makeTask, passes } from './rhythmLevels'
 import { STAR_THRESHOLDS, starsFor } from './levels'
+import { keyOf, spelled, stepTarget, type Spelled, type StepTask } from './accidentals'
 import { pitch } from './staff'
 import { pitchClass } from './theory'
 
 export type NoteIntroId = 'keyboard' | 'names' | 'treble' | 'bass' | 'grand' | 'ledgers' | 'timed' | 'reading'
+  | 'semitone' | 'sharpFlat' | 'natural' | 'double' | 'enharmonic'
 
-/** How the task is shown: the note's name only, or the note on a staff. */
-export type NoteShow = 'name' | 'treble' | 'bass' | 'grand'
+/** How the task is shown: the note's name only, a step from a key on the keyboard, or the note on a staff. */
+export type NoteShow = 'name' | 'step' | 'treble' | 'bass' | 'grand'
 
 export interface NoteLevel {
   id: number
@@ -27,9 +29,17 @@ export interface NoteLevel {
   readingBpm?: number
   /** Stars at this many right answers (melodies count fewer than single notes). */
   stars?: readonly [number, number, number]
+  /** Notes written with accidentals (plan step 20): the staff shows the writing, the key is where it sounds. */
+  written?: readonly Spelled[]
 }
 
+/** Sections of «Теория» built from note-finding levels. */
+export type NoteSectionId = 'notes' | 'accidentals'
+
 const keys = (names: string) => names.trim().split(/\s+/).map(pitch)
+const writtenAs = (names: string) => names.trim().split(/\s+/).map(spelled)
+/** A level of written notes: the keys are where they sound. */
+const writtenLevel = (level: Omit<NoteLevel, 'keys' | 'written'>, names: string): NoteLevel => ({ ...level, written: writtenAs(names), keys: writtenAs(names).map(keyOf) })
 
 export const NOTE_LEVELS: readonly NoteLevel[] = [
   { id: 1, show: 'name', keys: keys('C4 D4 E4 F4 G4 A4 B4'), anyOctave: true, introduces: ['keyboard', 'names'] },
@@ -48,6 +58,17 @@ export const NOTE_LEVELS: readonly NoteLevel[] = [
   // Read a short melody in rhythm (the rhythm of Р4), one hand on C4-G4 like the «Ода» that follows.
   { id: 9, show: 'treble', keys: keys('C4 D4 E4 F4 G4'), anyOctave: false, introduces: ['reading'], readingBpm: 60, stars: [3, 6, 9] },
 ]
+
+// «Теория» → «Полутоны и знаки» (plan step 20): steps on the keyboard, then sharps and flats, naturals and doubles,
+// then one key written two ways. All inside C4-C5, so the MK4 out of the box needs no octave press.
+export const ACCIDENTAL_LEVELS: readonly NoteLevel[] = [
+  { id: 1, show: 'step', keys: keys('C4 C#4 D4 D#4 E4 F4 F#4 G4 G#4 A4 A#4 B4'), anyOctave: false, introduces: ['semitone'] },
+  writtenLevel({ id: 2, show: 'treble', anyOctave: false, introduces: ['sharpFlat'] }, 'C#4 D#4 F#4 G#4 A#4 Db4 Eb4 Gb4 Ab4 Bb4'),
+  writtenLevel({ id: 3, show: 'treble', anyOctave: false, introduces: ['natural', 'double'] }, 'Fn4 Bn4 Fx4 Cx4 Gx4 Bbb4 Ebb4 Abb4'),
+  writtenLevel({ id: 4, show: 'treble', anyOctave: false, introduces: ['enharmonic'] }, 'E#4 B#4 Fb4 Cb5 C#4 Db4 F#4 Gb4 A#4 Bb4'),
+]
+
+export const NOTE_SECTIONS: Readonly<Record<NoteSectionId, readonly NoteLevel[]>> = { notes: NOTE_LEVELS, accidentals: ACCIDENTAL_LEVELS }
 
 /** The rhythm level the melodies of «Читаем с ритмом» take their values from: halves, quarters, eighths, rests. */
 const READING_RHYTHM = RHYTHM_LEVELS.find((item) => item.id === 4)!
@@ -102,38 +123,58 @@ export interface NoteLevelProgress {
   correct: number
 }
 
-export function parseNoteProgress(value: unknown): Record<number, NoteLevelProgress> {
+export function parseNoteProgress(value: unknown, levels: readonly NoteLevel[] = NOTE_LEVELS): Record<number, NoteLevelProgress> {
   if (typeof value !== 'object' || value === null || Array.isArray(value)) return {}
   const progress: Record<number, NoteLevelProgress> = {}
   for (const [key, item] of Object.entries(value)) {
     const correct = (item as Partial<NoteLevelProgress> | null)?.correct
-    if (NOTE_LEVELS.some((level) => level.id === Number(key)) && typeof correct === 'number' && correct >= 0) progress[Number(key)] = { correct: Math.floor(correct) }
+    if (levels.some((level) => level.id === Number(key)) && typeof correct === 'number' && correct >= 0) progress[Number(key)] = { correct: Math.floor(correct) }
   }
   return progress
 }
 
 /** Stars as in «Аккорды»: 5, 10 and 20 notes found; a level of melodies sets its own counts. */
-export function noteStars(progress: Readonly<Record<number, NoteLevelProgress>>, id: number): number {
+export function noteStars(progress: Readonly<Record<number, NoteLevelProgress>>, id: number, levels: readonly NoteLevel[] = NOTE_LEVELS): number {
   const correct = progress[id]?.correct ?? 0
-  const own = NOTE_LEVELS.find((level) => level.id === id)?.stars
+  const own = levels.find((level) => level.id === id)?.stars
   return own ? own.filter((threshold) => correct >= threshold).length : starsFor(correct)
 }
 
-export function isNoteLevelOpen(id: number, progress: Readonly<Record<number, NoteLevelProgress>>): boolean {
-  if (!NOTE_LEVELS.some((level) => level.id === id)) return false
-  return id === 1 || noteStars(progress, id - 1) >= STAR_THRESHOLDS.length
+export function isNoteLevelOpen(id: number, progress: Readonly<Record<number, NoteLevelProgress>>, levels: readonly NoteLevel[] = NOTE_LEVELS): boolean {
+  if (!levels.some((level) => level.id === id)) return false
+  return id === 1 || noteStars(progress, id - 1, levels) >= STAR_THRESHOLDS.length
 }
 
 /** Where to open: the first open level that still lacks stars, or the last open one. */
-export function currentNoteLevel(progress: Readonly<Record<number, NoteLevelProgress>>): number {
-  const open = NOTE_LEVELS.filter((level) => isNoteLevelOpen(level.id, progress))
-  return (open.find((level) => noteStars(progress, level.id) < STAR_THRESHOLDS.length) ?? open[open.length - 1] ?? NOTE_LEVELS[0]!).id
+export function currentNoteLevel(progress: Readonly<Record<number, NoteLevelProgress>>, levels: readonly NoteLevel[] = NOTE_LEVELS): number {
+  const open = levels.filter((level) => isNoteLevelOpen(level.id, progress, levels))
+  return (open.find((level) => noteStars(progress, level.id, levels) < STAR_THRESHOLDS.length) ?? open[open.length - 1] ?? levels[0]!).id
 }
 
-/** The next note to find: never the same as the one before, so the child sees that the task changed. */
-export function nextNote(level: NoteLevel, previous: number | null, random: () => number = Math.random): number {
-  const choices = level.keys.filter((key) => key !== previous)
-  return choices[Math.floor(random() * choices.length)] ?? level.keys[0]!
+/** One task: the key to press, and how it was asked (written with accidentals, or a step from a key). */
+export interface NoteTask {
+  key: number
+  written?: Spelled
+  step?: StepTask
+}
+
+/** The next task: never the same as the one before, so the child sees that the task changed. */
+export function nextTask(level: NoteLevel, previous: NoteTask | null, random: () => number = Math.random): NoteTask {
+  const pick = <T>(items: readonly T[]): T => items[Math.floor(random() * items.length)] ?? items[0]!
+  if (level.show === 'step') {
+    // A half or a whole step up or down from a key, landing between the lowest key and the C above the highest
+    // (C4-C5): inside the 25 keys both of the MK4 out of the box and of the screen.
+    const low = Math.min(...level.keys)
+    const high = Math.max(...level.keys) + 1
+    const steps = level.keys.filter((from) => from !== previous?.step?.from).flatMap((from) => ([1, 2] as const).flatMap((semitones) => [true, false].map((up): StepTask => ({ from, semitones, up }))))
+    const step = pick(steps.filter((item) => stepTarget(item) >= low && stepTarget(item) <= high))
+    return { key: stepTarget(step), step }
+  }
+  if (level.written) {
+    const index = level.written.indexOf(pick(level.written.filter((note) => note !== previous?.written)))
+    return { key: level.keys[index]!, written: level.written[index]! }
+  }
+  return { key: pick(level.keys.filter((key) => key !== previous?.key)) }
 }
 
 /**

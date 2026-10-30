@@ -21,7 +21,7 @@ const windowStart = useKeyboardWindow()
 const SECTIONS = ['rhythm', 'notes', 'accidentals', 'intervals', 'scales', 'functions', 'sevenths'] as const
 type Section = typeof SECTIONS[number]
 /** Sections built so far; the others wait for their plan step. */
-const READY: readonly Section[] = ['rhythm', 'notes']
+const READY: readonly Section[] = ['rhythm', 'notes', 'accidentals']
 
 const section = computed<Section>(() => {
   const asked = route.query.section
@@ -37,7 +37,7 @@ function openSection(next: Section) {
   <main class="page page--fill">
     <PageHeader :title="t('theory.title')" back="/train" :back-label="t('train.title')">
       <!-- In «Ритм» any key counts and the window moves as the child taps: the map opens there only on a tap. -->
-      <OctaveMapButton :window-start="windowStart" :show-on-shift="section === 'notes'" />
+      <OctaveMapButton :window-start="windowStart" :show-on-shift="section !== 'rhythm'" />
       <MidiStatus />
     </PageHeader>
 
@@ -59,7 +59,8 @@ function openSection(next: Section) {
     </div>
 
     <TheoryRhythm v-if="section === 'rhythm'" />
-    <TheoryNotes v-else />
+    <!-- One screen for every note-finding section; a new key, so switching sections starts it fresh. -->
+    <TheoryNotes v-else-if="section === 'notes' || section === 'accidentals'" :key="section" :section="section" />
   </main>
 </template>
 
