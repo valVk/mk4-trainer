@@ -213,13 +213,13 @@ function listenExample() {
             <USwitch v-model="withRests" size="lg" class="ml-2" :label="t('rhythm.rests')" />
           </div>
           <div class="flex flex-wrap gap-3">
+            <UButton icon="i-lucide-shuffle" color="neutral" variant="soft" size="lg" :label="t('rhythm.newExample')" @click="newExample" />
             <UButton
               :icon="rhythmPlayer.playing.value ? 'i-lucide-square' : 'i-lucide-ear'"
               size="lg"
               :label="rhythmPlayer.playing.value ? t('rhythm.stopExample') : t('rhythm.listenExample')"
               @click="listenExample"
             />
-            <UButton icon="i-lucide-shuffle" color="neutral" variant="soft" size="lg" :label="t('rhythm.newExample')" @click="newExample" />
           </div>
         </div>
         <div v-else class="flex flex-col gap-4">
@@ -260,8 +260,8 @@ function listenExample() {
               :title="t('rhythm.calibrationUnsteady', { spread: calibrationResult.spreadMs })"
             />
             <div class="flex flex-wrap gap-3">
-              <UButton icon="i-lucide-timer" size="lg" :label="t('rhythm.calibrate')" @click="metronome.startCalibration()" />
               <UButton v-if="anyLatency" color="neutral" variant="ghost" size="lg" :label="t('rhythm.resetLatency')" @click="metronome.resetLatency()" />
+              <UButton icon="i-lucide-timer" size="lg" :label="t('rhythm.calibrate')" @click="metronome.startCalibration()" />
             </div>
           </template>
         </div>

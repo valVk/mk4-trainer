@@ -96,8 +96,8 @@ const formatSize = (bytes: number) => `${Math.max(1, Math.round(bytes / 1024))} 
         <!-- A built-in piece would come back on the next start: nothing to delete. -->
         <span v-if="pieceOf(song.fileName)" />
         <div v-else-if="confirmDelete === song.id" class="flex items-center gap-2">
-          <UButton color="error" variant="soft" size="lg" :label="t('songs.deleteYes')" @click="remove(song.id)" />
           <UButton color="neutral" variant="ghost" size="lg" :label="t('pads.cancel')" @click="confirmDelete = null" />
+          <UButton color="error" variant="soft" size="lg" :label="t('songs.deleteYes')" @click="remove(song.id)" />
         </div>
         <UButton
           v-else

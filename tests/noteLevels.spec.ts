@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 
 import { KEYBOARD_KEYS } from '@/lib/keyboard'
-import { NOTE_LEVELS, checkNote, countsForStars, currentNoteLevel, isNoteLevelOpen, nextNote, parseNoteProgress } from '@/lib/noteLevels'
+import { NOTE_LEVELS, checkNote, countsForStars, makeMelody, noteStars, readMarks, readingPasses, currentNoteLevel, isNoteLevelOpen, nextNote, parseNoteProgress } from '@/lib/noteLevels'
 import { octaveShift } from '@/lib/staff'
 
 const level = (id: number) => NOTE_LEVELS.find((item) => item.id === id)!
@@ -74,9 +74,9 @@ describe('note progress', () => {
 })
 
 describe('the timed level', () => {
-  it('is the last one, and only quick answers earn stars there', () => {
-    const timed = NOTE_LEVELS[NOTE_LEVELS.length - 1]!
-    expect(NOTE_LEVELS.slice(0, -1).every((item) => item.timed === undefined)).toBe(true)
+  it('is the upper one, and only quick answers earn stars there', () => {
+    const timed = level(8)
+    expect(NOTE_LEVELS.filter((item) => item.timed !== undefined).map((item) => item.id)).toEqual([8])
     expect(countsForStars(timed, 2500)).toBe(true)
     expect(countsForStars(timed, timed.timed! + 1)).toBe(false)
     expect(countsForStars(level(3), 60_000)).toBe(true)
@@ -84,5 +84,67 @@ describe('the timed level', () => {
 
   it('stays inside the 25 keys at C3-C5', () => {
     expect(level(8).keys.every((key) => octaveShift(key, MK4_START) === 0)).toBe(true)
+  })
+})
+
+describe('reading melodies in rhythm', () => {
+  const reading = level(9)
+  const seeds = Array.from({ length: 40 }, (_, seed) => {
+    let state = seed + 1
+    return () => {
+      state = (state * 16807) % 2147483647
+      return state / 2147483647
+    }
+  })
+
+  it('writes tunes for one hand on C4-G4, by step or a third, ending on C', () => {
+    for (const random of seeds) {
+      const melody = makeMelody(reading, random)
+      const played = melody.notes.filter((note) => !note.rest)
+      expect(played.every((note) => note.key !== undefined && reading.keys.includes(note.key))).toBe(true)
+      expect(melody.notes.filter((note) => note.rest).every((note) => note.key === undefined)).toBe(true)
+      const scale = [...reading.keys].sort((a, b) => a - b)
+      played.slice(1).forEach((note, i) => {
+        expect(Math.abs(scale.indexOf(note.key!) - scale.indexOf(played[i]!.key!))).toBeLessThanOrEqual(2)
+      })
+    }
+  })
+
+  it('ends on C, the note it started from', () => {
+    // A last note tied from the one before keeps that one's key, so look at the last note that is struck.
+    const lastStruck = seeds.map((random) => makeMelody(reading, random)).map((melody) => {
+      const struck = melody.notes.filter((note, i) => !note.rest && !melody.notes[i - 1]?.tie)
+      return struck[struck.length - 1]!.key
+    })
+    expect(new Set(lastStruck)).toEqual(new Set([60]))
+  })
+
+  it('keeps the key over a tie', () => {
+    const pairs = seeds.flatMap((random) => {
+      const melody = makeMelody(reading, random)
+      return melody.notes.flatMap((note, i) => (note.tie && !note.rest && melody.notes[i + 1] && !melody.notes[i + 1]!.rest ? [[note.key, melody.notes[i + 1]!.key]] : []))
+    })
+    expect(pairs.every(([from, to]) => from === to)).toBe(true)
+  })
+
+  const melody = { meter: { numerator: 4, denominator: 4 }, notes: [{ duration: 'quarter' as const, key: 60 }, { duration: 'quarter' as const, key: 62 }, { duration: 'half' as const, key: 64 }] }
+  const result = (index: number, verdict: 'onTime' | 'late' | 'missed', key: number | null) => ({ index, verdict, offset: verdict === 'missed' ? null : 0, hold: null, held: null, velocity: null, key })
+
+  it('marks each note: right, off time, wrong key or missed', () => {
+    const score = { results: [result(0, 'onTime', 60), result(1, 'late', 62), result(2, 'onTime', 65)], extra: 0, onTime: 2, total: 3 }
+    expect(readMarks(melody, score)).toEqual({ 0: 'right', 1: 'off', 2: 'wrongKey' })
+    expect(readingPasses(melody, score)).toBe(false)
+  })
+
+  it('passes with the right keys and the rhythm of «Ритм»', () => {
+    const score = { results: [result(0, 'onTime', 60), result(1, 'onTime', 62), result(2, 'onTime', 64)], extra: 0, onTime: 3, total: 3 }
+    expect(readingPasses(melody, score)).toBe(true)
+    const missed = { results: [result(0, 'onTime', 60), result(1, 'missed', null), result(2, 'onTime', 64)], extra: 0, onTime: 2, total: 3 }
+    expect(readingPasses(melody, missed)).toBe(false)
+  })
+
+  it('gives stars for 3, 6 and 9 melodies', () => {
+    expect([2, 3, 6, 9].map((correct) => noteStars({ 9: { correct } }, 9))).toEqual([0, 1, 2, 3])
+    expect(noteStars({ 3: { correct: 5 } }, 3)).toBe(1)
   })
 })

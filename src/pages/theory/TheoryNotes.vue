@@ -4,6 +4,7 @@ import { useI18n } from 'vue-i18n'
 
 import NoteStaff, { type StaffNote } from '@/components/NoteStaff.vue'
 import OctaveMap from '@/components/OctaveMap.vue'
+import NoteReading from '@/pages/theory/NoteReading.vue'
 import PianoKeyboard from '@/components/PianoKeyboard.vue'
 import PianoMap from '@/components/PianoMap.vue'
 import { STAFF_COLOURS } from '@/components/staffDrawing'
@@ -77,8 +78,8 @@ function newTask(previous: number | null) {
   keyHint.value = false
   taskNumber.value++
   shownAt = performance.now()
-  // On the timed level the key never lights up: it would give the answer away.
-  if (info.value.timed === undefined) {
+  // On the timed level the key never lights up: it would give the answer away; melodies have no single key.
+  if (info.value.timed === undefined && info.value.readingBpm === undefined) {
     hintTimer = setTimeout(() => {
       keyHint.value = true
     }, KEY_HINT_DELAY_MS)
@@ -118,7 +119,7 @@ const settledHeld = useSettled(heldNotes, (next) => (next.length === 0 ? 0 : SET
 const settledCheck = computed(() => (settledHeld.value.length === 0 ? 'empty' : check.value))
 
 watch(check, (status) => {
-  if (status !== 'right' || solved.value || phase.value !== 'task') return
+  if (status !== 'right' || solved.value || phase.value !== 'task' || info.value.readingBpm !== undefined) return
   solved.value = true
   clearTimeout(hintTimer)
   // Right is always praised; on the timed level a slow answer just does not count towards the stars.
@@ -155,6 +156,18 @@ const hintKey = computed(() => {
   for (let key = windowStart.value; key < windowStart.value + KEYBOARD_KEYS; key++) if (pitchClass(key) === pitchClass(target.value)) return key
   return null
 })
+
+/** «Читаем с ритмом» runs its own attempts (NoteReading) once its intro is closed. */
+const reading = computed(() => info.value.readingBpm !== undefined && phase.value === 'task')
+
+/** One more melody read right: it counts like a note found, and may finish the level. */
+async function onMelodyPassed() {
+  const before = noteStars(passed.value, level.value)
+  await progress.addNoteCorrect(level.value)
+  const done = before < STAR_THRESHOLDS.length && noteStars(passed.value, level.value) === STAR_THRESHOLDS.length
+  levelDone.value = done
+  playCue(done ? 'levelDone' : 'success')
+}
 
 /** Keys on the screen while a task runs, and in the octave-map intro, which is played with. */
 const keysShown = computed(() => phase.value === 'task' || info.value.introduces.includes('ledgers'))
@@ -204,79 +217,92 @@ const INTRO_NOTES: Partial<Record<NoteIntroId, { show: 'treble' | 'bass' | 'gran
       </template>
     </div>
     <span class="stars" :aria-label="t('train.stars', { n: stars })">{{ '★'.repeat(stars) }}<span class="stars__off">{{ '★'.repeat(3 - stars) }}</span></span>
+    <!-- «Читаем с ритмом» puts its play and listen buttons here. -->
+    <span id="notes-actions" class="row-actions" />
   </div>
 
-  <section class="task">
-    <template v-if="phase === 'intro'">
-      <p class="prompt text-highlighted">{{ t('theory.intro.title') }}</p>
-      <div class="intro">
-        <div v-for="id in info.introduces" :key="id" class="intro__item" :class="{ 'intro__item--wide': id === 'keyboard' || id === 'names' || id === 'ledgers' }">
-          <PianoMap v-if="id === 'keyboard'" :window-start="windowStart" class="intro__map" />
-          <!-- Live: press Octave + or − and keys, and watch the band and the notes move. -->
-          <OctaveMap v-else-if="id === 'ledgers'" :window-start="windowStart" :held="heldNotes" :scale="short ? 0.7 : 0.9" />
-          <div v-else-if="id === 'names'" class="names">
-            <span v-for="(key, i) in NAMES" :key="key" class="names__item">
-              <span class="names__local">{{ name(key) }}</span>
-              <span class="names__letter text-muted">{{ LETTERS[i] }}</span>
-            </span>
-          </div>
-          <NoteStaff v-else-if="INTRO_NOTES[id]" :notes="INTRO_NOTES[id]!.notes()" :show="INTRO_NOTES[id]!.show" :scale="1.4" class="intro__staff" />
-          <p class="text-toned">{{ t(`theory.notes.intro.${id}`) }}</p>
-        </div>
-      </div>
-    </template>
-
-    <template v-else>
-      <p class="prompt text-highlighted">
-        {{ info.show === 'name' ? t('theory.notes.pressName') : info.anyOctave ? t('theory.notes.findAny') : t('theory.notes.findExact') }}
-      </p>
-      <p v-if="info.show === 'name'" class="big-name" :class="{ 'big-name--right': solved }">{{ name(target) }}</p>
-      <NoteStaff v-else :notes="staffNotes" :show="info.show" :scale="info.show === 'grand' ? 1.7 : 2.2" fit class="task__staff" />
-      <!-- Calm pills over the card, never pushing the layout. -->
-      <!-- Time for a star: a calm bar that empties, no countdown numbers and nothing red. -->
-      <span v-if="info.timed && !solved" :key="taskNumber" class="timer" :style="{ animationDuration: `${info.timed}ms` }" aria-hidden="true" />
-      <p v-if="slowAnswer" class="pill" role="status">{{ t('theory.notes.slow', { s: Math.round(info.timed! / 1000) }) }}</p>
-      <p v-else-if="shiftNeeded !== 0 && !solved" class="pill pill--octave" role="status">
-        {{ shiftNeeded > 0 ? t('theory.notes.octaveUp') : t('theory.notes.octaveDown') }}
-      </p>
-      <p v-else-if="settledCheck === 'octave' && !solved" class="pill" role="status">{{ t('theory.notes.otherOctave') }}</p>
-      <p v-else-if="settledCheck === 'wrong' && !solved" class="pill" role="status">{{ t('theory.notes.notThis') }}</p>
-    </template>
-
-    <div v-if="levelDone" class="result result--passed" role="status">
-      <p class="result__title">{{ t('theory.notes.levelDone', { n: level }) }}</p>
-    </div>
-  </section>
-
-  <div class="controls">
-    <UButton v-if="phase === 'intro'" icon="i-lucide-check" size="xl" :label="t('theory.intro.ok')" @click="closeIntro" />
-    <template v-else>
-      <template v-if="levelDone">
-        <template v-for="piece in piecesAfter(level)" :key="piece.id">
-          <UButton v-if="piece.to" :to="piece.to" icon="i-lucide-music" size="xl" color="success" :label="t('theory.playPiece', { name: piece.title })" />
-        </template>
+  <!-- «Читаем с ритмом»: a melody in time instead of one note at a time. -->
+  <NoteReading v-if="reading" :level="info" :level-done="levelDone" actions-to="#notes-actions" @passed="onMelodyPassed">
+    <template #done>
+      <template v-for="piece in piecesAfter(level)" :key="piece.id">
+        <UButton v-if="piece.to" :to="piece.to" icon="i-lucide-music" size="xl" color="success" :label="t('theory.playPiece', { name: piece.title })" />
       </template>
-      <UButton v-if="levelDone && isNoteLevelOpen(level + 1, passed)" icon="i-lucide-arrow-right" size="xl" :label="t('theory.nextLevel')" @click="openLevel(level + 1)" />
-      <UButton v-if="levelDone" icon="i-lucide-rotate-ccw" color="neutral" variant="soft" size="xl" :label="t('theory.notes.stay')" @click="levelDone = false" />
+      <UButton v-if="isNoteLevelOpen(level + 1, passed)" icon="i-lucide-arrow-right" size="xl" :label="t('theory.nextLevel')" @click="openLevel(level + 1)" />
     </template>
-    <template v-if="keysShown">
-      <span class="hands text-toned">{{ t('theory.notes.underHands', { octaves: underHands }) }}</span>
-      <!-- The same as the Octave buttons of the MK4, for the keys on the screen. -->
-      <UButton icon="i-lucide-minus" color="neutral" variant="soft" size="lg" :aria-label="t('theory.notes.screenOctaveDown')" @click="shiftOctave(-1)" />
-      <UButton icon="i-lucide-plus" color="neutral" variant="soft" size="lg" :aria-label="t('theory.notes.screenOctaveUp')" @click="shiftOctave(1)" />
-    </template>
-  </div>
+  </NoteReading>
+  <template v-else>
+    <section class="task">
+      <template v-if="phase === 'intro'">
+        <p class="prompt text-highlighted">{{ t('theory.intro.title') }}</p>
+        <div class="intro">
+          <div v-for="id in info.introduces" :key="id" class="intro__item" :class="{ 'intro__item--wide': id === 'keyboard' || id === 'names' || id === 'ledgers' }">
+            <PianoMap v-if="id === 'keyboard'" :window-start="windowStart" class="intro__map" />
+            <!-- Live: press Octave + or − and keys, and watch the band and the notes move. -->
+            <OctaveMap v-else-if="id === 'ledgers'" :window-start="windowStart" :held="heldNotes" :scale="short ? 0.7 : 0.9" />
+            <div v-else-if="id === 'names'" class="names">
+              <span v-for="(key, i) in NAMES" :key="key" class="names__item">
+                <span class="names__local">{{ name(key) }}</span>
+                <span class="names__letter text-muted">{{ LETTERS[i] }}</span>
+              </span>
+            </div>
+            <NoteStaff v-else-if="INTRO_NOTES[id]" :notes="INTRO_NOTES[id]!.notes()" :show="INTRO_NOTES[id]!.show" :scale="1.4" class="intro__staff" />
+            <p class="text-toned">{{ t(`theory.notes.intro.${id}`) }}</p>
+          </div>
+        </div>
+      </template>
 
-  <PianoKeyboard
-    v-if="keysShown"
-    class="note-keys"
-    :class="{ 'note-keys--low': phase === 'intro' }"
-    :start="windowStart"
-    :held="heldNotes"
-    :hint="phase === 'task' && keyHint && !solved && hintKey !== null ? [hintKey] : []"
-    @press="pressNote"
-    @release="releaseNote"
-  />
+      <template v-else>
+        <p class="prompt text-highlighted">
+          {{ info.show === 'name' ? t('theory.notes.pressName') : info.anyOctave ? t('theory.notes.findAny') : t('theory.notes.findExact') }}
+        </p>
+        <p v-if="info.show === 'name'" class="big-name" :class="{ 'big-name--right': solved }">{{ name(target) }}</p>
+        <NoteStaff v-else :notes="staffNotes" :show="info.show" :scale="info.show === 'grand' ? 1.7 : 2.2" fit class="task__staff" />
+        <!-- Calm pills over the card, never pushing the layout. -->
+        <!-- Time for a star: a calm bar that empties, no countdown numbers and nothing red. -->
+        <span v-if="info.timed && !solved" :key="taskNumber" class="timer" :style="{ animationDuration: `${info.timed}ms` }" aria-hidden="true" />
+        <p v-if="slowAnswer" class="pill" role="status">{{ t('theory.notes.slow', { s: Math.round(info.timed! / 1000) }) }}</p>
+        <p v-else-if="shiftNeeded !== 0 && !solved" class="pill pill--octave" role="status">
+          {{ shiftNeeded > 0 ? t('theory.notes.octaveUp') : t('theory.notes.octaveDown') }}
+        </p>
+        <p v-else-if="settledCheck === 'octave' && !solved" class="pill" role="status">{{ t('theory.notes.otherOctave') }}</p>
+        <p v-else-if="settledCheck === 'wrong' && !solved" class="pill" role="status">{{ t('theory.notes.notThis') }}</p>
+      </template>
+
+      <div v-if="levelDone" class="result result--passed" role="status">
+        <p class="result__title">{{ t('theory.notes.levelDone', { n: level }) }}</p>
+      </div>
+    </section>
+
+    <div class="controls">
+      <UButton v-if="phase === 'intro'" icon="i-lucide-check" size="xl" :label="t('theory.intro.ok')" @click="closeIntro" />
+      <template v-else>
+        <UButton v-if="levelDone" icon="i-lucide-rotate-ccw" color="neutral" variant="soft" size="xl" :label="t('theory.notes.stay')" @click="levelDone = false" />
+        <template v-if="levelDone">
+          <template v-for="piece in piecesAfter(level)" :key="piece.id">
+            <UButton v-if="piece.to" :to="piece.to" icon="i-lucide-music" size="xl" color="success" :label="t('theory.playPiece', { name: piece.title })" />
+          </template>
+        </template>
+        <UButton v-if="levelDone && isNoteLevelOpen(level + 1, passed)" icon="i-lucide-arrow-right" size="xl" :label="t('theory.nextLevel')" @click="openLevel(level + 1)" />
+      </template>
+      <template v-if="keysShown">
+        <span class="hands text-toned">{{ t('theory.notes.underHands', { octaves: underHands }) }}</span>
+        <!-- The same as the Octave buttons of the MK4, for the keys on the screen. -->
+        <UButton icon="i-lucide-minus" color="neutral" variant="soft" size="lg" :aria-label="t('theory.notes.screenOctaveDown')" @click="shiftOctave(-1)" />
+        <UButton icon="i-lucide-plus" color="neutral" variant="soft" size="lg" :aria-label="t('theory.notes.screenOctaveUp')" @click="shiftOctave(1)" />
+      </template>
+    </div>
+
+    <PianoKeyboard
+      v-if="keysShown"
+      class="note-keys"
+      :class="{ 'note-keys--low': phase === 'intro' }"
+      :start="windowStart"
+      :held="heldNotes"
+      :hint="phase === 'task' && keyHint && !solved && hintKey !== null ? [hintKey] : []"
+      @press="pressNote"
+      @release="releaseNote"
+    />
+  </template>
 </template>
 
 <style scoped src="./theory.css"></style>
@@ -321,6 +347,17 @@ const INTRO_NOTES: Partial<Record<NoteIntroId, { show: 'treble' | 'bass' | 'gran
 
 .names__letter {
   font-weight: 600;
+}
+
+.row-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  margin-left: auto;
+}
+
+.row-actions:empty {
+  display: none;
 }
 
 .big-name {

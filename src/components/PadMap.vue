@@ -109,6 +109,15 @@ function reset() {
       </p>
       <div class="flex flex-wrap gap-3">
         <UButton
+          v-if="!isDefault"
+          icon="i-lucide-rotate-ccw"
+          color="neutral"
+          variant="ghost"
+          size="xl"
+          :label="t('pads.reset')"
+          @click="reset"
+        />
+        <UButton
           v-if="midiStatus !== 'connected'"
           icon="i-lucide-plug"
           size="xl"
@@ -118,15 +127,6 @@ function reset() {
           @click="connectMidi"
         />
         <UButton v-else icon="i-lucide-crosshair" size="xl" :label="t('pads.calibrate')" @click="startCalibration" />
-        <UButton
-          v-if="!isDefault"
-          icon="i-lucide-rotate-ccw"
-          color="neutral"
-          variant="ghost"
-          size="xl"
-          :label="t('pads.reset')"
-          @click="reset"
-        />
       </div>
       <p class="text-muted text-sm">{{ t('pads.virtualHint') }}</p>
     </div>

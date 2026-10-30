@@ -3,11 +3,13 @@
 // lines that need the octave buttons. Pure code, no Vue, no UI text.
 
 import { isGraze, type Press } from './ladder'
+import type { Rhythm, RhythmScore } from './rhythm'
+import { RHYTHM_LEVELS, makeTask, passes } from './rhythmLevels'
 import { STAR_THRESHOLDS, starsFor } from './levels'
 import { pitch } from './staff'
 import { pitchClass } from './theory'
 
-export type NoteIntroId = 'keyboard' | 'names' | 'treble' | 'bass' | 'grand' | 'ledgers' | 'timed'
+export type NoteIntroId = 'keyboard' | 'names' | 'treble' | 'bass' | 'grand' | 'ledgers' | 'timed' | 'reading'
 
 /** How the task is shown: the note's name only, or the note on a staff. */
 export type NoteShow = 'name' | 'treble' | 'bass' | 'grand'
@@ -21,6 +23,10 @@ export interface NoteLevel {
   introduces: NoteIntroId[]
   /** Upper levels: only an answer within this many ms earns its star (plan step 19: «на время только на верхних уровнях»). */
   timed?: number
+  /** Short melodies read in rhythm with the metronome, at this tempo, instead of single notes. */
+  readingBpm?: number
+  /** Stars at this many right answers (melodies count fewer than single notes). */
+  stars?: readonly [number, number, number]
 }
 
 const keys = (names: string) => names.trim().split(/\s+/).map(pitch)
@@ -39,7 +45,53 @@ export const NOTE_LEVELS: readonly NoteLevel[] = [
   { id: 7, show: 'grand', keys: keys('D5 E5 G5 A5 C6 C2 E2 G2 B2'), anyOctave: false, introduces: ['ledgers'] },
   // Reading at sight: every note of both clefs inside C3-C5, a few seconds each. No key hint here: it would give the answer.
   { id: 8, show: 'grand', keys: keys('C3 D3 E3 F3 G3 A3 B3 C4 D4 E4 F4 G4 A4 B4 C5'), anyOctave: false, introduces: ['timed'], timed: 4000 },
+  // Read a short melody in rhythm (the rhythm of Р4), one hand on C4-G4 like the «Ода» that follows.
+  { id: 9, show: 'treble', keys: keys('C4 D4 E4 F4 G4'), anyOctave: false, introduces: ['reading'], readingBpm: 60, stars: [3, 6, 9] },
 ]
+
+/** The rhythm level the melodies of «Читаем с ритмом» take their values from: halves, quarters, eighths, rests. */
+const READING_RHYTHM = RHYTHM_LEVELS.find((item) => item.id === 4)!
+
+/**
+ * A melody to read: a rhythm of Р4 with keys of the level, moving by step or a third the way a beginner's
+ * tune does, from and back to the lowest note. Tied notes keep their key; rests have none.
+ */
+export function makeMelody(level: NoteLevel, random: () => number = Math.random): Rhythm {
+  const rhythm = makeTask(READING_RHYTHM, random)
+  const scale = [...level.keys].sort((a, b) => a - b)
+  let place = 0
+  const sounding = rhythm.notes.map((note, i) => ({ note, i })).filter(({ note }) => !note.rest)
+  const keyAt = new Map<number, number>()
+  sounding.forEach(({ i }, n) => {
+    const tiedFrom = i > 0 && rhythm.notes[i - 1]!.tie && !rhythm.notes[i - 1]!.rest
+    if (n > 0 && !tiedFrom) {
+      // A step or a third that stays on the five keys and never further from home than the notes left can come
+      // back by such steps: the last note is home, because a tune that ends on its first note sounds finished.
+      const left = sounding.length - 1 - n
+      const highest = Math.min(scale.length - 1, 2 * left)
+      const moves = [-2, -1, 1, 2].map((step) => place + step).filter((to) => to >= 0 && to <= highest)
+      place = moves.length ? moves[Math.floor(random() * moves.length)]! : 0
+    }
+    keyAt.set(i, scale[place]!)
+  })
+  return { ...rhythm, notes: rhythm.notes.map((note, i) => (keyAt.has(i) ? { ...note, key: keyAt.get(i)! } : note)) }
+}
+
+export type ReadMark = 'right' | 'wrongKey' | 'off' | 'missed'
+
+/** Each note after an attempt: the right key on time, the right key off time, a wrong key, or not played. */
+export function readMarks(melody: Rhythm, score: RhythmScore): Record<number, ReadMark> {
+  return Object.fromEntries(score.results.map((result) => {
+    const want = melody.notes[result.index]?.key
+    const mark: ReadMark = result.verdict === 'missed' ? 'missed' : result.key !== want ? 'wrongKey' : result.verdict === 'onTime' ? 'right' : 'off'
+    return [result.index, mark]
+  }))
+}
+
+/** Passed: the rhythm passes as in «Ритм» and every note was played on its own key. */
+export function readingPasses(melody: Rhythm, score: RhythmScore): boolean {
+  return passes(score) && Object.values(readMarks(melody, score)).every((mark) => mark !== 'wrongKey')
+}
 
 /** Whether a right answer counts towards the stars: on a timed level only a quick one does. */
 export function countsForStars(level: NoteLevel, answerMs: number): boolean {
@@ -60,9 +112,11 @@ export function parseNoteProgress(value: unknown): Record<number, NoteLevelProgr
   return progress
 }
 
-/** Stars as in «Аккорды»: 5, 10 and 20 notes found. */
+/** Stars as in «Аккорды»: 5, 10 and 20 notes found; a level of melodies sets its own counts. */
 export function noteStars(progress: Readonly<Record<number, NoteLevelProgress>>, id: number): number {
-  return starsFor(progress[id]?.correct ?? 0)
+  const correct = progress[id]?.correct ?? 0
+  const own = NOTE_LEVELS.find((level) => level.id === id)?.stars
+  return own ? own.filter((threshold) => correct >= threshold).length : starsFor(correct)
 }
 
 export function isNoteLevelOpen(id: number, progress: Readonly<Record<number, NoteLevelProgress>>): boolean {

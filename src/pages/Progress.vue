@@ -169,8 +169,8 @@ async function confirmImport() {
             </div>
             <form v-else class="flex flex-wrap items-center gap-3" @submit.prevent="saveRename">
               <UInput v-model="renameValue" size="xl" autofocus :aria-label="t('progress.rename')" />
-              <UButton type="submit" size="lg" :label="t('progress.save')" />
               <UButton color="neutral" variant="ghost" size="lg" :label="t('pads.cancel')" @click="renaming = false" />
+              <UButton type="submit" size="lg" :label="t('progress.save')" />
             </form>
             <form class="flex flex-wrap items-center gap-3" @submit.prevent="addProfile">
               <UInput v-model="newName" size="lg" :placeholder="t('progress.newPlayer')" :aria-label="t('progress.newPlayer')" />
@@ -221,8 +221,8 @@ async function confirmImport() {
           <div class="flex flex-col gap-4">
             <p class="text-muted leading-relaxed">{{ t('progress.backupHint') }}</p>
             <div class="flex flex-wrap gap-3">
-              <UButton icon="i-lucide-download" size="lg" :disabled="!available" :label="t('progress.export')" @click="exportFile" />
               <UButton icon="i-lucide-upload" color="neutral" variant="soft" size="lg" :disabled="!available" :label="t('progress.import')" @click="fileInput?.click()" />
+              <UButton icon="i-lucide-download" size="lg" :disabled="!available" :label="t('progress.export')" @click="exportFile" />
               <input ref="fileInput" type="file" accept="application/json,.json" hidden @change="onFile">
             </div>
             <UAlert

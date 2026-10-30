@@ -654,8 +654,8 @@ const nextLabel = computed(() => {
             <template v-if="resetAsk">
               <p class="text-sm text-toned">{{ resetAsk === 'unit' ? t('songs.resetUnitAsk', { name: unitLabel(unit) }) : t('songs.resetPartAsk') }}</p>
               <div class="flex flex-wrap gap-2">
-                <UButton color="error" variant="soft" size="md" :label="t('songs.resetYes')" @click="confirmReset" />
                 <UButton color="neutral" variant="ghost" size="md" :label="t('songs.resetNo')" @click="resetAsk = null" />
+                <UButton color="error" variant="soft" size="md" :label="t('songs.resetYes')" @click="confirmReset" />
               </div>
             </template>
             <div v-else class="flex flex-wrap gap-x-3 gap-y-1">
@@ -675,15 +675,7 @@ const nextLabel = computed(() => {
         </aside>
         <div class="main-col">
           <div class="controls">
-            <UButton
-              :icon="player.playing.value || waiting ? 'i-lucide-pause' : 'i-lucide-play'"
-              size="lg"
-              :loading="synth.status.value === 'loading'"
-              :label="player.playing.value || waiting ? t('songs.pause') : t('songs.play')"
-              @click="withSound(togglePlay)"
-            />
-            <UButton icon="i-lucide-rotate-ccw" color="neutral" variant="soft" size="lg" :label="t('songs.again')" @click="withSound(startAttempt)" />
-            <UButton icon="i-lucide-ear" color="neutral" variant="soft" size="lg" :label="t('songs.listen')" @click="withSound(listen)" />
+            <!-- Secondary first; the main action is the last button of the group (owner's rule). -->
             <UButton
               icon="i-lucide-timer"
               :color="metronomeOn ? 'primary' : 'neutral'"
@@ -693,6 +685,15 @@ const nextLabel = computed(() => {
               :aria-label="t('songs.metronome')"
               :title="t('songs.metronome')"
               @click="toggleMetronome"
+            />
+            <UButton icon="i-lucide-ear" color="neutral" variant="soft" size="lg" :label="t('songs.listen')" @click="withSound(listen)" />
+            <UButton icon="i-lucide-rotate-ccw" color="neutral" variant="soft" size="lg" :label="t('songs.again')" @click="withSound(startAttempt)" />
+            <UButton
+              :icon="player.playing.value || waiting ? 'i-lucide-pause' : 'i-lucide-play'"
+              size="lg"
+              :loading="synth.status.value === 'loading'"
+              :label="player.playing.value || waiting ? t('songs.pause') : t('songs.play')"
+              @click="withSound(togglePlay)"
             />
 
             <span class="controls__divider" aria-hidden="true" />

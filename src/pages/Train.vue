@@ -281,8 +281,8 @@ const levelItems = computed(() => LEVELS.map((item) => ({ label: String(item.id)
           <p class="level-done__title text-highlighted">{{ t('train.levelDone', { n: levelDone }) }}</p>
           <p class="text-toned">{{ hasNextLevel ? t('train.levelDoneHint') : t('train.allDone') }}</p>
           <div class="level-done__actions">
-            <UButton v-if="hasNextLevel" icon="i-lucide-arrow-right" size="xl" :label="t('train.nextLevel')" @click="goNextLevel" />
             <UButton color="neutral" variant="soft" size="xl" :label="t('train.stay')" @click="stayOnLevel" />
+            <UButton v-if="hasNextLevel" icon="i-lucide-arrow-right" size="xl" :label="t('train.nextLevel')" @click="goNextLevel" />
           </div>
         </div>
       </div>

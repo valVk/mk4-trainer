@@ -4,16 +4,15 @@ import { useI18n } from 'vue-i18n'
 
 import RhythmStaff from '@/components/RhythmStaff.vue'
 import { useMetronome } from '@/composables/useMetronome'
-import { useNoteSource } from '@/composables/useNoteSource'
 import { padsPlayMusic, usePadActions } from '@/composables/usePadActions'
 import { useProgress } from '@/composables/useProgress'
 import { useRhythmPlayer } from '@/composables/useRhythmPlayer'
 import { useShortScreen } from '@/composables/useShortScreen'
-import { useSynth } from '@/composables/useSynth'
 import { useTheoryPieces } from '@/composables/useTheoryPieces'
+import { useTimedPresses, type TimedPress } from '@/composables/useTimedPresses'
 import { useWakeLock } from '@/composables/useWakeLock'
-import { scaleGroups, tapInputOf, type TapInput } from '@/lib/metronome'
-import { quarterSeconds, scoreRhythm, sounds, type Rhythm, type RhythmPress, type RhythmScore, type TimingVerdict } from '@/lib/rhythm'
+import { scaleGroups } from '@/lib/metronome'
+import { quarterSeconds, scoreRhythm, sounds, type Rhythm, type RhythmScore, type TimingVerdict } from '@/lib/rhythm'
 import {
   RHYTHM_LEVELS,
   RHYTHM_TEMPOS,
@@ -46,7 +45,6 @@ useWakeLock()
 const progress = useProgress()
 const metronome = useMetronome()
 const player = useRhythmPlayer()
-const { onEvent } = useNoteSource()
 
 /** Seconds after the last note before the attempt is scored: a late last tap still counts. */
 const SCORE_TAIL_MS = 400
@@ -112,8 +110,6 @@ const levelDone = ref(false)
 let taskCounted = false
 
 /** A press, with where it came from: a key (its hand is found by octave at the end) or a known hand (pad row, screen button). */
-type Press = RhythmPress & { input: TapInput, key: number | null, hand: Hand | null }
-let presses: Press[] = []
 const scoreLower = shallowRef<RhythmScore | null>(null)
 let attemptTimer: ReturnType<typeof setTimeout> | undefined
 
@@ -215,7 +211,7 @@ function startAttempt() {
   if (phase.value === 'intro') closeIntro()
   stopAttempt()
   metronome.stop()
-  presses = []
+  timed.reset()
   score.value = null
   hints.value = []
   phase.value = 'playing'
@@ -231,11 +227,12 @@ watch(() => player.playing.value, (on) => {
 
 async function finishAttempt() {
   padsPlayMusic.value = false
+  const presses = timed.presses()
   // Hold is checked only when every press came with a release (keys and the screen, not pads).
   const checkHold = presses.length > 0 && presses.every((press) => press.end !== null)
   // Two hands: keys split by octave (the left hand plays the lower one), pads and screen buttons by their side.
   const split = handSplit(presses.flatMap((press) => (press.key === null ? [] : [press.key])))
-  const handOf = (press: Press): Hand => press.hand ?? (press.key !== null && press.key < split ? 'left' : 'right')
+  const handOf = (press: TimedPress): Hand => press.hand ?? (press.key !== null && press.key < split ? 'left' : 'right')
   const lower = lowerTask.value
   const result = scoreRhythm(sounds(task.value, bpm.value), lower ? presses.filter((press) => handOf(press) === 'right') : presses, checkHold)
   const left = lower ? scoreRhythm(sounds(lower, bpm.value), presses.filter((press) => handOf(press) === 'left'), checkHold) : null
@@ -274,42 +271,13 @@ async function finishAttempt() {
   levelDone.value = before < RHYTHM_TEMPOS.length && starsOf(levelPasses.value) === RHYTHM_TEMPOS.length
 }
 
-/** Where the press lands in the rhythm, as heard: the input's own delay taken off. */
-function pressTime(input: TapInput) {
-  return player.heardPosition() - metronome.latency.value[input] / 1000
-}
-
-/**
- * A tap; `velocity` only from the MK4 (the screen and computer keys always send the same). `from` says
- * which key, or which hand when it is known (a pad row, a screen button).
- */
-function press(input: TapInput, velocity: number | null = null, from: { key?: number, hand?: Hand } = {}) {
-  if (phase.value !== 'playing') return
-  presses.push({ time: pressTime(input), end: null, input, velocity: input === 'midi' ? velocity : null, key: from.key ?? null, hand: from.hand ?? null })
-  // Keys sound through the synth when it is on; everything else gets a soft tick, so a tap is heard.
-  if (input !== 'midi' && input !== 'keys') metronome.noteAt(metronome.audioContext().currentTime, 0.12)
-  else if (useSynth().status.value !== 'ready') metronome.noteAt(metronome.audioContext().currentTime, 0.12)
-}
-
-function release(input: TapInput, from: { key?: number, hand?: Hand } = {}) {
-  if (phase.value !== 'playing') return
-  for (let i = presses.length - 1; i >= 0; i--) {
-    const item = presses[i]!
-    const same = (from.key === undefined || item.key === from.key) && (from.hand === undefined || item.hand === from.hand)
-    if (item.input === input && item.end === null && same) {
-      presses[i] = { ...item, end: Math.max(item.time, pressTime(input)) }
-      return
-    }
-  }
-}
-
-onEvent((event) => {
-  if (event.type === 'noteOn') press(tapInputOf(event), event.velocity, { key: event.note })
-  else if (event.type === 'noteOff') release(event.source === 'midi' ? 'midi' : 'keys', { key: event.note })
-  // Pad 1 is the drum (two hands: pads 1-4 left, 5-8 right); pads have no length, so they are not checked for hold.
-  else if (event.type === 'pad' && lowerTask.value) press(tapInputOf(event), event.velocity, { hand: padHand(event.pad) })
-  else if (event.type === 'pad' && event.pad === 1) press(tapInputOf(event), event.velocity)
+const timed = useTimedPresses({
+  active: () => phase.value === 'playing',
+  heardPosition: () => player.heardPosition(),
+  // Pad 1 is the drum; with two hands pads 1-4 are the left hand and 5-8 the right.
+  pad: (pad) => (lowerTask.value ? { hand: padHand(pad) } : pad === 1 ? {} : null),
 })
+const { press, release } = timed
 
 usePadActions({
   next: () => {
@@ -474,30 +442,7 @@ const levelTabs = computed(() => RHYTHM_LEVELS.map((item) => ({ id: item.id, ope
   <div class="controls">
     <UButton v-if="phase === 'intro'" icon="i-lucide-check" size="xl" :label="t('theory.intro.ok')" @click="closeIntro" />
     <template v-else>
-      <template v-if="phase === 'result' && attemptPassed && wasPractice">
-        <UButton icon="i-lucide-play" size="xl" :label="t('theory.atTempoOf', { bpm: levelBpm })" @click="pickTempo(null); startAttempt()" />
-      </template>
-      <template v-else-if="phase === 'result' && attemptPassed">
-        <!-- A piece that has just opened is named here, the moment it opens; the chip in the row stays small. -->
-        <template v-if="levelDone">
-          <template v-for="piece in piecesAfter(level)" :key="piece.id">
-            <UButton v-if="piece.to" :to="piece.to" icon="i-lucide-music" size="xl" color="success" :label="t('theory.playPiece', { name: piece.title })" />
-          </template>
-        </template>
-        <UButton v-if="levelDone && isOpen(level + 1, passed)" icon="i-lucide-arrow-right" size="xl" :label="t('theory.nextLevel')" @click="openLevel(level + 1)" />
-        <UButton v-else icon="i-lucide-arrow-right" size="xl" :label="t('theory.next')" @click="nextTask" />
-        <UButton icon="i-lucide-rotate-ccw" color="neutral" variant="soft" size="xl" :label="t('theory.again')" @click="startAttempt" />
-      </template>
-      <UButton v-if="phase === 'result' && offerSlow" icon="i-lucide-turtle" size="xl" :label="t('theory.slower')" @click="startSlow" />
-      <UButton
-        v-else-if="!(phase === 'result' && attemptPassed)"
-        :icon="phase === 'playing' ? 'i-lucide-square' : 'i-lucide-play'"
-        size="xl"
-        :label="phase === 'playing' ? t('theory.stop') : phase === 'result' ? t('theory.again') : t('theory.play')"
-        @click="phase === 'playing' ? stopAttempt() : startAttempt()"
-      />
-      <UButton icon="i-lucide-ear" color="neutral" variant="soft" size="xl" :disabled="phase === 'playing'" :label="phase === 'result' ? t('theory.listenRight') : t('theory.listen')" @click="listen" />
-      <UButton icon="i-lucide-shuffle" color="neutral" variant="ghost" size="xl" :label="t('theory.other')" @click="nextTask" />
+      <!-- Secondary first; the main action is always the last button, on the right (owner's rule). -->
       <UButton
         icon="i-lucide-timer"
         :color="metronomeOn ? 'primary' : 'neutral'"
@@ -514,6 +459,30 @@ const levelTabs = computed(() => RHYTHM_LEVELS.map((item) => ({ id: item.id, ope
           <span v-if="metronomeOn && metronome.beat.value >= 0" :key="beatCount" class="beat" :class="{ 'beat--strong': metronome.beat.value === 0 }" aria-hidden="true" />
         </template>
       </UButton>
+      <UButton icon="i-lucide-shuffle" color="neutral" variant="ghost" size="xl" :label="t('theory.other')" @click="nextTask" />
+      <UButton icon="i-lucide-ear" color="neutral" variant="soft" size="xl" :disabled="phase === 'playing'" :label="phase === 'result' ? t('theory.listenRight') : t('theory.listen')" @click="listen" />
+      <template v-if="phase === 'result' && attemptPassed && wasPractice">
+        <UButton icon="i-lucide-play" size="xl" :label="t('theory.atTempoOf', { bpm: levelBpm })" @click="pickTempo(null); startAttempt()" />
+      </template>
+      <template v-else-if="phase === 'result' && attemptPassed">
+        <UButton icon="i-lucide-rotate-ccw" color="neutral" variant="soft" size="xl" :label="t('theory.again')" @click="startAttempt" />
+        <!-- A piece that has just opened is named here, the moment it opens; the chip in the row stays small. -->
+        <template v-if="levelDone">
+          <template v-for="piece in piecesAfter(level)" :key="piece.id">
+            <UButton v-if="piece.to" :to="piece.to" icon="i-lucide-music" size="xl" color="success" :label="t('theory.playPiece', { name: piece.title })" />
+          </template>
+        </template>
+        <UButton v-if="levelDone && isOpen(level + 1, passed)" icon="i-lucide-arrow-right" size="xl" :label="t('theory.nextLevel')" @click="openLevel(level + 1)" />
+        <UButton v-else icon="i-lucide-arrow-right" size="xl" :label="t('theory.next')" @click="nextTask" />
+      </template>
+      <UButton v-if="phase === 'result' && offerSlow" icon="i-lucide-turtle" size="xl" :label="t('theory.slower')" @click="startSlow" />
+      <UButton
+        v-else-if="!(phase === 'result' && attemptPassed)"
+        :icon="phase === 'playing' ? 'i-lucide-square' : 'i-lucide-play'"
+        size="xl"
+        :label="phase === 'playing' ? t('theory.stop') : phase === 'result' ? t('theory.again') : t('theory.play')"
+        @click="phase === 'playing' ? stopAttempt() : startAttempt()"
+      />
 
       <!-- For playing without the MK4: a big pad on the screen, two for two hands. -->
       <div class="taps">

@@ -213,6 +213,13 @@ async function togglePlay() {
       </p>
 
       <div class="transport">
+        <div class="seek" role="group" :aria-label="t('songs.seekGroup')">
+          <UButton icon="i-lucide-skip-back" color="neutral" variant="soft" size="lg" :aria-label="t('songs.previousSection')" @click="previousSection" />
+          <UButton icon="i-lucide-rewind" color="neutral" variant="soft" size="lg" :aria-label="t('songs.rewind', { n: SKIP_S })" @click="skip(-SKIP_S)" />
+          <UButton icon="i-lucide-fast-forward" color="neutral" variant="soft" size="lg" :aria-label="t('songs.forward', { n: SKIP_S })" @click="skip(SKIP_S)" />
+          <UButton icon="i-lucide-skip-forward" color="neutral" variant="soft" size="lg" :aria-label="t('songs.nextSection')" @click="nextSection" />
+        </div>
+        <!-- The main action last, after the seek buttons (owner's rule). -->
         <UButton
           :icon="player.playing.value ? 'i-lucide-pause' : 'i-lucide-play'"
           size="xl"
@@ -220,12 +227,6 @@ async function togglePlay() {
           :label="player.playing.value ? t('songs.pause') : t('songs.play')"
           @click="togglePlay"
         />
-        <div class="seek" role="group" :aria-label="t('songs.seekGroup')">
-          <UButton icon="i-lucide-skip-back" color="neutral" variant="soft" size="lg" :aria-label="t('songs.previousSection')" @click="previousSection" />
-          <UButton icon="i-lucide-rewind" color="neutral" variant="soft" size="lg" :aria-label="t('songs.rewind', { n: SKIP_S })" @click="skip(-SKIP_S)" />
-          <UButton icon="i-lucide-fast-forward" color="neutral" variant="soft" size="lg" :aria-label="t('songs.forward', { n: SKIP_S })" @click="skip(SKIP_S)" />
-          <UButton icon="i-lucide-skip-forward" color="neutral" variant="soft" size="lg" :aria-label="t('songs.nextSection')" @click="nextSection" />
-        </div>
         <SongClock class="time text-highlighted" :duration="song.duration" />
         <div class="ml-auto flex gap-2">
           <UButton color="neutral" variant="soft" size="lg" icon="i-lucide-volume-2" :label="t('songs.allOn')" @click="setAll(true)" />

@@ -58,7 +58,8 @@ export function useRhythmPlayer() {
     for (let i = 0; i < clicks; i++) scheduled.push(...metronome.clickAt(start + i * beat, accentOf(i % beats, beats)))
     if (notes) {
       for (const item of heard) {
-        if (!item.rest) scheduled.push(...metronome.noteAt(firstNoteAt.value + item.start, item.length))
+        // A melody sounds at its own pitches; a rhythm on the metronome's note.
+        if (!item.rest) scheduled.push(...metronome.noteAt(firstNoteAt.value + item.start, item.length, item.key === undefined ? undefined : 440 * 2 ** ((item.key - 69) / 12)))
       }
       for (const item of lower ? sounds(lower, bpm) : []) {
         if (!item.rest) scheduled.push(...metronome.noteAt(firstNoteAt.value + item.start, item.length, LOWER_HZ))

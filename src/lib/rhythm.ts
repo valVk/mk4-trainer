@@ -20,6 +20,8 @@ export interface RhythmNote {
   tuplet?: { actual: number, normal: number }
   /** Accent (>): played louder than the notes around it. */
   accent?: boolean
+  /** The key, for a melody read from the notes (plan step 19); a rhythm alone has none. */
+  key?: number
 }
 
 export interface Rhythm {
@@ -30,7 +32,7 @@ export interface Rhythm {
 }
 
 /** Length of a written note in quarter notes, with dots and tuplet. */
-export function noteQuarters(note: RhythmNote): number {
+export function noteQuarters(note: Pick<RhythmNote, 'duration' | 'dots' | 'tuplet'>): number {
   const base = QUARTERS[note.duration]
   const dots = note.dots ?? 0
   // One dot: 1.5, two dots: 1.75.
@@ -55,6 +57,8 @@ export interface Sound {
   rest: boolean
   /** Index of the first written note of this sound (ties merge several). */
   index: number
+  /** The key of a melody note. */
+  key?: number
 }
 
 /** What is heard: ties merged into one sound, consecutive rests kept separate. */
@@ -66,7 +70,7 @@ export function sounds(rhythm: Rhythm, bpm: number): Sound[] {
   rhythm.notes.forEach((note, index) => {
     const length = noteQuarters(note) * quarter
     if (tied && !note.rest) tied.length += length
-    else result.push(tied = { start: position * quarter, length, rest: Boolean(note.rest), index })
+    else result.push(tied = { start: position * quarter, length, rest: Boolean(note.rest), index, ...(note.key === undefined ? {} : { key: note.key }) })
     if (!note.tie || note.rest) tied = null
     position += noteQuarters(note)
   })
@@ -146,6 +150,8 @@ export interface RhythmPress {
   end: number | null
   /** How hard the key or pad was hit (1-127); null when the input has no velocity (screen, computer keys). */
   velocity?: number | null
+  /** The key pressed, when the input has keys. */
+  key?: number | null
 }
 
 export type TimingVerdict = 'onTime' | 'early' | 'late' | 'missed'
@@ -162,6 +168,8 @@ export interface SoundResult {
   held: number | null
   /** Velocity of the press that played the note, when the input has one. */
   velocity: number | null
+  /** Key of the press that played the note, when the input has keys. */
+  key: number | null
 }
 
 export interface RhythmScore {
@@ -211,13 +219,13 @@ export function scoreRhythm(all: readonly Sound[], presses: readonly RhythmPress
       if (offset < -before || offset > after) return
       if (pick === -1 || Math.abs(offset) < Math.abs(presses[pick]!.time - note.start)) pick = p
     })
-    if (pick === -1) return { index: note.index, verdict: 'missed', offset: null, hold: null, held: null, velocity: null }
+    if (pick === -1) return { index: note.index, verdict: 'missed', offset: null, hold: null, held: null, velocity: null, key: null }
     used.add(pick)
     const press = presses[pick]!
     const offset = press.time - note.start
     const verdict: TimingVerdict = Math.abs(offset) <= window ? 'onTime' : offset < 0 ? 'early' : 'late'
     const held = press.end === null ? null : press.end - press.time
-    return { index: note.index, verdict, offset, hold: checkHold && held !== null ? holdVerdict(held, note.length) : null, held, velocity: press.velocity ?? null }
+    return { index: note.index, verdict, offset, hold: checkHold && held !== null ? holdVerdict(held, note.length) : null, held, velocity: press.velocity ?? null, key: press.key ?? null }
   })
   const first = notes[0]?.start ?? 0
   // Warming up before the first note does not count as extra.

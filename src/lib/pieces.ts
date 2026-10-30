@@ -310,7 +310,7 @@ const DRUMMER: Piece = {
   ],
 }
 
-// «Ода к радости» read from the notes with the right hand (plan step 19, after the sight-reading level Н8): the same
+// «Ода к радости» read from the notes with the right hand (plan step 19, after reading in rhythm, Н9): the same
 // tune as the rhythm piece, now on the keys, C4-G4, with the bass under it.
 const ODE_RIGHT: Piece = {
   id: 'ode-right-hand',
@@ -321,7 +321,7 @@ const ODE_RIGHT: Piece = {
   meter: { numerator: 4, denominator: 4 },
   bpm: 72,
   learner: 0,
-  after: { section: 'notes', level: 8 },
+  after: { section: 'notes', level: 9 },
   voices: [
     { channel: 0, program: 0, notes: ODE_MELODY },
     { channel: 1, program: 32, velocity: 80, notes: voice('C3/1 G2/1 C3/1 G2/1 C3/1 G2/1 C3/1 G2/2 C3/2') },

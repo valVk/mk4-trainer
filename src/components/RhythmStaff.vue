@@ -1,9 +1,10 @@
 <script setup lang="ts">
 import { onBeforeUnmount, onMounted, ref, watch } from 'vue'
-import { Annotation, AnnotationVerticalJustify, Articulation, Beam, Dot, Formatter, ModifierPosition, Stave, StaveNote, StaveTie, Stem, Tuplet, Voice } from 'vexflow/bravura'
+import { Accidental, Annotation, AnnotationVerticalJustify, Articulation, Beam, Dot, Formatter, ModifierPosition, Stave, StaveNote, StaveTie, Stem, Tuplet, Voice } from 'vexflow/bravura'
 
 import { STAFF_COLOURS, staffContext } from '@/components/staffDrawing'
 
+import { spellBar } from '@/lib/notation'
 import { barQuarters, countLabels, noteQuarters, splitBars, type Duration, type Rhythm, type TimingVerdict } from '@/lib/rhythm'
 
 // A rhythm on a one-line staff (plan step 16): time signature, bars, beams, rests, dots, ties, triplets.
@@ -67,6 +68,7 @@ function draw() {
   const gap = LINE_GAP + (props.counts ? COUNTS_ROOM : 0)
   const { context, width } = staffContext(element, STAFF_HEIGHT + (lines.length - 1) * gap + (props.counts ? COUNTS_ROOM : 0), props.scale)
 
+  const pitched = props.rhythm.notes.some((note) => note.key !== undefined)
   const barsOf = lines.map((line) => splitBars(line.rhythm))
   const labelsOf = lines.map((line) => (props.counts ? countLabels(line.rhythm) : new Map<number, string>()))
   const { numerator, denominator } = props.rhythm.meter
@@ -95,18 +97,25 @@ function draw() {
       // compares the lengths of the two hands' bars exactly.
       const quarters = Math.round(bar.reduce((sum, item) => sum + noteQuarters(item.note), 0) * 96) / 96
       const stave = new Stave(x, -6 + l * gap, staveWidth)
-      stave.setConfigForLines(ONLY_MIDDLE_LINE)
+      // A melody (plan step 19) is read on the whole treble staff; a rhythm alone on one line.
+      if (!pitched) stave.setConfigForLines(ONLY_MIDDLE_LINE)
+      if (b === 0 && pitched) stave.addClef('treble')
       if (b === 0) stave.addTimeSignature(signature)
       stave.setContext(context).draw()
-      const notes = bar.map(({ note, index }) => {
+      const spelled = spellBar(bar.map(({ note }) => (note.key === undefined || note.rest ? [] : [note.key])))
+      const notes = bar.map(({ note, index }, n) => {
+        const key = spelled[n]![0]
         const staveNote = new StaveNote({
-          keys: [LINE_KEY],
+          keys: [key?.key ?? LINE_KEY],
           duration: CODES[note.duration],
           dots: note.dots ?? 0,
           type: note.rest ? 'r' : undefined,
+          clef: 'treble',
           // Stems up, as rhythms are written: beams and the triplet «3» go above, the counts below stay clear.
-          stemDirection: Stem.UP,
+          // A melody has its stems where its notes are, as any music.
+          ...(pitched ? { autoStem: true } : { stemDirection: Stem.UP }),
         })
+        if (key?.accidental) staveNote.addModifier(new Accidental(key.accidental), 0)
         if (note.dots) Dot.buildAndAttach([staveNote], { all: true })
         // Accent (>) always above the staff, where children look for it.
         if (note.accent && !note.rest) staveNote.addModifier(new Articulation('a>').setPosition(ModifierPosition.ABOVE), 0)
@@ -126,7 +135,7 @@ function draw() {
       voices.push(new Voice({ numBeats: quarters * (denominator / 4), beatValue: denominator }).setStrict(false).addTickables(notes))
       staves.push(stave)
       // Beam groups follow the meter: eighths in pairs in 4/4, in threes in 6/8.
-      beams.push(...Beam.generateBeams(notes, { groups: Beam.getDefaultBeamGroups(signature), stemDirection: Stem.UP }))
+      beams.push(...Beam.generateBeams(notes, { groups: Beam.getDefaultBeamGroups(signature), ...(pitched ? {} : { stemDirection: Stem.UP }) }))
     })
     // Both hands are formatted together, so notes at the same moment stand one above the other.
     const formatter = new Formatter()
