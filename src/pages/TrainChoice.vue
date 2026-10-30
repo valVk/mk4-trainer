@@ -37,7 +37,8 @@ const rhythmStars = computed(() => starsOf(progress.rhythmProgress.value[rhythmL
           <span class="card__title">{{ t('trainChoice.chords') }}</span>
         </span>
         <span class="card__body">
-          <ChordDiagram :lit="cMajor" class="card__picture" />
+          <!-- F3 to D5: as wide as the rhythm on the other card, with the chord in the middle. -->
+          <ChordDiagram :lit="cMajor" :from="53" :to="74" class="card__picture card__picture--wide" />
           <span class="card__lead">{{ t('trainChoice.chordsLead') }}</span>
         </span>
         <span class="card__foot">

@@ -3,7 +3,7 @@ import { computed, onBeforeUnmount, onMounted, ref, shallowRef, watch } from 'vu
 import { useI18n } from 'vue-i18n'
 import { Accidental, Formatter, GhostNote, Stave, StaveConnector, StaveNote, Voice, type Note } from 'vexflow/bravura'
 
-import { STAFF_COLOURS, staffContext } from '@/components/staffDrawing'
+import { paintNote, STAFF_COLOURS, staffContext } from '@/components/staffDrawing'
 
 import { spellBar } from '@/lib/notation'
 import { clefOf, mapBand, mapColumn, mapColumns, mapSign, type StaffClef } from '@/lib/staff'
@@ -39,7 +39,7 @@ function staveNote(key: number, clef: StaffClef): StaveNote {
   const [spelled] = spellBar([[key]])[0]!
   const note = new StaveNote({ keys: [spelled!.key], duration: 'w', clef })
   if (spelled!.accidental) note.addModifier(new Accidental(spelled!.accidental), 0)
-  note.setStyle({ fillStyle: STAFF_COLOURS.current, strokeStyle: STAFF_COLOURS.current })
+  paintNote(note, STAFF_COLOURS.current)
   return note
 }
 

@@ -2,7 +2,7 @@
 import { onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { Accidental, Annotation, AnnotationVerticalJustify, Articulation, Beam, Dot, Formatter, ModifierPosition, Stave, StaveNote, StaveTie, Stem, Tuplet, Voice } from 'vexflow/bravura'
 
-import { STAFF_COLOURS, staffContext } from '@/components/staffDrawing'
+import { paintNote, STAFF_COLOURS, staffContext } from '@/components/staffDrawing'
 
 import { spellBar } from '@/lib/notation'
 import { barQuarters, countLabels, noteQuarters, splitBars, type Duration, type Rhythm, type TimingVerdict } from '@/lib/rhythm'
@@ -126,7 +126,7 @@ function draw() {
           staveNote.addModifier(count, 0)
         }
         const colour = colourOf(index, line.marks, line.current)
-        if (colour) staveNote.setStyle({ fillStyle: colour, strokeStyle: colour })
+        paintNote(staveNote, colour)
         staveNotes[l]!.set(index, staveNote)
         return staveNote
       })

@@ -1,4 +1,4 @@
-import { Renderer, type RenderContext } from 'vexflow/bravura'
+import { Renderer, type RenderContext, type StaveNote } from 'vexflow/bravura'
 
 // Shared by the staff components: an SVG drawing surface for VexFlow with the bravura font built
 // into the bundle (works offline).
@@ -29,3 +29,15 @@ export const STAFF_COLOURS = {
   off: 'var(--color-pad-sun)',
   missed: 'var(--color-pad-tomato)',
 } as const
+
+/**
+ * Paints the whole note (head, stem, flag) in one colour: the text colour unless a result colour is given.
+ * VexFlow draws stems black on its own, which vanishes in the dark theme and leaves coloured notes with black stems.
+ */
+export function paintNote(note: StaveNote, colour?: string | null): StaveNote {
+  const paint = colour ?? 'currentColor'
+  if (colour) note.setStyle({ fillStyle: paint, strokeStyle: paint })
+  note.setStemStyle({ fillStyle: paint, strokeStyle: paint })
+  note.setFlagStyle({ fillStyle: paint, strokeStyle: paint })
+  return note
+}

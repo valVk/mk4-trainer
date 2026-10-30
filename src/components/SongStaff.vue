@@ -2,7 +2,7 @@
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { Accidental, Beam, Dot, Formatter, Stave, StaveConnector, StaveNote, StaveTie, Voice, type RenderContext } from 'vexflow/bravura'
 
-import { STAFF_COLOURS, STAFF_SCALE, staffContext } from '@/components/staffDrawing'
+import { paintNote, STAFF_COLOURS, STAFF_SCALE, staffContext } from '@/components/staffDrawing'
 import { barAt, drumPlace, spellBar, type Clef, type PlayedMark, type WrittenBar, type WrittenNote } from '@/lib/notation'
 import type { TimeSignature } from '@/lib/song'
 
@@ -96,7 +96,7 @@ function barNotes(row: Row, bar: WrittenBar): StaveNote[] {
     })
     if (note.dots) Dot.buildAndAttach([staveNote], { all: true })
     const fill = row.colour(bar.index, i, note)
-    if (fill) staveNote.setStyle({ fillStyle: fill, strokeStyle: fill })
+    paintNote(staveNote, fill)
     return staveNote
   })
 }

@@ -2,7 +2,7 @@
 import { onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { Accidental, Annotation, AnnotationVerticalJustify, Formatter, GhostNote, Stave, StaveConnector, StaveNote, Voice, type Note } from 'vexflow/bravura'
 
-import { staffContext } from '@/components/staffDrawing'
+import { paintNote, staffContext } from '@/components/staffDrawing'
 
 import { spellBar } from '@/lib/notation'
 import { clefOf, type StaffClef } from '@/lib/staff'
@@ -50,7 +50,7 @@ function staveNote(item: StaffNote, clef: StaffClef, alone: boolean): StaveNote 
   if (item.label) {
     note.addModifier(new Annotation(item.label).setVerticalJustification(AnnotationVerticalJustify.BOTTOM).setFont('sans-serif', 13, 'bold'), 0)
   }
-  if (item.colour) note.setStyle({ fillStyle: item.colour, strokeStyle: item.colour })
+  paintNote(note, item.colour)
   return note
 }
 
