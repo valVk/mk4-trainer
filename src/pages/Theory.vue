@@ -4,9 +4,11 @@ import { useI18n } from 'vue-i18n'
 import { useRoute, useRouter } from 'vue-router'
 
 import MidiStatus from '@/components/MidiStatus.vue'
+import OctaveMapButton from '@/components/OctaveMapButton.vue'
 import PageHeader from '@/components/PageHeader.vue'
 import TheoryNotes from '@/pages/theory/TheoryNotes.vue'
 import TheoryRhythm from '@/pages/theory/TheoryRhythm.vue'
+import { useKeyboardWindow } from '@/composables/useKeyboardWindow'
 
 // «Теория» (plan steps 17-24): the course from the video, section by section, fitted to the 25 keys of the
 // MK4. This page is the frame: the sections are their own components. The open section is in the address
@@ -14,6 +16,7 @@ import TheoryRhythm from '@/pages/theory/TheoryRhythm.vue'
 const { t } = useI18n()
 const route = useRoute()
 const router = useRouter()
+const windowStart = useKeyboardWindow()
 
 const SECTIONS = ['rhythm', 'notes', 'accidentals', 'intervals', 'scales', 'functions', 'sevenths'] as const
 type Section = typeof SECTIONS[number]
@@ -33,6 +36,8 @@ function openSection(next: Section) {
 <template>
   <main class="page page--fill">
     <PageHeader :title="t('theory.title')" back="/train" :back-label="t('train.title')">
+      <!-- In «Ритм» any key counts and the window moves as the child taps: the map opens there only on a tap. -->
+      <OctaveMapButton :window-start="windowStart" :show-on-shift="section === 'notes'" />
       <MidiStatus />
     </PageHeader>
 

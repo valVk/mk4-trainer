@@ -3,6 +3,7 @@ import { computed, onBeforeUnmount, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 
 import MidiStatus from '@/components/MidiStatus.vue'
+import OctaveMapButton from '@/components/OctaveMapButton.vue'
 import PageHeader from '@/components/PageHeader.vue'
 import PianoKeyboard from '@/components/PianoKeyboard.vue'
 import SoundControl from '@/components/SoundControl.vue'
@@ -244,6 +245,7 @@ const levelItems = computed(() => LEVELS.map((item) => ({ label: String(item.id)
 <template>
   <main class="page page--fill train">
     <PageHeader :title="t('trainChoice.chords')" back="/train" :back-label="t('train.title')">
+      <OctaveMapButton :window-start="start" show-on-shift />
       <SoundControl />
       <MidiStatus />
     </PageHeader>

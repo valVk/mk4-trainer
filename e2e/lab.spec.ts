@@ -30,5 +30,5 @@ test('shows the octave map once the octave presses settle, then puts it away', a
   await page.waitForTimeout(150)
   await expect(map).toBeHidden()
   await expect(map).toBeVisible({ timeout: 800 })
-  await expect(map).toBeHidden({ timeout: 4000 })
+  await expect(map).toBeHidden({ timeout: 2500 })
 })

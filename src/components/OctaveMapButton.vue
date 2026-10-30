@@ -20,7 +20,7 @@ const { t } = useI18n()
 /** Quick presses in a row open the map once, at the final place. */
 const SHOW_AFTER_MS = 350
 /** How long the map stays after the last move when it opened by itself. */
-const HIDE_AFTER_MS = 3000
+const HIDE_AFTER_MS = 1750
 
 const open = ref(false)
 /** Opened by a move, not by a tap: only then it closes by itself. */
