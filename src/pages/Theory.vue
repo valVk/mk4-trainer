@@ -180,6 +180,17 @@ function listen() {
  * The metronome button: steady clicks at the task's tempo and meter between attempts, to count along and
  * tap the beat before trying. An attempt has its own count-in and clicks, so «Играть» and «Послушать» stop it.
  */
+/** Short screens (the smaller tablets, 650 px high) get a smaller staff, so the page does not scroll. */
+const windowHeight = ref(window.innerHeight)
+const onResize = () => {
+  windowHeight.value = window.innerHeight
+}
+window.addEventListener('resize', onResize)
+onBeforeUnmount(() => window.removeEventListener('resize', onResize))
+const short = computed(() => windowHeight.value < 720)
+const staffScale = computed(() => (lowerTask.value ? (short.value ? 1 : 1.35) : short.value ? 1.6 : 2))
+const introScale = computed(() => (short.value ? 1.25 : 1.5))
+
 const metronomeOn = computed(() => metronome.running.value)
 /** Counts the beats heard, to restart the beat light on each one (also when the same beat number comes again). */
 const beatCount = ref(0)
@@ -428,7 +439,7 @@ const levelTabs = computed(() => RHYTHM_LEVELS.map((item) => ({ id: item.id, ope
         <p class="prompt text-highlighted">{{ t('theory.intro.title') }}</p>
         <div class="intro">
           <div v-for="item in introRhythms" :key="item.id" class="intro__item">
-            <RhythmStaff :rhythm="item.rhythm" counts />
+            <RhythmStaff :rhythm="item.rhythm" :scale="introScale" counts />
             <p class="text-toned">{{ t(`theory.intro.${item.id}`) }}</p>
             <UButton icon="i-lucide-ear" color="neutral" variant="soft" size="md" class="self-start" :label="t('theory.listen')" @click="player.play(item.rhythm, bpm)" />
           </div>
@@ -443,7 +454,7 @@ const levelTabs = computed(() => RHYTHM_LEVELS.map((item) => ({ id: item.id, ope
         <div class="staff-box">
           <RhythmStaff
             v-if="showNotes"
-            :scale="lowerTask ? 1.7 : 2.2"
+            :scale="staffScale"
             :rhythm="task"
             counts
             :lower="lowerTask"
@@ -728,6 +739,28 @@ const levelTabs = computed(() => RHYTHM_LEVELS.map((item) => ({ id: item.id, ope
   .beat {
     animation: none;
     opacity: 1;
+  }
+}
+
+/* Short tablets (650 px high): a tighter card, so even two hands fit without scrolling. */
+@media (max-height: 720px) {
+  .sections,
+  .levels-row {
+    margin-top: 0.5rem;
+  }
+
+  .task {
+    gap: 0.375rem;
+    margin-top: 0.5rem;
+    padding: 0.625rem 1rem;
+  }
+
+  .controls {
+    margin-top: 0.625rem;
+  }
+
+  .how {
+    font-size: 0.9375rem;
   }
 }
 

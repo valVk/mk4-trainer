@@ -1,4 +1,4 @@
-import { getCurrentScope, onScopeDispose, readonly, ref, shallowRef } from 'vue'
+import { computed, getCurrentScope, onScopeDispose, readonly, ref, shallowRef } from 'vue'
 
 import {
   DEFAULT_BASE_NOTE,
@@ -257,6 +257,34 @@ const midi = new WebMidiSource(() => padMap.value, (inputs) => {
 })
 midi.subscribe(dispatch)
 
+/** What Chrome says about MIDI for this site; null when the browser cannot tell (then we just ask). */
+async function midiPermission(): Promise<PermissionState | null> {
+  try {
+    const status = await navigator.permissions.query({ name: 'midi' as PermissionName })
+    // Allowed or blocked later in the site settings: follow it without a reload.
+    status.onchange = () => {
+      if (status.state === 'granted') void connectMidi()
+      else if (status.state === 'denied') midiStatus.value = 'denied'
+      else if (midiStatus.value === 'denied') midiStatus.value = 'idle'
+    }
+    return status.state
+  } catch {
+    return null
+  }
+}
+
+/**
+ * At startup: connect only when MIDI is already allowed. Asking before the child has tapped anything
+ * shows Chrome's prompt on every visit; after a few prompts closed unanswered, Chrome blocks MIDI for the
+ * site for good. Otherwise the «Подключить MK4» button asks, right after a tap.
+ */
+async function autoConnectMidi(): Promise<void> {
+  if (midiStatus.value === 'unsupported') return
+  const state = await midiPermission()
+  if (state === 'granted' || state === null) await connectMidi()
+  else if (state === 'denied') midiStatus.value = 'denied'
+}
+
 async function connectMidi(): Promise<void> {
   if (midiStatus.value === 'unsupported' || midiStatus.value === 'connected') return
   midiStatus.value = 'connecting'
@@ -298,6 +326,9 @@ export function useNoteSource() {
     capturePresses,
     baseNote: readonly(baseNote),
     midiStatus: readonly(midiStatus),
+    /** A keyboard is actually plugged in (MIDI access alone says nothing about that). */
+    midiFound: computed(() => midiInputs.value.some((input) => input.connected)),
+    autoConnectMidi,
     midiError: readonly(midiError),
     midiInputs: readonly(midiInputs),
     connectMidi,

@@ -9,9 +9,8 @@ import { useNoteSource } from '@/composables/useNoteSource'
 import { usePadActions } from '@/composables/usePadActions'
 import { useProgress } from '@/composables/useProgress'
 
-// Connect the MK4 right away: the child should not need to find a button first.
-// Chrome asks for permission once and remembers it; a refusal just leaves the connect buttons visible.
-void useNoteSource().connectMidi()
+// Connect the MK4 right away when MIDI is already allowed; otherwise the «Подключить MK4» button asks.
+void useNoteSource().autoConnectMidi()
 // Open the database, restore the profile, pad map and instrument.
 void useProgress().init()
 

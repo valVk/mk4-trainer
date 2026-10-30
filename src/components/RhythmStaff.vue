@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { onBeforeUnmount, onMounted, ref, watch } from 'vue'
-import { Annotation, AnnotationVerticalJustify, Articulation, Beam, Dot, Formatter, ModifierPosition, Stave, StaveNote, StaveTie, Tuplet, Voice } from 'vexflow/bravura'
+import { Annotation, AnnotationVerticalJustify, Articulation, Beam, Dot, Formatter, ModifierPosition, Stave, StaveNote, StaveTie, Stem, Tuplet, Voice } from 'vexflow/bravura'
 
 import { STAFF_COLOURS, staffContext } from '@/components/staffDrawing'
 
@@ -30,6 +30,10 @@ const host = ref<HTMLDivElement | null>(null)
 const CODES: Record<Duration, string> = { whole: 'w', half: 'h', quarter: 'q', eighth: '8', sixteenth: '16' }
 /** Height in unscaled staff units. */
 const STAFF_HEIGHT = 84
+/** VexFlow tuplet place: 1 is above the notes (with the beams, stems are up). */
+const TUPLET_ABOVE = 1
+/** Room under the stems for the counts («1», «и»…), so they do not run into the text below. */
+const COUNTS_ROOM = 26
 /** Extra room per note, in quarter notes of width. */
 const NOTE_ROOM = 0.35
 /** Rhythm sits on the middle line of a five-line staff whose other lines are hidden: rests and bar lines then land where musicians expect. */
@@ -59,7 +63,9 @@ function draw() {
   if (!element) return
   const lines: Line[] = [{ rhythm: props.rhythm, marks: props.marks, current: props.current }]
   if (props.lower) lines.push({ rhythm: props.lower, marks: props.lowerMarks })
-  const { context, width } = staffContext(element, STAFF_HEIGHT + (lines.length - 1) * LINE_GAP, props.scale)
+  // With counts, every line keeps room under its stems for them.
+  const gap = LINE_GAP + (props.counts ? COUNTS_ROOM : 0)
+  const { context, width } = staffContext(element, STAFF_HEIGHT + (lines.length - 1) * gap + (props.counts ? COUNTS_ROOM : 0), props.scale)
 
   const barsOf = lines.map((line) => splitBars(line.rhythm))
   const labelsOf = lines.map((line) => (props.counts ? countLabels(line.rhythm) : new Map<number, string>()))
@@ -88,7 +94,7 @@ function draw() {
       // Rounded to a 1/96 grid: three triplet eighths add up to 0.9999… in floating point, and VexFlow
       // compares the lengths of the two hands' bars exactly.
       const quarters = Math.round(bar.reduce((sum, item) => sum + noteQuarters(item.note), 0) * 96) / 96
-      const stave = new Stave(x, -6 + l * LINE_GAP, staveWidth)
+      const stave = new Stave(x, -6 + l * gap, staveWidth)
       stave.setConfigForLines(ONLY_MIDDLE_LINE)
       if (b === 0) stave.addTimeSignature(signature)
       stave.setContext(context).draw()
@@ -98,6 +104,8 @@ function draw() {
           duration: CODES[note.duration],
           dots: note.dots ?? 0,
           type: note.rest ? 'r' : undefined,
+          // Stems up, as rhythms are written: beams and the triplet «3» go above, the counts below stay clear.
+          stemDirection: Stem.UP,
         })
         if (note.dots) Dot.buildAndAttach([staveNote], { all: true })
         // Accent (>) always above the staff, where children look for it.
@@ -118,7 +126,7 @@ function draw() {
       voices.push(new Voice({ numBeats: quarters * (denominator / 4), beatValue: denominator }).setStrict(false).addTickables(notes))
       staves.push(stave)
       // Beam groups follow the meter: eighths in pairs in 4/4, in threes in 6/8.
-      beams.push(...Beam.generateBeams(notes, { groups: Beam.getDefaultBeamGroups(signature) }))
+      beams.push(...Beam.generateBeams(notes, { groups: Beam.getDefaultBeamGroups(signature), stemDirection: Stem.UP }))
     })
     // Both hands are formatted together, so notes at the same moment stand one above the other.
     const formatter = new Formatter()
@@ -150,7 +158,8 @@ function tupletsOf(written: Rhythm['notes'], notes: StaveNote[]): Tuplet[] {
       continue
     }
     const group = notes.slice(i, i + tuplet.actual)
-    tuplets.push(new Tuplet(group, { numNotes: tuplet.actual, notesOccupied: tuplet.normal }))
+    // Above, with the beam: under the notes it would be read as a count.
+    tuplets.push(new Tuplet(group, { numNotes: tuplet.actual, notesOccupied: tuplet.normal }).setTupletLocation(TUPLET_ABOVE))
     i += tuplet.actual
   }
   return tuplets
