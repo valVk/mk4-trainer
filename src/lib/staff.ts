@@ -93,3 +93,43 @@ export function octaveSign(key: number, clef: StaffClef): '8va' | '15ma' | '8vb'
 export function clefOf(key: number): StaffClef {
   return key >= 60 ? 'treble' : 'bass'
 }
+
+// The octave map (plan step 19, owner's addition): the grand staff from C2 to C6 laid out by pitch, one column per
+// white key, the name of each octave under its C, and the MK4 window as a band over the columns it covers.
+
+export const MAP_LOW = 36
+export const MAP_HIGH = 84
+
+export interface MapColumn {
+  key: number
+  /** The octave name, on the C that starts it. */
+  octave: OctaveName | null
+}
+
+export function mapColumns(): MapColumn[] {
+  const columns: MapColumn[] = []
+  for (let key = MAP_LOW; key <= MAP_HIGH; key++) {
+    if (!isBlackKey(key)) columns.push({ key, octave: pitchClass(key) === 0 ? octaveName(key) : null })
+  }
+  return columns
+}
+
+/** Column of a key on the map (a black key shares the column of the white key below); null off the map. */
+export function mapColumn(key: number): number | null {
+  if (key < MAP_LOW || key > MAP_HIGH) return null
+  return diatonicStep(key) - diatonicStep(MAP_LOW)
+}
+
+/** First and last column the 25-key window covers, clipped to the map. */
+export function mapBand(start: number): { from: number, to: number } {
+  const last = diatonicStep(MAP_HIGH) - diatonicStep(MAP_LOW)
+  const clip = (key: number) => Math.max(0, Math.min(last, diatonicStep(key) - diatonicStep(MAP_LOW)))
+  return { from: clip(start), to: clip(start + KEYBOARD_KEYS - 1) }
+}
+
+/** The window goes past the top or bottom of the map: what the notes would be written with. */
+export function mapSign(start: number): '8va' | '8vb' | null {
+  if (start + KEYBOARD_KEYS - 1 > MAP_HIGH) return '8va'
+  if (start < MAP_LOW) return '8vb'
+  return null
+}

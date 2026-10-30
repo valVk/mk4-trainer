@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 
 import { KEYBOARD_KEYS } from '@/lib/keyboard'
-import { NOTE_LEVELS, checkNote, currentNoteLevel, isNoteLevelOpen, nextNote, parseNoteProgress } from '@/lib/noteLevels'
+import { NOTE_LEVELS, checkNote, countsForStars, currentNoteLevel, isNoteLevelOpen, nextNote, parseNoteProgress } from '@/lib/noteLevels'
 import { octaveShift } from '@/lib/staff'
 
 const level = (id: number) => NOTE_LEVELS.find((item) => item.id === id)!
@@ -15,7 +15,7 @@ describe('note levels', () => {
   })
 
   it('fit the 25 keys at C3-C5 until the ledger-line level, which needs the octave buttons', () => {
-    for (const item of NOTE_LEVELS.filter((entry) => !entry.anyOctave && entry.id < 7)) {
+    for (const item of NOTE_LEVELS.filter((entry) => !entry.anyOctave && entry.id !== 7)) {
       expect(item.keys.every((key) => octaveShift(key, MK4_START) === 0)).toBe(true)
     }
     expect(level(7).keys.some((key) => octaveShift(key, MK4_START) !== 0)).toBe(true)
@@ -70,5 +70,19 @@ describe('note progress', () => {
   it('reads saved progress and drops what is broken', () => {
     expect(parseNoteProgress({ 1: { correct: 7.5 }, 2: { correct: -1 }, 99: { correct: 3 }, 3: null })).toEqual({ 1: { correct: 7 } })
     expect(parseNoteProgress('x')).toEqual({})
+  })
+})
+
+describe('the timed level', () => {
+  it('is the last one, and only quick answers earn stars there', () => {
+    const timed = NOTE_LEVELS[NOTE_LEVELS.length - 1]!
+    expect(NOTE_LEVELS.slice(0, -1).every((item) => item.timed === undefined)).toBe(true)
+    expect(countsForStars(timed, 2500)).toBe(true)
+    expect(countsForStars(timed, timed.timed! + 1)).toBe(false)
+    expect(countsForStars(level(3), 60_000)).toBe(true)
+  })
+
+  it('stays inside the 25 keys at C3-C5', () => {
+    expect(level(8).keys.every((key) => octaveShift(key, MK4_START) === 0)).toBe(true)
   })
 })

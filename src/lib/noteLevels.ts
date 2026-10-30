@@ -7,7 +7,7 @@ import { STAR_THRESHOLDS, starsFor } from './levels'
 import { pitch } from './staff'
 import { pitchClass } from './theory'
 
-export type NoteIntroId = 'keyboard' | 'names' | 'treble' | 'bass' | 'grand' | 'ledgers'
+export type NoteIntroId = 'keyboard' | 'names' | 'treble' | 'bass' | 'grand' | 'ledgers' | 'timed'
 
 /** How the task is shown: the note's name only, or the note on a staff. */
 export type NoteShow = 'name' | 'treble' | 'bass' | 'grand'
@@ -19,6 +19,8 @@ export interface NoteLevel {
   /** Any octave counts (first levels); otherwise the very key on the staff. */
   anyOctave: boolean
   introduces: NoteIntroId[]
+  /** Upper levels: only an answer within this many ms earns its star (plan step 19: «на время только на верхних уровнях»). */
+  timed?: number
 }
 
 const keys = (names: string) => names.trim().split(/\s+/).map(pitch)
@@ -35,7 +37,14 @@ export const NOTE_LEVELS: readonly NoteLevel[] = [
   { id: 6, show: 'grand', keys: keys('C3 E3 G3 B3 D4 F4 A4 C5 D3 F3 A3 C4 E4 G4 B4'), anyOctave: false, introduces: ['grand'] },
   // Ledger lines past the 25 keys: the child moves the octave on the MK4, which is what 8va means.
   { id: 7, show: 'grand', keys: keys('D5 E5 G5 A5 C6 C2 E2 G2 B2'), anyOctave: false, introduces: ['ledgers'] },
+  // Reading at sight: every note of both clefs inside C3-C5, a few seconds each. No key hint here: it would give the answer.
+  { id: 8, show: 'grand', keys: keys('C3 D3 E3 F3 G3 A3 B3 C4 D4 E4 F4 G4 A4 B4 C5'), anyOctave: false, introduces: ['timed'], timed: 4000 },
 ]
+
+/** Whether a right answer counts towards the stars: on a timed level only a quick one does. */
+export function countsForStars(level: NoteLevel, answerMs: number): boolean {
+  return level.timed === undefined || answerMs <= level.timed
+}
 
 export interface NoteLevelProgress {
   correct: number

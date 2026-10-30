@@ -8,9 +8,10 @@ import { useNoteSource } from '@/composables/useNoteSource'
 import { padsPlayMusic, usePadActions } from '@/composables/usePadActions'
 import { useProgress } from '@/composables/useProgress'
 import { useRhythmPlayer } from '@/composables/useRhythmPlayer'
+import { useShortScreen } from '@/composables/useShortScreen'
 import { useSynth } from '@/composables/useSynth'
+import { useTheoryPieces } from '@/composables/useTheoryPieces'
 import { useWakeLock } from '@/composables/useWakeLock'
-import { PIECES, builtinId } from '@/lib/pieces'
 import { scaleGroups, tapInputOf, type TapInput } from '@/lib/metronome'
 import { quarterSeconds, scoreRhythm, sounds, type Rhythm, type RhythmPress, type RhythmScore, type TimingVerdict } from '@/lib/rhythm'
 import {
@@ -179,13 +180,7 @@ function listen() {
  * tap the beat before trying. An attempt has its own count-in and clicks, so «Играть» and «Послушать» stop it.
  */
 /** Short screens (the smaller tablets, 650 px high) get a smaller staff, so the page does not scroll. */
-const windowHeight = ref(window.innerHeight)
-const onResize = () => {
-  windowHeight.value = window.innerHeight
-}
-window.addEventListener('resize', onResize)
-onBeforeUnmount(() => window.removeEventListener('resize', onResize))
-const short = computed(() => windowHeight.value < 720)
+const short = useShortScreen()
 const staffScale = computed(() => (lowerTask.value ? (short.value ? 1 : 1.35) : short.value ? 1.6 : 2))
 const introScale = computed(() => (short.value ? 1.25 : 1.5))
 
@@ -356,13 +351,7 @@ onBeforeUnmount(() => cancelAnimationFrame(countFrame))
 
 /** The intro: one bar of each new value, to look at and listen to. */
 const introRhythms = computed(() => info.value.introduces.map((id) => ({ id, rhythm: introRhythm(id) })))
-/** Rhythm pieces that come after a level, with a link to their stored song once it is there. */
-function piecesAfter(id: number) {
-  return PIECES.filter((piece) => piece.kind === 'rhythm' && piece.afterLevel === id).map((piece) => {
-    const song = progress.songs.value.find((item) => builtinId(item.fileName) === piece.id)
-    return { id: piece.id, title: piece.short ?? piece.title, to: song ? `/songs/${song.id}/${piece.learner}` : null }
-  })
-}
+const { piecesAfter } = useTheoryPieces('rhythm')
 const levelTabs = computed(() => RHYTHM_LEVELS.map((item) => ({ id: item.id, open: isOpen(item.id, passed.value), stars: starsOf(passed.value[item.id]?.passes ?? 0) })))
 </script>
 

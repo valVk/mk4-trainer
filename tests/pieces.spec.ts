@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest'
 import { KEYBOARD_KEYS } from '@/lib/keyboard'
 import { PIECES, buildPieceMidi, builtinId, pieceFileName, pitch, rhythmVoice, voice, voiceQuarters } from '@/lib/pieces'
 import { barQuarters } from '@/lib/rhythm'
+import { NOTE_LEVELS } from '@/lib/noteLevels'
 import { RHYTHM_LEVELS } from '@/lib/rhythmLevels'
 import { parseSong } from '@/lib/song'
 
@@ -53,10 +54,15 @@ describe.each(PIECES.map((piece) => [piece.title, piece] as const))('%s', (_, pi
   })
 })
 
-describe('rhythm pieces in «Теория»', () => {
-  it('each comes after a real level and has a short chip name', () => {
-    for (const piece of PIECES.filter((item) => item.kind === 'rhythm')) {
-      expect(RHYTHM_LEVELS.some((level) => level.id === piece.afterLevel)).toBe(true)
+describe('pieces in «Теория»', () => {
+  it('every rhythm piece comes after a level of «Ритм»', () => {
+    expect(PIECES.filter((item) => item.kind === 'rhythm').every((piece) => piece.after?.section === 'rhythm')).toBe(true)
+  })
+
+  it('each comes after a real level of its section and has a short chip name', () => {
+    for (const piece of PIECES.filter((item) => item.after)) {
+      const levels = piece.after!.section === 'rhythm' ? RHYTHM_LEVELS : NOTE_LEVELS
+      expect(levels.some((level) => level.id === piece.after!.level)).toBe(true)
       expect(piece.short!.length).toBeLessThanOrEqual(12)
     }
   })

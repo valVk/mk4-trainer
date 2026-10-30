@@ -19,6 +19,8 @@ declare module 'vue' {
     MidiStatus: typeof import('./src/components/MidiStatus.vue')['default']
     NoteFall: typeof import('./src/components/NoteFall.vue')['default']
     NoteStaff: typeof import('./src/components/NoteStaff.vue')['default']
+    OctaveMap: typeof import('./src/components/OctaveMap.vue')['default']
+    OctaveMapButton: typeof import('./src/components/OctaveMapButton.vue')['default']
     PadMap: typeof import('./src/components/PadMap.vue')['default']
     PadStrip: typeof import('./src/components/PadStrip.vue')['default']
     PageHeader: typeof import('./src/components/PageHeader.vue')['default']

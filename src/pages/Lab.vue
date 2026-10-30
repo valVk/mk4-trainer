@@ -4,6 +4,7 @@ import { useI18n } from 'vue-i18n'
 
 import IntervalBar from '@/components/IntervalBar.vue'
 import MidiStatus from '@/components/MidiStatus.vue'
+import OctaveMapButton from '@/components/OctaveMapButton.vue'
 import PageHeader from '@/components/PageHeader.vue'
 import PianoKeyboard from '@/components/PianoKeyboard.vue'
 import SoundControl from '@/components/SoundControl.vue'
@@ -76,6 +77,7 @@ const rangeLabel = computed(() => `${midiName(start.value)} – ${midiName(start
 <template>
   <main class="page page--fill lab">
     <PageHeader :title="t('lab.title')">
+      <OctaveMapButton :window-start="start" show-on-shift />
       <SoundControl />
       <MidiStatus />
     </PageHeader>

@@ -32,6 +32,9 @@ export interface PieceVoice {
  */
 export type PieceKind = 'melody' | 'rhythm'
 
+/** Sections of «Теория» that end their level groups with pieces. */
+export type TheorySection = 'rhythm' | 'notes'
+
 export interface Piece {
   /** Stable id; the version goes up whenever the notes change, so saved copies are refreshed. */
   id: string
@@ -48,8 +51,8 @@ export interface Piece {
   learner: number
   /** Rhythm pieces: the drum part is a groove of its own, not the rhythm of the tune. */
   groove?: boolean
-  /** Rhythm pieces: the theory level they come after («Теория» → «Ритм»). */
-  afterLevel?: number
+  /** The level of «Теория» the piece comes after: it opens with that level's last star. */
+  after?: { section: TheorySection, level: number }
 }
 
 const DRUMS = 9
@@ -144,7 +147,7 @@ const ODE: Piece = {
   meter: { numerator: 4, denominator: 4 },
   bpm: 84,
   learner: DRUMS,
-  afterLevel: 2,
+  after: { section: 'rhythm', level: 2 },
   voices: [
     { channel: 0, program: 0, notes: ODE_MELODY },
     { channel: 1, program: 32, velocity: 80, notes: voice('C3/1 G2/1 C3/1 G2/1 C3/1 G2/1 C3/1 G2/2 C3/2') },
@@ -166,7 +169,7 @@ const ROW: Piece = {
   meter: { numerator: 6, denominator: 8 },
   bpm: 60,
   learner: DRUMS,
-  afterLevel: 10,
+  after: { section: 'rhythm', level: 10 },
   voices: [
     { channel: 0, program: 0, notes: ROW_MELODY },
     { channel: 1, program: 32, velocity: 80, notes: voice('C3/2. C3/2. C3/2. C3/2. C3/2. C3/2. G2/2. C3/2.') },
@@ -190,7 +193,7 @@ const CHIZHIK: Piece = {
   meter: { numerator: 4, denominator: 4 },
   bpm: 76,
   learner: DRUMS,
-  afterLevel: 5,
+  after: { section: 'rhythm', level: 5 },
   voices: [
     { channel: 0, program: 0, notes: CHIZHIK_MELODY },
     { channel: 1, program: 32, velocity: 80, notes: voice('F2/2 G2/2 C3/2 F2/2 F2/2 G2/2 C3/2 F2/2') },
@@ -216,7 +219,7 @@ const WALTZ: Piece = {
   meter: { numerator: 3, denominator: 4 },
   bpm: 96,
   learner: DRUMS,
-  afterLevel: 7,
+  after: { section: 'rhythm', level: 7 },
   voices: [
     { channel: 0, program: 0, notes: WALTZ_MELODY },
     { channel: 1, program: 32, velocity: 80, notes: voice(WALTZ_ROOTS.map((root) => `${root}/4 r/2`).join(' ')) },
@@ -241,7 +244,7 @@ const YOLKA: Piece = {
   meter: { numerator: 2, denominator: 4 },
   bpm: 66,
   learner: DRUMS,
-  afterLevel: 8,
+  after: { section: 'rhythm', level: 8 },
   voices: [
     { channel: 0, program: 0, notes: YOLKA_MELODY },
     { channel: 1, program: 32, velocity: 80, notes: voice('r/2 F2/2 F2/2 C3/2 F2/2 Bb2/2 F2/2 C3/2 F2/2') },
@@ -269,7 +272,7 @@ const ENTERTAINER: Piece = {
   meter: { numerator: 2, denominator: 4 },
   bpm: 56,
   learner: DRUMS,
-  afterLevel: 8,
+  after: { section: 'rhythm', level: 8 },
   voices: [
     { channel: 0, program: 0, notes: ENTERTAINER_MELODY },
     {
@@ -298,7 +301,7 @@ const DRUMMER: Piece = {
   meter: { numerator: 4, denominator: 4 },
   bpm: 84,
   learner: DRUMS,
-  afterLevel: 10,
+  after: { section: 'rhythm', level: 10 },
   groove: true,
   voices: [
     { channel: 0, program: 0, notes: ODE_MELODY },
@@ -307,7 +310,25 @@ const DRUMMER: Piece = {
   ],
 }
 
-export const PIECES: readonly Piece[] = [FUR_ELISE, ODE, CHIZHIK, WALTZ, YOLKA, ENTERTAINER, ROW, DRUMMER]
+// «Ода к радости» read from the notes with the right hand (plan step 19, after the sight-reading level Н8): the same
+// tune as the rhythm piece, now on the keys, C4-G4, with the bass under it.
+const ODE_RIGHT: Piece = {
+  id: 'ode-right-hand',
+  version: 1,
+  title: 'Ода к радости — правая рука',
+  short: 'Ода',
+  kind: 'melody',
+  meter: { numerator: 4, denominator: 4 },
+  bpm: 72,
+  learner: 0,
+  after: { section: 'notes', level: 8 },
+  voices: [
+    { channel: 0, program: 0, notes: ODE_MELODY },
+    { channel: 1, program: 32, velocity: 80, notes: voice('C3/1 G2/1 C3/1 G2/1 C3/1 G2/1 C3/1 G2/2 C3/2') },
+  ],
+}
+
+export const PIECES: readonly Piece[] = [FUR_ELISE, ODE, CHIZHIK, WALTZ, YOLKA, ENTERTAINER, ROW, DRUMMER, ODE_RIGHT]
 
 /** The file name a piece is stored under: built in, with its version. */
 export function pieceFileName(piece: Pick<Piece, 'id' | 'version'>): string {

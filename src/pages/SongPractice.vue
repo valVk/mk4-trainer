@@ -4,6 +4,7 @@ import { useI18n } from 'vue-i18n'
 import { useRoute } from 'vue-router'
 
 import NoteFall from '@/components/NoteFall.vue'
+import OctaveMapButton from '@/components/OctaveMapButton.vue'
 import PadStrip from '@/components/PadStrip.vue'
 import PageHeader from '@/components/PageHeader.vue'
 import PianoKeyboard from '@/components/PianoKeyboard.vue'
@@ -629,6 +630,7 @@ const nextLabel = computed(() => {
             </div>
           </template>
         </UPopover>
+        <OctaveMapButton v-if="!onPads" :window-start="windowStart" />
         <SoundControl :fixed-instrument="partName" :fixed-label="onPads ? t('sound.yourPads', { name: partName }) : undefined" />
     </PageHeader>
 

@@ -11,6 +11,8 @@ import { OCTAVE_NAMES, PIANO_HIGH, PIANO_LOW, octaveOf } from '@/lib/staff'
 const props = defineProps<{
   /** First key of the MK4 window. */
   windowStart: number
+  /** Where the window usually is (the first and second octave): drawn as a calm outline, to see how far it moved. */
+  homeStart?: number
 }>()
 
 const { t } = useI18n()
@@ -42,19 +44,23 @@ const octaves = computed(() => OCTAVE_NAMES.map((name, octave) => {
   return { name, from, to }
 }).filter((item) => item.to > item.from))
 
-const band = computed(() => {
-  const from = xOf(props.windowStart)
-  return { from, to: xOf(props.windowStart + KEYBOARD_KEYS) }
-})
+const bandOf = (start: number) => ({ from: xOf(start), to: xOf(start + KEYBOARD_KEYS) })
+const band = computed(() => bandOf(props.windowStart))
+const home = computed(() => (props.homeStart === undefined || props.homeStart === props.windowStart ? null : bandOf(props.homeStart)))
 </script>
 
 <template>
   <svg :viewBox="`0 0 ${keys.width} ${WHITE_H + LABEL_H}`" class="piano-map" role="img" :aria-label="t('theory.notes.mapLabel')">
     <rect v-for="item in keys.whites" :key="item.key" :x="item.x + 0.3" y="0" :width="WHITE_W - 0.6" :height="WHITE_H" rx="1.2" class="white" />
     <rect v-for="item in keys.blacks" :key="item.key" :x="item.x" y="0" :width="BLACK_W" :height="BLACK_H" rx="0.8" class="black" />
+    <rect v-if="home" :x="home.from" y="-1" :width="home.to - home.from" :height="WHITE_H + 2" rx="2" class="home" />
+    <text v-if="home" :x="(home.from + home.to) / 2" :y="WHITE_H - 5" text-anchor="middle" class="home__label">{{ t('theory.notes.homeWindow') }}</text>
     <!-- The MK4 window: 25 keys under the hands now. -->
-    <rect :x="band.from" y="-1" :width="band.to - band.from" :height="WHITE_H + 2" rx="2" class="band" />
-    <text :x="(band.from + band.to) / 2" :y="WHITE_H - 5" text-anchor="middle" class="band__label">MK4</text>
+    <!-- Moved with a transform, so the band slides to its new place when the octave changes. -->
+    <g class="band__move" :style="{ transform: `translateX(${band.from}px)` }">
+      <rect x="0" y="-1" :width="band.to - band.from" :height="WHITE_H + 2" rx="2" class="band" />
+      <text :x="(band.to - band.from) / 2" :y="WHITE_H - 5" text-anchor="middle" class="band__label">MK4</text>
+    </g>
     <g v-for="(item, i) in octaves" :key="item.name">
       <line :x1="item.from" :x2="item.from" :y1="WHITE_H + 2" :y2="WHITE_H + LABEL_H - 2" class="tick" />
       <text :x="(item.from + item.to) / 2" :y="WHITE_H + LABEL_H - 5" text-anchor="middle" class="octave" :class="{ 'octave--first': i === octaveOf(60) }">
@@ -85,6 +91,29 @@ const band = computed(() => {
   fill: color-mix(in oklab, var(--color-pad-sky) 22%, transparent);
   stroke: var(--color-pad-sky);
   stroke-width: 1.2;
+}
+
+.home {
+  fill: color-mix(in oklab, var(--ui-text-muted) 10%, transparent);
+  stroke: var(--ui-text-muted);
+  stroke-width: 0.8;
+  stroke-dasharray: 3 2;
+}
+
+.home__label {
+  font-size: 8px;
+  font-weight: 600;
+  fill: var(--ui-text-muted);
+}
+
+.band__move {
+  transition: transform 200ms var(--ease-out);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .band__move {
+    transition: none;
+  }
 }
 
 .band__label {

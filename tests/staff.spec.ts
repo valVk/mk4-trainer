@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
-import { clefOf, octaveName, octaveShift, octaveSign, staffPlace, windowOctaves } from '@/lib/staff'
+import { clefOf, mapBand, mapColumn, mapColumns, mapSign, octaveName, octaveShift, octaveSign, staffPlace, windowOctaves } from '@/lib/staff'
 
 describe('octaves', () => {
   it('names the octaves of the piano, middle C in «первая»', () => {
@@ -69,5 +69,33 @@ describe('the place of a note on the staff', () => {
 
   it('reads middle C and up in the treble clef', () => {
     expect([clefOf(60), clefOf(59)]).toEqual(['treble', 'bass'])
+  })
+})
+
+describe('the octave map', () => {
+  it('lays the white keys of C2-C6 out as columns, a C under each octave name', () => {
+    const columns = mapColumns()
+    expect(columns[0]).toMatchObject({ key: 36, octave: 'great' })
+    expect(columns[columns.length - 1]).toMatchObject({ key: 84, octave: 'third' })
+    expect(columns).toHaveLength(29)
+    expect(columns.filter((column) => column.octave !== null).map((column) => column.key)).toEqual([36, 48, 60, 72, 84])
+  })
+
+  it('puts the MK4 window on the columns it covers', () => {
+    expect(mapBand(48)).toEqual({ from: 7, to: 21 })
+    expect(mapBand(24)).toEqual({ from: 0, to: 7 })
+    expect(mapBand(84)).toEqual({ from: 28, to: 28 })
+  })
+
+  it('says 8va or 8vb when the window goes past the map', () => {
+    expect(mapSign(48)).toBeNull()
+    expect(mapSign(72)).toBe('8va')
+    expect(mapSign(24)).toBe('8vb')
+  })
+
+  it('finds the column of a pressed key, black keys on the white key below', () => {
+    expect(mapColumn(60)).toBe(14)
+    expect(mapColumn(61)).toBe(14)
+    expect(mapColumn(20)).toBeNull()
   })
 })
