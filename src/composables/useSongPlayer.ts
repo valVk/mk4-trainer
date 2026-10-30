@@ -36,10 +36,30 @@ function requireSynth() {
   return synth
 }
 
+/**
+ * A jump the sequencer has not reported yet. It runs in the audio thread and answers a frame or two
+ * late: until then it still says the old place (the end of a phrase just listened to), which would end
+ * the next attempt at once. Until it catches up, the target is the position.
+ */
+let settling: { target: number, until: number } | null = null
+/** How close the sequencer must come to the target, and how long to wait for it at most. */
+const SETTLE_NEAR_S = 0.25
+const SETTLE_MAX_MS = 500
+
+function position(current: Sequencer): number {
+  const reported = current.currentHighResolutionTime
+  if (!settling) return reported
+  if (Math.abs(reported - settling.target) < SETTLE_NEAR_S || performance.now() > settling.until) {
+    settling = null
+    return reported
+  }
+  return settling.target
+}
+
 function tick() {
   const current = sequencer.value
   if (!current) return
-  time.value = current.currentHighResolutionTime
+  time.value = position(current)
   frame = requestAnimationFrame(tick)
 }
 
@@ -95,6 +115,7 @@ function play(): void {
   if (pausedTarget !== null) {
     // While playing, the sequencer keeps the exact time and waits for the next event.
     current.currentTime = pausedTarget
+    settling = { target: pausedTarget, until: performance.now() + SETTLE_MAX_MS }
     pausedTarget = null
   }
   playing.value = true
@@ -106,6 +127,7 @@ function pause(): void {
   const current = sequencer.value
   if (!current) return
   current.pause()
+  settling = null
   playing.value = false
   cancelAnimationFrame(frame)
   time.value = current.currentTime
@@ -127,6 +149,8 @@ function seek(seconds: number, atNote = false): void {
   const target = Math.max(0, Math.min(seconds, current.duration))
   current.currentTime = target
   pausedTarget = playing.value || atNote ? null : target
+  // Sent straight to the sequencer: it reports the new place a moment late.
+  settling = pausedTarget === null ? { target, until: performance.now() + SETTLE_MAX_MS } : null
   time.value = target
 }
 
@@ -191,6 +215,6 @@ export function useSongPlayer() {
     setMix,
     unload,
     /** Current position straight from the sequencer, for the wait-mode loop. */
-    currentTime: (): number => pausedTarget ?? sequencer.value?.currentHighResolutionTime ?? 0,
+    currentTime: (): number => pausedTarget ?? (sequencer.value ? position(sequencer.value) : 0),
   }
 }

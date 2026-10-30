@@ -533,7 +533,27 @@ const soundingKeys = computed(() => {
   const minLength = onPads.value ? PAD_NOTE_MIN_S : 0
   return fallNotes.value.filter((note) => note.start <= now + 0.02 && now < note.start + Math.max(note.length, minLength) - 0.02).map((note) => note.key)
 })
-const litKeys = computed(() => (result.value ? [] : [...new Set([...pendingKeys.value, ...soundingKeys.value])]))
+/**
+ * «Ждать меня»: the song waits at the note, and the key lights up only after the child has had time to
+ * find it from the notes, like a teacher who waits before pointing. In tempo there is no time to think,
+ * so the keys light up as the notes come.
+ */
+const KEY_HINT_DELAY_MS = 2000
+const keyHint = ref(false)
+let keyHintTimer: ReturnType<typeof setTimeout> | undefined
+watch([waiting, pendingIndex], () => {
+  clearTimeout(keyHintTimer)
+  keyHint.value = false
+  if (waiting.value) keyHintTimer = setTimeout(() => {
+    keyHint.value = true
+  }, KEY_HINT_DELAY_MS)
+})
+onBeforeUnmount(() => clearTimeout(keyHintTimer))
+const litKeys = computed(() => {
+  if (result.value) return []
+  if (mode.value === 'wait') return waiting.value && keyHint.value ? pendingKeys.value : []
+  return [...new Set([...pendingKeys.value, ...soundingKeys.value])]
+})
 
 /** What a pad plays: the drum sound, or the note with its Russian name. */
 function padLabel(key: number): string {
