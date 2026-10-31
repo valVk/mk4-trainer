@@ -9,6 +9,7 @@ import PageHeader from '@/components/PageHeader.vue'
 import StatusLed from '@/components/StatusLed.vue'
 import { useKeyboardWindow } from '@/composables/useKeyboardWindow'
 import { useNoteSource } from '@/composables/useNoteSource'
+import { padsPlayMusic } from '@/composables/usePadActions'
 import { addMessage, clockTempo, inventoryJson, type Inventory } from '@/lib/midiInventory'
 import { midiName } from '@/lib/theory'
 
@@ -55,6 +56,12 @@ const ticker = setInterval(() => {
   now.value = performance.now()
 }, 100)
 onBeforeUnmount(() => clearInterval(ticker))
+
+// Pads are being looked at here, not used: pads 5 and 6 must not switch to «Тренировка» or «Лаборатория» mid-check.
+padsPlayMusic.value = true
+onBeforeUnmount(() => {
+  padsPlayMusic.value = false
+})
 
 const isSecure = window.isSecureContext
 const hasWebMidi = 'requestMIDIAccess' in navigator
