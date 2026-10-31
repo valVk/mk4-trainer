@@ -32,6 +32,7 @@ import { useWakeLock } from '@/composables/useWakeLock'
 import type { SongProgress } from '@/db/schema'
 import { findName, groupOf } from '@/lib/instruments'
 import { rangeStartFor } from '@/lib/keyboard'
+import { COUNTDOWN_S } from '@/lib/rhythm'
 import { songBeats, tapInputOf, type TapInput } from '@/lib/metronome'
 import {
   buildUnits,
@@ -246,12 +247,11 @@ let countClicks: AudioScheduledSourceNode[] = []
 const countingIn = computed(() => clicksEndAt.value !== null)
 const beatsPerBar = computed(() => song.value?.timeSignature.numerator ?? 4)
 const countIn = useCountIn(() => {
-  const beat = barLength.value / beatsPerBar.value / rate.value
   const songLead = (firstTime.value - startTime.value) / rate.value
   const position = clicksEndAt.value !== null
     ? -((clicksEndAt.value - performance.now()) / 1000 + songLead)
     : (player.time.value - firstTime.value) / rate.value
-  return { active: countingIn.value || player.playing.value, position, beat, beats: beatsPerBar.value }
+  return { active: countingIn.value || player.playing.value, position }
 })
 
 function stopCountIn() {
@@ -262,10 +262,31 @@ function stopCountIn() {
 }
 
 /** Plays from the start of the attempt, first clicking the beats the song has no room for (one bar at most). */
+/** Beats clicked before the song plays: what its two lead-in bars lack (one bar at most), at least the countdown. */
+const clickBeats = computed(() => {
+  const beat = barLength.value / beatsPerBar.value
+  const songLead = firstTime.value - startTime.value
+  const forBars = Math.min(beatsPerBar.value, Math.round((leadIn.value - songLead) / beat))
+  const forCountdown = Math.ceil((COUNTDOWN_S - songLead / rate.value) / (beat / rate.value) - 1e-9)
+  return Math.max(0, forBars, forCountdown)
+})
+
+/**
+ * The time the falling notes show. Before the song plays (ready, or counting in over the clicks) they show it that
+ * many beats earlier, so the first note starts above the keys with room under it and falls onto them when it is to
+ * be played: room for a human to get ready, never a note already on the keys.
+ */
+function fallTime(): number {
+  const lead = clickBeats.value * (barLength.value / beatsPerBar.value)
+  if (clicksEndAt.value !== null) return player.time.value - (Math.max(0, clicksEndAt.value - performance.now()) / 1000) * rate.value
+  if (!player.playing.value && !waiting.value && !result.value && Math.abs(player.time.value - startTime.value) < 0.01) return startTime.value - lead
+  return player.currentTime()
+}
+
 function playWithCountIn() {
   stopCountIn()
   const beat = barLength.value / beatsPerBar.value
-  const missing = Math.min(beatsPerBar.value, Math.round((leadIn.value - (firstTime.value - startTime.value)) / beat))
+  const missing = clickBeats.value
   if (missing <= 0) {
     player.play()
     return
@@ -651,6 +672,10 @@ function padLabel(key: number): string {
   return part.value?.isDrum ? t(`drums.${drumKind(key)}`, { n: key }) : withLocal(midiName(key), localName(key, true))
 }
 const padLabels = computed(() => layout.value?.padKeys.map((key) => (key === null ? null : padLabel(key))) ?? [])
+/** What the student is playing now, for the waterfall: the held keys, or the notes of the pads just hit. */
+const fallHeld = computed(() => (onPads.value
+  ? hitPads.value.map((pad) => layout.value?.padKeys[pad - 1]).filter((key): key is number => key !== null && key !== undefined)
+  : heldNotes.value))
 const litPads = computed(() => litKeys.value.map((key) => layout.value?.padOf.get(key)).filter((pad): pad is number => pad !== undefined))
 
 const prompt = computed(() => {
@@ -834,17 +859,20 @@ const nextLabel = computed(() => {
               <UIcon :name="hint === 'up' ? 'i-lucide-arrow-up' : 'i-lucide-arrow-down'" class="size-4 shrink-0" />
               {{ t(`songs.octave.${hint}`) }}
             </p>
-            <CountIn :value="countIn" />
             <ResultCard v-if="result" :result="result" :guided="guided" :unit-done="unitFinished && !hasNextRung" :next-label="nextLabel" @next="nextRung" @again="startAttempt" />
             <div class="view-switch segmented" role="radiogroup" :aria-label="t('songs.viewLabel')">
               <button v-for="item in SONG_VIEWS" :key="item" type="button" role="radio" class="segment" :class="{ 'segment--on': view === item }" :aria-checked="view === item" @click="view = item">
                 {{ t(`songs.view.${item}`) }}
               </button>
             </div>
+            <!-- The notes (staff, waterfall) in one box: the countdown stands over them, never over the keys. -->
+            <div class="stage__notes">
             <div v-if="showStaff" class="stage__staff" :class="{ 'stage__staff--alone': !showFall }">
               <SongStaff :bars="written" :clef="clef" :meter="song!.timeSignature" :key-signature="song!.keySignature" :get-time="player.currentTime" :lower="writtenLow" :played="playedBars" :marks="playedMarks" :scale="showFall ? (grand || onPads ? 0.85 : 1.1) : undefined" />
             </div>
-            <NoteFall v-if="showFall" class="stage__fall" :class="{ 'stage__fall--short': showStaff, 'stage__fall--shortest': showStaff && (grand || onPads) }" :notes="fallNotes" :start="windowStart" :get-time="player.currentTime" :pending="pendingKeys" :pad-keys="onPads ? layout!.padKeys : undefined" />
+            <NoteFall v-if="showFall" class="stage__fall" :class="{ 'stage__fall--short': showStaff, 'stage__fall--shortest': showStaff && (grand || onPads) }" :notes="fallNotes" :start="windowStart" :get-time="fallTime" :pending="pendingKeys" :held="fallHeld" :judge="mode !== 'listen'" :pad-keys="onPads ? layout!.padKeys : undefined" />
+              <CountIn :value="countIn" />
+            </div>
             <template v-if="onPads">
               <PadStrip :labels="padLabels" :lit="litPads" :hit="hitPads" @press="pressPad" />
               <p class="window text-muted">{{ t('songs.padsLayout') }}</p>
@@ -1144,6 +1172,14 @@ const nextLabel = computed(() => {
   display: flex;
   align-items: center;
   min-height: 9rem;
+}
+
+.stage__notes {
+  position: relative;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
 }
 
 .stage__fall {

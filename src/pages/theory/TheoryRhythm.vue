@@ -22,7 +22,7 @@ import { useTimedPresses, type TimedPress } from '@/composables/useTimedPresses'
 import { useWakeLock } from '@/composables/useWakeLock'
 import { EXAM_STARS } from '@/lib/levels'
 import { scaleGroups } from '@/lib/metronome'
-import { beatSeconds, scoreRhythm, sounds, type Rhythm, type RhythmScore, type TimingVerdict } from '@/lib/rhythm'
+import { scoreRhythm, sounds, type Rhythm, type RhythmScore, type TimingVerdict } from '@/lib/rhythm'
 import {
   RHYTHM_LEVELS,
   RHYTHM_TEMPOS,
@@ -349,8 +349,6 @@ const showNotes = computed(() => kind.value !== 'repeat' || phase.value === 'res
 const countIn = useCountIn(() => ({
   active: phase.value === 'playing',
   position: player.heardPosition(),
-  beat: beatSeconds(bpm.value, task.value.meter),
-  beats: task.value.meter.numerator,
 }))
 
 /** The intro: one bar of each new value, to look at and listen to. */

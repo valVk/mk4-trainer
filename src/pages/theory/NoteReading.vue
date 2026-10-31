@@ -13,7 +13,7 @@ import { useRhythmPlayer } from '@/composables/useRhythmPlayer'
 import { useShortScreen } from '@/composables/useShortScreen'
 import { useTimedPresses } from '@/composables/useTimedPresses'
 import { makeMelody, readMarks, readingPasses, type NoteLevel, type ReadMark } from '@/lib/noteLevels'
-import { beatSeconds, scoreRhythm, sounds, type Rhythm, type RhythmScore, type TimingVerdict } from '@/lib/rhythm'
+import { scoreRhythm, sounds, type Rhythm, type RhythmScore, type TimingVerdict } from '@/lib/rhythm'
 import { octaveShift } from '@/lib/staff'
 
 // «Теория» → «Ноты», «Читаем с ритмом» (plan step 19): a short melody on the staff, read in rhythm with the
@@ -143,8 +143,6 @@ const shiftNeeded = computed(() => Math.max(...melody.value.notes.map((note) => 
 const countIn = useCountIn(() => ({
   active: phase.value === 'playing',
   position: player.heardPosition(),
-  beat: beatSeconds(bpm.value, melody.value.meter),
-  beats: melody.value.meter.numerator,
 }))
 </script>
 

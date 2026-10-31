@@ -15,8 +15,12 @@ const props = withDefaults(defineProps<{
   getTime: () => number
   /** Seconds of song shown above the keyboard. */
   lookahead?: number
-  /** Keys of the step waiting to be played, drawn brighter. */
+  /** Keys of the step the song waits on («Ждать меня»): they stay bright at the line. */
   pending?: readonly number[]
+  /** Keys the student holds now: a note held while it sounds turns green and stays green after (played). */
+  held?: readonly number[]
+  /** The student plays along (not just listening): a note that passes unplayed turns red (missed). */
+  judge?: boolean
   /**
    * Pad mode: the note of each of the 8 pads. Each pad has its own lane right above it in PadStrip
    * (left to right 1 5 2 6 3 7 4 8); notes carry their pad number, top-row lanes and notes are darker.
@@ -25,6 +29,8 @@ const props = withDefaults(defineProps<{
 }>(), {
   lookahead: 3,
   pending: () => [],
+  held: () => [],
+  judge: false,
   padKeys: undefined,
 })
 
@@ -32,6 +38,14 @@ const canvas = ref<HTMLCanvasElement | null>(null)
 let frame = 0
 const PAD_ROW = 4
 const PAD_LANES = 8
+
+/** A press this much before a note starts still plays it (fingers come a little early). */
+const HOLD_EARLY_S = 0.15
+/** Nothing pressed this long after a note started: it is missed (a press later than this is a stray one). */
+const MISS_AFTER_S = 0.25
+/** Notes the student held while they sounded: they stay green after they pass. */
+let played = new WeakSet<SongNote>()
+let lastNow = 0
 
 /** Pixels between a note and the next one on the same key, so repeats read as separate notes. */
 const NOTE_GAP_PX = 3
@@ -52,7 +66,7 @@ const nextOnKey = computed(() => {
 function padLane(index: number): number {
   return index < PAD_ROW ? index * 2 : (index - PAD_ROW) * 2 + 1
 }
-let colors = { white: '#3d7bff', black: '#2a5ad1', pending: '#22b8a6', outside: '#8a90ab', line: '#cfd5e3', label: '#fff' }
+let colors = { white: '#3d7bff', black: '#2a5ad1', played: '#22b8a6', missed: '#ff5a4e', outside: '#8a90ab', line: '#cfd5e3', label: '#fff' }
 
 function readColors() {
   const style = getComputedStyle(document.documentElement)
@@ -60,7 +74,8 @@ function readColors() {
   colors = {
     white: pick('--color-active', colors.white),
     black: pick('--color-active-deep', colors.black),
-    pending: pick('--color-correct', colors.pending),
+    played: pick('--color-correct', colors.played),
+    missed: pick('--color-wrong', colors.missed),
     outside: pick('--ui-text-dimmed', colors.outside),
     line: pick('--ui-border', colors.line),
     label: pick('--color-on-fill', colors.label),
@@ -126,9 +141,13 @@ function draw() {
   }
 
   const now = props.getTime()
+  // Back in time (a new attempt): nothing is played yet.
+  if (now < lastNow - 0.3) played = new WeakSet()
+  lastNow = now
   const pxPerSecond = height / props.lookahead
   const nextStart = nextOnKey.value
   const pending = new Set(props.pending)
+  const held = new Set(props.held)
   for (const note of props.notes) {
     const until = note.start - now
     if (until > props.lookahead || until + note.length < -0.5) continue
@@ -144,8 +163,16 @@ function draw() {
     const top = next === undefined ? tall : Math.max(tall, height - (next - now) * pxPerSecond + NOTE_GAP_PX)
     // Darker: black keys, or pads of the top row.
     const isBlack = props.padKeys ? padIndex >= PAD_ROW : [1, 3, 6, 8, 10].includes(note.key % 12)
-    context.globalAlpha = until < 0 ? 0.35 : 1
-    context.fillStyle = outside ? colors.outside : pending.has(note.key) && Math.abs(until) < 0.15 ? colors.pending : isBlack ? colors.black : colors.white
+    // Held while it sounds (a press a little early counts): played, green now and after. Not played: blue.
+    const end = note.start + Math.max(note.length, padIndex === -1 ? 0 : PAD_NOTE_MIN_S)
+    if (until <= HOLD_EARLY_S && now < end && held.has(note.key)) played.add(note)
+    const isPlayed = played.has(note)
+    // Not pressed a moment after it started: missed, red while it still crosses the line (the one the song waits on
+    // is not missed: it waits). Faded once it is over.
+    const missed = props.judge && !isPlayed && now - note.start > MISS_AFTER_S && !pending.has(note.key)
+    const over = now >= end && !pending.has(note.key)
+    context.globalAlpha = over ? 0.45 : 1
+    context.fillStyle = outside ? colors.outside : isPlayed ? colors.played : missed ? colors.missed : isBlack ? colors.black : colors.white
     context.beginPath()
     context.roundRect(x, top, w, bottom - top, Math.min(6, w / 2))
     context.fill()

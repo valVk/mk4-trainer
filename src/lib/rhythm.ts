@@ -50,19 +50,22 @@ export function quarterSeconds(bpm: number, meter: TimeSignature): number {
   return (60 / bpm) * (meter.denominator / 4)
 }
 
+/** Seconds counted down before the first note (owner's rule: «2, 1», plain seconds, whatever the tempo). */
+export const COUNTDOWN_S = 2
+
 /**
- * The countdown before the first note (4, 3, 2, 1 in 4/4): the beats still to wait, shown while the heard position
- * is within the last bar before the first note (negative seconds); null before that and once it plays. Every
+ * The countdown before the first note: the whole seconds still to wait (2, 1), shown in the last COUNTDOWN_S
+ * seconds before it (`position` is real seconds from the first note, negative before it); null otherwise. Every
  * practice starts this way, never straight into the notes (owner's rule).
  */
-export function countInBeat(position: number, beatSeconds: number, beats: number): number | null {
-  if (position >= 0 || -position > beats * beatSeconds) return null
-  return Math.min(beats, Math.ceil(-position / beatSeconds))
+export function countdown(position: number, from = COUNTDOWN_S): number | null {
+  if (position >= 0 || -position > from) return null
+  return Math.ceil(-position)
 }
 
-/** One beat of a meter in seconds at `bpm`: a quarter in x/4, an eighth in 6/8 (the metronome counts eighths there). */
-export function beatSeconds(bpm: number, meter: TimeSignature): number {
-  return quarterSeconds(bpm, meter) * (4 / meter.denominator)
+/** Bars of count-in so that the wait before the first note is at least the countdown (one bar at least). */
+export function countInBars(barSeconds: number, atLeast = COUNTDOWN_S): number {
+  return Math.max(1, Math.ceil(atLeast / barSeconds - 1e-9))
 }
 
 /** A sound to play or a silence to keep, in seconds from the start of the rhythm. */

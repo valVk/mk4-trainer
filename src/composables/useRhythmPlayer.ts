@@ -2,7 +2,7 @@ import { onScopeDispose, readonly, ref } from 'vue'
 
 import { useMetronome } from '@/composables/useMetronome'
 import { accentOf, beatsPerBar, type MeterId } from '@/lib/metronome'
-import { quarterSeconds, sounds, type Rhythm, type Sound } from '@/lib/rhythm'
+import { countInBars, quarterSeconds, sounds, type Rhythm, type Sound } from '@/lib/rhythm'
 
 // Plays a rhythm exercise (plan step 16): one bar of count-in clicks, then the notes with the clicks
 // going on under them. Everything is scheduled at once on the audio clock (exercises are a few bars),
@@ -37,11 +37,12 @@ export function useRhythmPlayer() {
   }
 
   /**
-   * Plays the rhythm at `bpm` (beats of its meter, like the metronome) after `countInBars` bars of clicks.
+   * Plays the rhythm at `bpm` (beats of its meter, like the metronome) after `countInBars` bars of clicks: by
+   * default enough bars for the countdown (two seconds), one at least.
    * With `notes: false` only the clicks sound: the child plays the notes. `lower` is a second hand,
    * heard an octave lower.
    */
-  function play(rhythm: Rhythm, bpm: number, { countInBars = 1, notes = true, lower = null }: { countInBars?: number, notes?: boolean, lower?: Rhythm | null } = {}) {
+  function play(rhythm: Rhythm, bpm: number, { countInBars: bars, notes = true, lower = null }: { countInBars?: number, notes?: boolean, lower?: Rhythm | null } = {}) {
     stop()
     const audio = metronome.audioContext()
     void audio.resume()
@@ -53,7 +54,8 @@ export function useRhythmPlayer() {
     const length = heard.reduce((end, item) => Math.max(end, item.start + item.length), 0)
     // A pickup starts inside the count-in bar: the count-in still begins on beat 1.
     const pickup = (rhythm.pickup ?? 0) * quarterSeconds(bpm, rhythm.meter)
-    firstNoteAt.value = start + countInBars * beats * beat - pickup
+    const countIn = bars ?? countInBars(beats * beat)
+    firstNoteAt.value = start + countIn * beats * beat - pickup
     const clicks = Math.round((firstNoteAt.value - start + length) / beat)
     for (let i = 0; i < clicks; i++) scheduled.push(...metronome.clickAt(start + i * beat, accentOf(i % beats, beats)))
     if (notes) {

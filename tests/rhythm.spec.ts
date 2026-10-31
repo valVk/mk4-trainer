@@ -10,8 +10,8 @@ import {
   holdVerdict,
   noteQuarters,
   onTimeWindow,
-  beatSeconds,
-  countInBeat,
+  countInBars,
+  countdown,
   quarterSeconds,
   scoreRhythm,
   sounds,
@@ -43,16 +43,17 @@ describe('note values', () => {
     expect(quarterSeconds(120, SIX_EIGHT)).toBe(1)
   })
 
-  it('counts down 4-3-2-1 in the last bar before the first note, then nothing', () => {
-    // 60 bpm in 4/4: one beat a second.
-    expect([-3.5, -2.5, -1.5, -0.5].map((position) => countInBeat(position, beatSeconds(60, FOUR), 4))).toEqual([4, 3, 2, 1])
-    expect(countInBeat(0, 1, 4)).toBeNull()
-    // A longer lead-in (a song's two bars): only its last bar is counted.
-    expect(countInBeat(-6, 1, 4)).toBeNull()
-    // 6/8 counts eighths: at 120 an eighth is half a second.
-    expect(beatSeconds(120, SIX_EIGHT)).toBe(0.5)
-    expect(countInBeat(-2.9, beatSeconds(120, SIX_EIGHT), 6)).toBe(6)
-    expect(countInBeat(-0.25, 0.5, 6)).toBe(1)
+  it('counts down 2, 1 in plain seconds before the first note, then nothing', () => {
+    expect([-2, -1.6, -1, -0.4].map((position) => countdown(position))).toEqual([2, 2, 1, 1])
+    expect(countdown(-2.5)).toBeNull()
+    expect(countdown(0)).toBeNull()
+  })
+
+  it('counts in long enough for the countdown: one bar, or more when bars are short', () => {
+    expect(countInBars(4)).toBe(1)
+    expect(countInBars(2)).toBe(1)
+    expect(countInBars(1.5)).toBe(2)
+    expect(countInBars(0.75)).toBe(3)
   })
 })
 

@@ -70,10 +70,10 @@ const cells = computed(() =>
   transition: transform 60ms ease-out, background-color 100ms ease;
 }
 
+/* The pad to hit now (a hint): a ring, like a hinted key. Filled only when it is really hit. */
 .pad--lit {
-  color: var(--color-on-fill);
-  background: var(--color-correct);
-  box-shadow: 0 0 0 1px color-mix(in oklab, var(--color-correct) 70%, var(--color-shade)) inset, 0 4px 0 color-mix(in oklab, var(--color-correct) 55%, var(--color-shade));
+  color: var(--color-correct);
+  box-shadow: 0 0 0 var(--ring-width-strong) var(--color-correct) inset, 0 4px 0 var(--rubber-edge);
 }
 
 /* Pushed in: the pad sinks onto its edge, shrinks a little and gets an inner shadow. */
