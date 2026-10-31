@@ -24,10 +24,10 @@ export function staffContext(element: HTMLDivElement, height: number, scale = ST
 
 /** Colour of a note: the one playing now, then a result after an attempt. */
 export const STAFF_COLOURS = {
-  current: 'var(--color-pad-sky)',
-  onTime: 'var(--color-pad-aqua)',
-  off: 'var(--color-pad-sun)',
-  missed: 'var(--color-pad-tomato)',
+  current: 'var(--color-active)',
+  onTime: 'var(--color-correct)',
+  off: 'var(--color-attention)',
+  missed: 'var(--color-wrong)',
 } as const
 
 /**

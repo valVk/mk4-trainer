@@ -70,6 +70,6 @@ const actions = computed(() => (props.result.passed && props.guided
 .result-overlay > * {
   background: color-mix(in oklab, var(--ui-bg-elevated) 92%, transparent);
   backdrop-filter: blur(6px);
-  box-shadow: 0 12px 32px -12px rgb(0 0 0 / 0.45);
+  box-shadow: 0 12px 32px -12px var(--shadow-strong);
 }
 </style>

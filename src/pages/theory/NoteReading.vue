@@ -215,7 +215,7 @@ onBeforeUnmount(() => cancelAnimationFrame(countFrame))
   font-family: var(--font-display);
   font-size: 5rem;
   font-weight: 800;
-  color: var(--color-pad-sky);
+  color: var(--color-active);
   pointer-events: none;
 }
 
@@ -228,7 +228,7 @@ onBeforeUnmount(() => cancelAnimationFrame(countFrame))
   font-weight: 600;
   color: var(--ui-text-highlighted);
   background: var(--ui-bg-elevated);
-  box-shadow: 0 0 0 2px var(--color-pad-sky) inset;
+  box-shadow: 0 0 0 2px var(--color-active) inset;
 }
 
 .note-keys {

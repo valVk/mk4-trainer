@@ -739,7 +739,7 @@ const INTRO_NOTES: Partial<Record<NoteIntroId, { show: 'treble' | 'bass' | 'gran
 }
 
 .big-name__answer {
-  color: var(--color-pad-aqua);
+  color: var(--color-correct);
 }
 
 .chain {
@@ -777,11 +777,11 @@ const INTRO_NOTES: Partial<Record<NoteIntroId, { show: 'treble' | 'bass' | 'gran
 }
 
 .chain__done {
-  color: var(--color-pad-aqua);
+  color: var(--color-correct);
 }
 
 .chain__now {
-  color: var(--color-pad-sky);
+  color: var(--color-active);
 }
 
 .steps-pictures {
@@ -791,7 +791,7 @@ const INTRO_NOTES: Partial<Record<NoteIntroId, { show: 'treble' | 'bass' | 'gran
 }
 
 .big-name--right {
-  color: var(--color-pad-aqua);
+  color: var(--color-correct);
 }
 
 .timer {
@@ -832,7 +832,7 @@ const INTRO_NOTES: Partial<Record<NoteIntroId, { show: 'treble' | 'bass' | 'gran
 
 .pill--octave {
   color: var(--ui-text-highlighted);
-  box-shadow: 0 0 0 2px var(--color-pad-sky) inset;
+  box-shadow: 0 0 0 2px var(--color-active) inset;
 }
 
 .hands {

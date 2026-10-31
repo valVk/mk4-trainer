@@ -100,17 +100,17 @@ defineEmits<{ choose: [index: number] }>()
 }
 
 .rung--done .rung__mark {
-  color: #fff;
-  background: var(--color-pad-aqua);
+  color: var(--color-on-fill);
+  background: var(--color-correct);
 }
 
 .rung--current {
-  box-shadow: 0 0 0 2px var(--color-pad-sky) inset;
-  background: color-mix(in oklab, var(--color-pad-sky) 14%, var(--ui-bg-elevated));
+  box-shadow: 0 0 0 2px var(--color-active) inset;
+  background: color-mix(in oklab, var(--color-active) 14%, var(--ui-bg-elevated));
 }
 
 .rung--current .rung__mark {
-  color: #fff;
-  background: var(--color-pad-sky);
+  color: var(--color-on-fill);
+  background: var(--color-active);
 }
 </style>

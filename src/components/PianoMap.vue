@@ -88,8 +88,8 @@ const home = computed(() => (props.homeStart === undefined || props.homeStart ==
 }
 
 .band {
-  fill: color-mix(in oklab, var(--color-pad-sky) 22%, transparent);
-  stroke: var(--color-pad-sky);
+  fill: color-mix(in oklab, var(--color-active) 22%, transparent);
+  stroke: var(--color-active);
   stroke-width: 1.2;
 }
 
@@ -119,7 +119,7 @@ const home = computed(() => (props.homeStart === undefined || props.homeStart ==
 .band__label {
   font-size: 9px;
   font-weight: 700;
-  fill: var(--color-pad-sky);
+  fill: var(--color-active);
 }
 
 .tick {

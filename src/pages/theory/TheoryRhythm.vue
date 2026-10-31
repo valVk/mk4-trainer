@@ -552,7 +552,7 @@ const levelTabs = computed(() => RHYTHM_LEVELS.map((item) => ({ id: item.id, ope
   font-family: var(--font-display);
   font-size: 5rem;
   font-weight: 800;
-  color: var(--color-pad-sky);
+  color: var(--color-active);
   pointer-events: none;
 }
 
@@ -640,8 +640,8 @@ const levelTabs = computed(() => RHYTHM_LEVELS.map((item) => ({ id: item.id, ope
 }
 
 .mark--on {
-  color: #fff;
-  background: var(--color-pad-sky);
+  color: var(--color-on-fill);
+  background: var(--color-active);
   box-shadow: none;
 }
 
@@ -666,9 +666,9 @@ const levelTabs = computed(() => RHYTHM_LEVELS.map((item) => ({ id: item.id, ope
 }
 
 .tap--live {
-  color: #fff;
-  background: var(--color-pad-sky);
-  box-shadow: 0 5px 0 color-mix(in oklab, var(--color-pad-sky) 55%, #000);
+  color: var(--color-on-fill);
+  background: var(--color-active);
+  box-shadow: 0 5px 0 color-mix(in oklab, var(--color-active) 55%, var(--color-shade));
 }
 
 .tap:active {

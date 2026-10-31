@@ -90,7 +90,7 @@ function keyDelay(note: number) {
 
 <style scoped>
 .diagram {
-  --lit: var(--color-pad-sky);
+  --lit: var(--color-active);
 }
 
 .gaps {
@@ -152,7 +152,7 @@ function keyDelay(note: number) {
   position: absolute;
   inset: 0;
   background: var(--lit);
-  box-shadow: 0 0 0 1px color-mix(in oklab, var(--lit) 70%, #000) inset;
+  box-shadow: 0 0 0 1px color-mix(in oklab, var(--lit) 70%, var(--color-shade)) inset;
 }
 
 .diagram--animated .key--lit::after {

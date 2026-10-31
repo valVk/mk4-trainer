@@ -139,13 +139,13 @@ const isCurrent = (item: Instrument) => sameInstrument(item, playing.value)
 
 .group--active {
   font-weight: 600;
-  color: #fff;
-  background: var(--color-pad-sky);
+  color: var(--color-on-fill);
+  background: var(--color-active);
 }
 
 @media (hover: hover) and (pointer: fine) {
   .group--active:hover {
-    background: var(--color-pad-sky);
+    background: var(--color-active);
   }
 }
 

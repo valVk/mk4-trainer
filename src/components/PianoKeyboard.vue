@@ -153,8 +153,8 @@ onBeforeUnmount(() => {
 
 <style scoped>
 .piano {
-  --lit: var(--color-pad-sky);
-  --hint: var(--color-pad-aqua);
+  --lit: var(--color-active);
+  --hint: var(--color-correct);
   user-select: none;
 }
 
@@ -226,7 +226,7 @@ onBeforeUnmount(() => {
 }
 
 .key--white.key--held {
-  box-shadow: 0 0 0 1px color-mix(in oklab, var(--lit) 70%, #000) inset, 0 2px 0 color-mix(in oklab, var(--lit) 55%, #000);
+  box-shadow: 0 0 0 1px color-mix(in oklab, var(--lit) 70%, var(--color-shade)) inset, 0 2px 0 color-mix(in oklab, var(--lit) 55%, var(--color-shade));
 }
 
 /* Hint: tinted and outlined, so a child spots it at a glance */
@@ -283,13 +283,13 @@ onBeforeUnmount(() => {
 }
 
 .key--held .key__name {
-  color: #fff;
+  color: var(--color-on-fill);
 }
 
 .key__name--black {
   margin-bottom: 0.5rem;
   font-size: 0.6875rem;
-  color: #c9cee2;
+  color: var(--key-label-outside);
 }
 
 @media (prefers-reduced-motion: reduce) {

@@ -104,7 +104,7 @@ const signs = computed(() => props.bars.map((bar) => ({
 }
 
 .form__bar:active {
-  background: color-mix(in oklab, var(--color-pad-sky) 18%, var(--ui-bg-elevated));
+  background: color-mix(in oklab, var(--color-active) 18%, var(--ui-bg-elevated));
 }
 
 .form__bar--wrong {
@@ -157,8 +157,8 @@ const signs = computed(() => props.bars.map((bar) => ({
   font-size: 1.25rem;
   font-weight: 700;
   text-align: center;
-  color: #fff;
-  background: var(--color-pad-aqua);
+  color: var(--color-on-fill);
+  background: var(--color-correct);
 }
 
 .form__chip--next {

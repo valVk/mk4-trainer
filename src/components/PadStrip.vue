@@ -71,18 +71,18 @@ const cells = computed(() =>
 }
 
 .pad--lit {
-  color: #fff;
-  background: var(--color-pad-aqua);
-  box-shadow: 0 0 0 1px color-mix(in oklab, var(--color-pad-aqua) 70%, #000) inset, 0 4px 0 color-mix(in oklab, var(--color-pad-aqua) 55%, #000);
+  color: var(--color-on-fill);
+  background: var(--color-correct);
+  box-shadow: 0 0 0 1px color-mix(in oklab, var(--color-correct) 70%, var(--color-shade)) inset, 0 4px 0 color-mix(in oklab, var(--color-correct) 55%, var(--color-shade));
 }
 
 /* Pushed in: the pad sinks onto its edge, shrinks a little and gets an inner shadow. */
 .pad--hit,
 .pad:not(:disabled):active {
   transform: translateY(4px) scale(0.96);
-  background: var(--color-pad-sky);
-  color: #fff;
-  box-shadow: 0 0 0 1px color-mix(in oklab, var(--color-pad-sky) 60%, #000) inset, 0 3px 8px rgb(0 0 0 / 0.35) inset, 0 0 0 var(--rubber-edge);
+  background: var(--color-active);
+  color: var(--color-on-fill);
+  box-shadow: 0 0 0 1px color-mix(in oklab, var(--color-active) 60%, var(--color-shade)) inset, 0 3px 8px var(--shadow-soft) inset, 0 0 0 var(--rubber-edge);
 }
 
 .pad--empty {

@@ -41,7 +41,7 @@ const gaps = computed(() => intervalsBetween(sorted.value))
   border-radius: 999px;
   font-family: var(--font-display);
   font-weight: 700;
-  color: #fff;
-  background: var(--color-pad-sky);
+  color: var(--color-on-fill);
+  background: var(--color-active);
 }
 </style>

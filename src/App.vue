@@ -104,7 +104,7 @@ setAppMk4Actions({
 .rotate__icon {
   width: 5rem;
   height: 5rem;
-  color: var(--color-pad-sky);
+  color: var(--color-active);
 }
 
 .rotate__title {

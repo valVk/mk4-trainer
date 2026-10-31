@@ -143,8 +143,8 @@ const lastWrong = computed(() => props.options.find((option) => option.id === wr
 }
 
 .option--right {
-  color: #fff;
-  background: var(--color-pad-aqua);
+  color: var(--color-on-fill);
+  background: var(--color-correct);
   box-shadow: none;
 }
 

@@ -400,7 +400,7 @@ useMk4Actions({
 
 .row__percent--changed {
   font-weight: 600;
-  color: var(--color-pad-sky);
+  color: var(--color-active);
 }
 
 .row__toggle {
@@ -454,7 +454,7 @@ useMk4Actions({
 
 .row__stars {
   margin-left: 0.25rem;
-  color: var(--color-pad-sun);
+  color: var(--color-attention);
 }
 
 .sections-row {
@@ -511,12 +511,12 @@ useMk4Actions({
   top: 0;
   bottom: 0;
   border-radius: 0.3125rem;
-  background: var(--color-pad-sky);
+  background: var(--color-active);
   transition: background-color 150ms ease;
 }
 
 .lane__block--drum {
-  background: var(--color-pad-sun);
+  background: var(--color-attention);
 }
 
 .row--off .lane__block {
@@ -530,7 +530,7 @@ useMk4Actions({
   left: var(--playhead, 0%);
   width: 2px;
   margin-left: -1px;
-  background: var(--color-pad-tomato);
+  background: var(--color-beat);
   pointer-events: none;
 }
 

@@ -67,7 +67,7 @@ const percent = computed(() => Math.round(progress.value * 100))
 .gate__icon {
   width: 3.5rem;
   height: 3.5rem;
-  color: var(--color-pad-sky);
+  color: var(--color-active);
 }
 
 .gate__title {

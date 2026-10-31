@@ -37,17 +37,18 @@ const PAD_LANES = 8
 function padLane(index: number): number {
   return index < PAD_ROW ? index * 2 : (index - PAD_ROW) * 2 + 1
 }
-let colors = { white: '#3d7bff', black: '#2a5ad1', pending: '#22b8a6', outside: '#8a90ab', line: '#cfd5e3' }
+let colors = { white: '#3d7bff', black: '#2a5ad1', pending: '#22b8a6', outside: '#8a90ab', line: '#cfd5e3', label: '#fff' }
 
 function readColors() {
   const style = getComputedStyle(document.documentElement)
   const pick = (name: string, fallback: string) => style.getPropertyValue(name).trim() || fallback
   colors = {
-    white: pick('--color-pad-sky', colors.white),
-    black: '#2a5ad1',
-    pending: pick('--color-pad-aqua', colors.pending),
+    white: pick('--color-active', colors.white),
+    black: pick('--color-active-deep', colors.black),
+    pending: pick('--color-correct', colors.pending),
     outside: pick('--ui-text-dimmed', colors.outside),
     line: pick('--ui-border', colors.line),
+    label: pick('--color-on-fill', colors.label),
   }
 }
 
@@ -130,7 +131,7 @@ function draw() {
     context.roundRect(x, top, w, bottom - top, Math.min(6, w / 2))
     context.fill()
     if (padIndex !== -1) {
-      context.fillStyle = '#fff'
+      context.fillStyle = colors.label
       context.font = '700 15px system-ui, sans-serif'
       context.textAlign = 'center'
       context.textBaseline = 'middle'

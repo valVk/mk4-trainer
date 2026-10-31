@@ -39,11 +39,11 @@ defineProps<{
   padding: var(--pad-padding, 1.25rem);
   border-radius: 1.25rem;
   text-align: left;
-  color: #fff;
-  background: radial-gradient(120% 90% at 30% 20%, color-mix(in oklab, var(--hue) 70%, #fff) 0%, var(--hue) 60%);
+  color: var(--color-on-fill);
+  background: radial-gradient(120% 90% at 30% 20%, color-mix(in oklab, var(--hue) 70%, var(--color-shine)) 0%, var(--hue) 60%);
   box-shadow:
-    0 0 0 1px color-mix(in oklab, var(--hue) 70%, #000) inset,
-    0 var(--depth) 0 color-mix(in oklab, var(--hue) 55%, #000),
+    0 0 0 1px color-mix(in oklab, var(--hue) 70%, var(--color-shade)) inset,
+    0 var(--depth) 0 color-mix(in oklab, var(--hue) 55%, var(--color-shade)),
     0 10px 28px -8px color-mix(in oklab, var(--hue) 70%, transparent);
   /* Release: settles back with a soft ease-out */
   transition: transform 180ms var(--ease-out), box-shadow 180ms var(--ease-out);
@@ -66,7 +66,7 @@ defineProps<{
 }
 
 .pad--tomato { --hue: var(--color-pad-tomato); }
-.pad--sun { --hue: var(--color-pad-sun); color: #3a2a00; }
+.pad--sun { --hue: var(--color-pad-sun); color: var(--color-on-attention); }
 .pad--aqua { --hue: var(--color-pad-aqua); }
 .pad--sky { --hue: var(--color-pad-sky); }
 

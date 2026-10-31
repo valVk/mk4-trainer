@@ -862,8 +862,8 @@ const nextLabel = computed(() => {
 }
 
 .segment--on {
-  color: #fff;
-  background: var(--color-pad-sky);
+  color: var(--color-on-fill);
+  background: var(--color-active);
 }
 
 .units {
@@ -919,7 +919,7 @@ const nextLabel = computed(() => {
 .progress__fill {
   position: absolute;
   inset: 0 auto 0 0;
-  background: var(--color-pad-sky);
+  background: var(--color-active);
 }
 
 .status {
@@ -945,7 +945,7 @@ const nextLabel = computed(() => {
 
 .status__notes--waiting {
   font-weight: 600;
-  color: var(--color-pad-aqua);
+  color: var(--color-correct);
 }
 
 .octave-hint {
@@ -962,9 +962,9 @@ const nextLabel = computed(() => {
   padding: 0.5rem 1rem;
   border-radius: 999px;
   font-weight: 600;
-  color: #fff;
-  background: color-mix(in oklab, var(--color-pad-tomato) 88%, #000);
-  box-shadow: 0 8px 24px -10px rgb(0 0 0 / 0.5);
+  color: var(--color-on-fill);
+  background: color-mix(in oklab, var(--color-wrong) 88%, var(--color-shade));
+  box-shadow: 0 8px 24px -10px var(--shadow-strong);
   transform: translateX(-50%);
 }
 
@@ -1054,7 +1054,7 @@ const nextLabel = computed(() => {
   font-family: var(--font-display);
   font-size: 6rem;
   font-weight: 800;
-  color: var(--color-pad-sky);
+  color: var(--color-active);
   pointer-events: none;
 }
 
@@ -1078,7 +1078,7 @@ const nextLabel = computed(() => {
   z-index: 1;
   top: 0.5rem;
   right: 0.5rem;
-  box-shadow: 0 4px 14px -6px rgb(0 0 0 / 0.35);
+  box-shadow: 0 4px 14px -6px var(--shadow-soft);
 }
 
 .stage__staff {

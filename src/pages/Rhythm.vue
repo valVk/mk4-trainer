@@ -348,12 +348,12 @@ function listenExample() {
 }
 
 .dot--on {
-  background: var(--color-pad-tomato);
+  background: var(--color-beat);
   transform: scale(1.12);
 }
 
 .dot--on.dot--count-in {
-  background: var(--color-pad-sky);
+  background: var(--color-active);
 }
 
 .count {
@@ -420,15 +420,15 @@ function listenExample() {
   font-family: var(--font-display);
   font-size: 2rem;
   font-weight: 800;
-  color: #fff;
-  background: var(--color-pad-tomato);
+  color: var(--color-on-fill);
+  background: var(--color-beat);
   touch-action: manipulation;
   user-select: none;
   -webkit-tap-highlight-color: transparent;
 }
 
 .tap--listen {
-  background: var(--color-pad-sky);
+  background: var(--color-active);
   opacity: 0.85;
 }
 

@@ -388,8 +388,8 @@ const levelItems = computed(() => LEVELS.map((item) => ({ label: String(item.id)
   max-width: 48rem;
   padding: 1.25rem clamp(1.25rem, 3vw, 2rem);
   border-radius: 1.5rem;
-  background: color-mix(in oklab, var(--color-pad-aqua) 12%, var(--ui-bg-elevated));
-  box-shadow: 0 0 0 1px color-mix(in oklab, var(--color-pad-aqua) 40%, transparent) inset;
+  background: color-mix(in oklab, var(--color-correct) 12%, var(--ui-bg-elevated));
+  box-shadow: 0 0 0 1px color-mix(in oklab, var(--color-correct) 40%, transparent) inset;
   animation: pop 240ms var(--ease-out);
 }
 
@@ -397,7 +397,7 @@ const levelItems = computed(() => LEVELS.map((item) => ({ label: String(item.id)
   flex: none;
   width: clamp(3.5rem, 10vh, 5rem);
   height: clamp(3.5rem, 10vh, 5rem);
-  color: var(--color-pad-sun);
+  color: var(--color-attention);
 }
 
 .level-done__body {
@@ -438,7 +438,7 @@ const levelItems = computed(() => LEVELS.map((item) => ({ label: String(item.id)
 }
 
 .star--on {
-  color: var(--color-pad-sun);
+  color: var(--color-attention);
 }
 
 /* Lucide puts fill="none" on the path itself */
@@ -467,7 +467,7 @@ const levelItems = computed(() => LEVELS.map((item) => ({ label: String(item.id)
 }
 
 .task--solved .prompt {
-  color: var(--color-pad-aqua);
+  color: var(--color-correct);
   transition: color 160ms ease;
 }
 
@@ -493,14 +493,14 @@ const levelItems = computed(() => LEVELS.map((item) => ({ label: String(item.id)
 }
 
 .step--current {
-  color: #fff;
-  background: var(--color-pad-sky);
+  color: var(--color-on-fill);
+  background: var(--color-active);
   box-shadow: none;
 }
 
 .step--done {
-  color: #fff;
-  background: var(--color-pad-aqua);
+  color: var(--color-on-fill);
+  background: var(--color-correct);
   box-shadow: none;
 }
 
@@ -515,8 +515,8 @@ const levelItems = computed(() => LEVELS.map((item) => ({ label: String(item.id)
   font-family: var(--font-display);
   font-size: 1.25rem;
   font-weight: 600;
-  color: #fff;
-  background: var(--color-pad-sky);
+  color: var(--color-on-fill);
+  background: var(--color-active);
 }
 
 .feedback {
@@ -529,12 +529,12 @@ const levelItems = computed(() => LEVELS.map((item) => ({ label: String(item.id)
 }
 
 .feedback--neutral { color: var(--ui-text-muted); }
-.feedback--warning { color: color-mix(in oklab, var(--color-pad-tomato) 85%, var(--ui-text)); }
+.feedback--warning { color: color-mix(in oklab, var(--color-wrong) 85%, var(--ui-text)); }
 
 .feedback--success {
   font-family: var(--font-display);
   font-weight: 700;
-  color: var(--color-pad-aqua);
+  color: var(--color-correct);
   animation: pop 240ms var(--ease-out);
 }
 

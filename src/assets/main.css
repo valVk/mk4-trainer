@@ -7,11 +7,34 @@
   --font-sans: "Golos Text Variable", "Segoe UI", Roboto, sans-serif;
   --font-display: "Unbounded Variable", "Arial Black", sans-serif;
 
-  /* Pad hues, also used to light piano keys */
+  /* The four MK4 pad hues: the palette. Components use the meanings below; only pads and cards that are a hue
+     (Home pads, the Train choice cards) name a hue directly. */
   --color-pad-tomato: #ff5a4e;
   --color-pad-sun: #ffc53d;
   --color-pad-aqua: #22b8a6;
   --color-pad-sky: #3d7bff;
+
+  /* What a colour means, the same on every screen. */
+  /* Selected, current, the main button, the note to play now. */
+  --color-active: var(--color-pad-sky);
+  /* Notes of black keys in the falling notes: the active hue, deeper. */
+  --color-active-deep: #2a5ad1;
+  /* Right, done, found, the key to press, the MIDI light on. */
+  --color-correct: var(--color-pad-aqua);
+  /* Stars, hints, things to look at, a press a little off time. */
+  --color-attention: var(--color-pad-sun);
+  /* A mistake, a missed note, the MIDI light off. */
+  --color-wrong: var(--color-pad-tomato);
+  /* The beat: metronome dots, the tap pad, the song's playhead. */
+  --color-beat: var(--color-pad-tomato);
+  /* Text and icons on a coloured fill. */
+  --color-on-fill: #fff;
+  /* Text on the attention (sun) fill, too light for white. */
+  --color-on-attention: #3a2a00;
+  /* Mixed into a hue to darken it: pressed edges, deep shadows of pads. */
+  --color-shade: #000;
+  /* Mixed into a hue to lighten it: the shine on pads and cards. */
+  --color-shine: #fff;
 
   --ease-out: cubic-bezier(0.23, 1, 0.32, 1);
 }
@@ -26,6 +49,20 @@
   --key-label: #4b5275;
   --key-label-dim: #7d84a3;
   --star-off: #b9c0d2;
+  /* The MK4 display on the panel drawing: dark glass, pale blue letters. */
+  --mk4-display: #1c2135;
+  --mk4-display-text: #9fb5ff;
+  /* Key labels on the grey (outside the window) keys of the on-screen piano. */
+  --key-label-outside: #c9cee2;
+
+  /* Where the MK4 display knob is (the focus): peach, apart from the blue of «selected» and the sun of stars (the
+     owner's pick, F5 on /dev/focus). Deeper in the light theme, so the ring and the label read on a light ground. */
+  --color-focus: #c4753a;
+  --color-on-focus: #fff;
+
+  /* Shadows under cards, results and pressed pads. */
+  --shadow-soft: rgb(0 0 0 / 0.35);
+  --shadow-strong: rgb(0 0 0 / 0.5);
 
   --ui-bg: #e9edf5;
   --ui-bg-muted: #e1e6f0;
@@ -50,6 +87,9 @@
   --key-white: #e9ecf6;
   --key-black: #0f1222;
   --star-off: #4a5175;
+
+  --color-focus: #e9a86f;
+  --color-on-focus: #2a1500;
 
   --ui-bg: #141729;
   --ui-bg-muted: #191d32;
@@ -92,19 +132,31 @@ body {
 }
 
 /*
- * Visible focus (the MK4 display knob, a keyboard) as a slightly lighter background, not an outline: an outline
- * looks like the selected state (the chosen phrase, the current rung). The inset shadow lies over any background
- * and under the label. It replaces Nuxt UI's own rings too.
+ * Where the MK4 display knob (or a keyboard) is, the owner's pick (F5 · I1 on /dev/focus): on an ordinary element a
+ * peach ring inside the edge and a peach label; on a selected or main one (a checked segment, the current rung or
+ * phrase, a solid primary button) a full peach fill with dark text, so the two states still read apart and neither
+ * looks like the blue «selected». Inset shadows replace Nuxt UI's own rings.
  */
 :focus-visible {
   outline: none !important;
-  box-shadow: inset 0 0 0 100vmax color-mix(in oklab, var(--ui-text-highlighted) 14%, transparent) !important;
+  box-shadow: inset 0 0 0 2px var(--color-focus) !important;
+  color: var(--color-focus) !important;
 }
 
-/* Grabbed by the MK4 display knob (Push): turning moves it now, so it looks taken, a stronger sky tint. */
-.knob-grabbed:focus-visible,
+:focus-visible:is(
+  [aria-checked="true"], [aria-pressed="true"], [aria-selected="true"], [aria-current]:not([aria-current="false"]),
+  [data-state="checked"], [data-state="active"], .bg-primary
+),
+/* Grabbed by Push: the knob turns it now. */
 .knob-grabbed {
-  box-shadow: inset 0 0 0 100vmax color-mix(in oklab, var(--color-pad-sky) 30%, transparent) !important;
+  box-shadow: inset 0 0 0 100vmax var(--color-focus) !important;
+  color: var(--color-on-focus) !important;
+  /* Muted labels inside (a rung's speed) follow the dark text on orange. */
+  --ui-text: var(--color-on-focus);
+  --ui-text-highlighted: var(--color-on-focus);
+  --ui-text-toned: color-mix(in oklab, var(--color-on-focus) 85%, transparent);
+  --ui-text-muted: color-mix(in oklab, var(--color-on-focus) 75%, transparent);
+  --ui-text-dimmed: color-mix(in oklab, var(--color-on-focus) 65%, transparent);
 }
 
 /* Page frame shared by every screen. Low specificity, so a page's own rules win. */

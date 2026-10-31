@@ -114,6 +114,6 @@ tbody tr {
 }
 
 .row--now {
-  background: color-mix(in oklab, var(--color-pad-sky) 18%, transparent);
+  background: color-mix(in oklab, var(--color-active) 18%, transparent);
 }
 </style>

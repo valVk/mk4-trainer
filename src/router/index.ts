@@ -76,6 +76,8 @@ const router = createRouter({
       name: 'midi-test',
       component: () => import('@/pages/MidiTest.vue'),
     },
+    // Development only: the owner picks how the MK4 knob's place looks.
+    ...(import.meta.env.DEV ? [{ path: '/dev/focus', name: 'dev-focus', component: () => import('@/pages/dev/FocusPlayground.vue') }] : []),
   ],
 })
 

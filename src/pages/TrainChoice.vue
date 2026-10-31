@@ -93,7 +93,7 @@ const rhythmStars = computed(() => starsOf(progress.rhythmProgress.value[rhythmL
   box-shadow:
     0 0 0 1px var(--ui-border) inset,
     0 6px 0 var(--ui-border),
-    0 14px 32px -16px rgb(0 0 0 / 0.35);
+    0 14px 32px -16px var(--shadow-soft);
   transition: transform 140ms var(--ease-out), box-shadow 140ms var(--ease-out);
 }
 
@@ -113,8 +113,8 @@ const rhythmStars = computed(() => starsOf(progress.rhythmProgress.value[rhythmL
   align-items: center;
   gap: 0.875rem;
   padding: clamp(0.875rem, 2.5vh, 1.25rem) 1.5rem;
-  color: #fff;
-  background: radial-gradient(120% 140% at 20% 0%, color-mix(in oklab, var(--hue) 70%, #fff) 0%, var(--hue) 65%);
+  color: var(--color-on-fill);
+  background: radial-gradient(120% 140% at 20% 0%, color-mix(in oklab, var(--hue) 70%, var(--color-shine)) 0%, var(--hue) 65%);
 }
 
 .card__icon {
@@ -181,14 +181,14 @@ const rhythmStars = computed(() => starsOf(progress.rhythmProgress.value[rhythmL
   padding: 0.5rem 1rem;
   border-radius: 999px;
   font-weight: 700;
-  color: #fff;
+  color: var(--color-on-fill);
   background: var(--hue);
 }
 
 .stars {
   font-size: 1.125rem;
   letter-spacing: 0.08em;
-  color: var(--color-pad-sun);
+  color: var(--color-attention);
 }
 
 .stars__off {

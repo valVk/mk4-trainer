@@ -162,11 +162,11 @@ function forget() {
 }
 
 .control--key rect {
-  fill: #f8f9fc;
+  fill: var(--key-white);
 }
 
 .control--blackKey rect {
-  fill: #232741;
+  fill: var(--key-black);
 }
 
 .control--pad rect {
@@ -174,11 +174,11 @@ function forget() {
 }
 
 .control--display rect {
-  fill: #1c2135;
+  fill: var(--mk4-display);
 }
 
 .control--display text {
-  fill: #9fb5ff;
+  fill: var(--mk4-display-text);
 }
 
 /* Taught nothing yet: dashed, quiet. */
@@ -190,12 +190,12 @@ function forget() {
 
 .control--lit rect,
 .control--lit ellipse {
-  fill: var(--color-pad-sky);
+  fill: var(--color-active);
 }
 
 .control--chosen rect,
 .control--chosen ellipse {
-  stroke: var(--color-pad-sky);
+  stroke: var(--color-active);
   stroke-width: 3;
 }
 
@@ -207,6 +207,6 @@ function forget() {
 
 .learning {
   font-weight: 600;
-  color: var(--color-pad-sky);
+  color: var(--color-active);
 }
 </style>

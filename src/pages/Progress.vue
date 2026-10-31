@@ -325,7 +325,7 @@ async function confirmImport() {
 }
 
 .star--on {
-  color: var(--color-pad-sun);
+  color: var(--color-attention);
 }
 
 .star--on :deep(path) {

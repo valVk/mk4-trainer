@@ -121,8 +121,8 @@ watch(() => [props.held, props.scale], draw, { deep: true })
   top: 0;
   bottom: 1.5rem;
   border-radius: 0.5rem;
-  background: color-mix(in oklab, var(--color-pad-sky) 16%, transparent);
-  box-shadow: 0 0 0 2px var(--color-pad-sky) inset;
+  background: color-mix(in oklab, var(--color-active) 16%, transparent);
+  box-shadow: 0 0 0 2px var(--color-active) inset;
   transition: left 200ms var(--ease-out), width 200ms var(--ease-out);
   pointer-events: none;
 }
@@ -138,7 +138,7 @@ watch(() => [props.held, props.scale], draw, { deep: true })
   font-size: 0.75rem;
   font-weight: 700;
   white-space: nowrap;
-  color: var(--color-pad-sky);
+  color: var(--color-active);
 }
 
 /* Past the top of the map: the words stand to the left of the strip; past the bottom, to its right. */

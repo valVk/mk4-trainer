@@ -109,7 +109,7 @@ const signs = (signature: number) => (signature === 0 ? '' : signature > 0 ? `${
 }
 
 .sector--on {
-  fill: color-mix(in oklab, var(--color-pad-sky) 35%, var(--ui-bg-elevated));
+  fill: color-mix(in oklab, var(--color-active) 35%, var(--ui-bg-elevated));
 }
 
 .label {

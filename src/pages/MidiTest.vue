@@ -301,7 +301,7 @@ onBeforeUnmount(() => {
 
 @starting-style {
   .event {
-    background-color: color-mix(in oklab, var(--color-pad-sky) 18%, transparent);
+    background-color: color-mix(in oklab, var(--color-active) 18%, transparent);
   }
 }
 
@@ -350,8 +350,8 @@ onBeforeUnmount(() => {
 }
 
 .view--on {
-  color: #fff;
-  background: var(--color-pad-sky);
+  color: var(--color-on-fill);
+  background: var(--color-active);
   box-shadow: none;
 }
 </style>

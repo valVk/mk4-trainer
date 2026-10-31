@@ -71,15 +71,15 @@ defineEmits<{ select: [index: number] }>()
 }
 
 .unit__stars {
-  color: var(--color-pad-sun);
+  color: var(--color-attention);
 }
 
 .unit--current {
-  box-shadow: 0 0 0 2px var(--color-pad-sky) inset;
+  box-shadow: 0 0 0 2px var(--color-active) inset;
 }
 
 .unit--next {
-  box-shadow: 0 0 0 2px var(--color-pad-aqua) inset;
+  box-shadow: 0 0 0 2px var(--color-correct) inset;
 }
 
 .unit--done .unit__name {

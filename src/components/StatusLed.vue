@@ -41,12 +41,12 @@ watch(() => props.activity, () => {
 }
 
 .led--on {
-  background: var(--color-pad-aqua);
-  box-shadow: 0 0 0 3px color-mix(in oklab, var(--color-pad-aqua) 25%, transparent), 0 0 12px var(--color-pad-aqua);
+  background: var(--color-correct);
+  box-shadow: 0 0 0 3px color-mix(in oklab, var(--color-correct) 25%, transparent), 0 0 12px var(--color-correct);
 }
 
 .led--off {
-  background: var(--color-pad-tomato);
-  box-shadow: 0 0 0 3px color-mix(in oklab, var(--color-pad-tomato) 25%, transparent);
+  background: var(--color-wrong);
+  box-shadow: 0 0 0 3px color-mix(in oklab, var(--color-wrong) 25%, transparent);
 }
 </style>
