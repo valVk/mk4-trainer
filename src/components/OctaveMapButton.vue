@@ -14,6 +14,7 @@ const props = defineProps<{
   windowStart: number
   showOnShift?: boolean
 }>()
+// It lives in the app's footer, small and quiet, next to the version: the map opens upwards from there.
 
 const { t } = useI18n()
 
@@ -63,8 +64,8 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
-  <UPopover :open="open" :content="{ side: 'bottom', align: 'end' }" :modal="false" @update:open="onTap">
-    <UButton icon="i-lucide-map" color="neutral" variant="ghost" size="lg" :aria-label="t('theory.notes.octaveMapOpen')" />
+  <UPopover :open="open" :content="{ side: 'top', align: 'end' }" :modal="false" @update:open="onTap">
+    <UButton icon="i-lucide-map" color="neutral" variant="ghost" size="sm" class="text-dimmed" :aria-label="t('theory.notes.octaveMapOpen')" />
     <template #content>
       <div class="octave-map-pop">
         <!-- The whole piano: where the 25 keys are now, and where they usually are. -->

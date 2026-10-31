@@ -78,11 +78,17 @@ const rangeLabel = computed(() => `${midiName(start.value)} – ${midiName(start
 
 <template>
   <main class="page page--fill lab">
-    <PageHeader :title="t('lab.title')">
+    <PageHeader :title="t('lab.title')" />
+    <!-- Sound and MK4 state live in the drawer, the map in the footer: the content gets the height. -->
+    <Teleport defer to="#footer-tools">
       <OctaveMapButton :window-start="start" show-on-shift />
+    </Teleport>
+    <Teleport defer to="#page-actions">
       <SoundControl />
+    </Teleport>
+    <Teleport defer to="#drawer-status">
       <MidiStatus />
-    </PageHeader>
+    </Teleport>
 
     <section class="readout" aria-live="polite">
       <p v-if="reading.kind === 'empty'" class="prompt text-muted">{{ t('lab.empty') }}</p>

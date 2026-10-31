@@ -7,6 +7,8 @@ export interface TheoryPiece {
   title: string
   /** «Теория» showing the piece's practice; null until the built-in pieces are stored. */
   to: string | null
+  /** `<song>-<part>`, as in the address, to tell the open piece. */
+  key: string | null
 }
 
 /** The pieces that end level groups of a «Теория» section (plan step 18-19), with links to their practice. */
@@ -18,7 +20,8 @@ export function useTheoryPieces(section: TheorySection) {
       const song = progress.songs.value.find((item) => builtinId(item.fileName) === piece.id)
       // Played inside «Теория», not on the song pages: back returns to the level (the owner's request, 31.10.2026).
       const query = section === 'rhythm' ? '' : `section=${section}&`
-      return { id: piece.id, title: piece.short ?? piece.title, to: song ? `/train/theory?${query}piece=${song.id}-${piece.learner}` : null }
+      const key = song ? `${song.id}-${piece.learner}` : null
+      return { id: piece.id, title: piece.short ?? piece.title, to: key ? `/train/theory?${query}piece=${key}` : null, key }
     })
   }
 

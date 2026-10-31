@@ -3,12 +3,14 @@ import { computed, onBeforeUnmount, ref, shallowRef, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 
 import RhythmStaff from '@/components/RhythmStaff.vue'
+import SongPractice from '@/pages/SongPractice.vue'
 import { useMetronome } from '@/composables/useMetronome'
 import { useMk4Actions } from '@/composables/useMk4Actions'
 import { padsPlayMusic, usePadActions } from '@/composables/usePadActions'
 import { useProgress } from '@/composables/useProgress'
 import { useRhythmPlayer } from '@/composables/useRhythmPlayer'
 import { useShortScreen } from '@/composables/useShortScreen'
+import { useTheoryPiece } from '@/composables/useTheoryPiece'
 import { useTheoryPieces } from '@/composables/useTheoryPieces'
 import { useTimedPresses, type TimedPress } from '@/composables/useTimedPresses'
 import { useWakeLock } from '@/composables/useWakeLock'
@@ -52,6 +54,8 @@ const SCORE_TAIL_MS = 400
 
 type Phase = 'intro' | 'ready' | 'playing' | 'result'
 
+/** A piece played inside the section: the rhythm task waits, the pads and keys belong to the piece. */
+const { piece: openPiece, closePiece } = useTheoryPiece()
 const passed = computed(() => progress.rhythmProgress.value)
 const level = ref(currentLevel(passed.value))
 // The saved progress arrives a moment after the page: open on the child's level then.
@@ -116,6 +120,7 @@ let attemptTimer: ReturnType<typeof setTimeout> | undefined
 
 function openLevel(id: number) {
   if (!isOpen(id, passed.value)) return
+  closePiece()
   stopAttempt()
   level.value = id
 }
@@ -197,7 +202,9 @@ useMk4Actions({
   playStop: () => (phase.value === 'playing' ? stopAttempt() : startAttempt()),
   again: () => startAttempt(),
   record: () => startAttempt(),
-  metronome: () => toggleMetronome(),
+  metronome: () => {
+    if (!openPiece.value) toggleMetronome()
+  },
 })
 
 function toggleMetronome() {
@@ -291,16 +298,28 @@ const { press, release } = timed
 
 usePadActions({
   next: () => {
+    // A piece inside the section has the pads.
+    if (openPiece.value) return
     if (phase.value === 'ready' || phase.value === 'intro') startAttempt()
     else if (phase.value === 'result') {
       if (attemptPassed.value) nextTask()
       else startAttempt()
     }
   },
-  listen: () => listen(),
-  skip: () => nextTask(),
+  listen: () => {
+    if (!openPiece.value) listen()
+  },
+  skip: () => {
+    if (!openPiece.value) nextTask()
+  },
   levelDown: () => openLevel(level.value - 1),
   levelUp: () => openLevel(level.value + 1),
+})
+
+watch(openPiece, (open) => {
+  if (!open) return
+  stopAttempt()
+  metronome.stop()
 })
 
 onBeforeUnmount(() => {
@@ -341,8 +360,8 @@ const levelTabs = computed(() => RHYTHM_LEVELS.map((item) => ({ id: item.id, ope
           type="button"
           role="tab"
           class="level"
-          :class="{ 'level--on': tab.id === level, 'level--done': tab.stars === 3 }"
-          :aria-selected="tab.id === level"
+          :class="{ 'level--on': !openPiece && tab.id === level, 'level--done': tab.stars === 3 }"
+          :aria-selected="!openPiece && tab.id === level"
           :disabled="!tab.open"
           @click="openLevel(tab.id)"
         >
@@ -351,7 +370,14 @@ const levelTabs = computed(() => RHYTHM_LEVELS.map((item) => ({ id: item.id, ope
         </button>
         <!-- The piece that ends this group of levels: open once the level has all its stars (plan step 18). -->
         <template v-for="piece in piecesAfter(tab.id)" :key="piece.id">
-          <RouterLink v-if="piece.to && tab.stars === 3" :to="piece.to" class="level level--piece" :aria-label="t('theory.playPiece', { name: piece.title })">
+          <RouterLink
+            v-if="piece.to && tab.stars === 3"
+            :to="piece.to"
+            class="level level--piece"
+            :class="{ 'level--on': openPiece?.key === piece.key }"
+            :aria-current="openPiece?.key === piece.key ? 'page' : undefined"
+            :aria-label="t('theory.playPiece', { name: piece.title })"
+          >
             <UIcon name="i-lucide-music" class="size-4" />
           </RouterLink>
           <span v-else class="level level--piece level--closed" role="img" :aria-label="t('theory.pieceLocked', { name: piece.title, n: tab.id })">
@@ -404,6 +430,9 @@ const levelTabs = computed(() => RHYTHM_LEVELS.map((item) => ({ id: item.id, ope
     </UPopover>
   </div>
 
+  <!-- A piece is played right here: the level row stays, only this content becomes its practice. -->
+  <SongPractice v-if="openPiece" :key="openPiece.key" :song-id="openPiece.songId" :channel="openPiece.channel" embedded />
+  <template v-else>
   <section class="task">
     <template v-if="phase === 'intro'">
       <p class="prompt text-highlighted">{{ t('theory.intro.title') }}</p>
@@ -526,6 +555,7 @@ const levelTabs = computed(() => RHYTHM_LEVELS.map((item) => ({ id: item.id, ope
       </div>
     </template>
   </div>
+  </template>
 </template>
 
 <style scoped src="./theory.css"></style>

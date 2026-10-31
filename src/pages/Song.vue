@@ -210,9 +210,10 @@ useMk4Actions({
 
 <template>
   <main ref="page" class="page">
-    <PageHeader :title="record?.name ?? t('songs.title')" back="/songs" :back-label="t('songs.title')">
+    <PageHeader :title="record?.name ?? t('songs.title')" back="/songs" :back-label="t('songs.title')" />
+    <Teleport defer to="#page-actions">
       <SoundControl />
-    </PageHeader>
+    </Teleport>
 
     <UAlert v-if="notFound" class="mt-6" color="warning" variant="subtle" icon="i-lucide-circle-help" :title="t('songs.notFound')" />
 

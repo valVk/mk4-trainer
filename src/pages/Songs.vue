@@ -56,7 +56,11 @@ const formatSize = (bytes: number) => `${Math.max(1, Math.round(bytes / 1024))} 
 
 <template>
   <main class="page">
-    <PageHeader :title="t('songs.title')">
+    <PageHeader :title="t('songs.title')" />
+
+    <!-- Importing is this screen's main action: on the screen, not in the drawer. -->
+    <div class="intro">
+      <p class="lead text-muted">{{ t('songs.lead') }}</p>
       <UButton
         icon="i-lucide-file-music"
         size="lg"
@@ -66,9 +70,7 @@ const formatSize = (bytes: number) => `${Math.max(1, Math.round(bytes / 1024))} 
         @click="fileInput?.click()"
       />
       <input ref="fileInput" type="file" accept=".mid,.midi,audio/midi,audio/x-midi" hidden @change="onFile">
-    </PageHeader>
-
-    <p class="lead text-muted">{{ t('songs.lead') }}</p>
+    </div>
     <p v-if="importError" class="text-error mt-4">{{ importError }}</p>
 
     <UEmpty
@@ -116,6 +118,14 @@ const formatSize = (bytes: number) => `${Math.max(1, Math.round(bytes / 1024))} 
 </template>
 
 <style scoped>
+.intro {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
 .lead {
   max-width: 60ch;
   margin-top: 1rem;

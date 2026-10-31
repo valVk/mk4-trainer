@@ -65,12 +65,6 @@ const props = defineProps<{
   channel?: number
   embedded?: boolean
 }>()
-const emit = defineEmits<{
-  /** Embedded: back to the screen it is shown in. */
-  close: []
-  /** Embedded: what the screen's header should call it. */
-  title: [title: string]
-}>()
 
 const route = useRoute()
 const backTo = computed(() => `/songs/${route.params.id}`)
@@ -607,9 +601,6 @@ const partName = computed(() => {
   return findName({ bank: 0, program: current.program }, synth.presets.value) ?? t(`sound.groups.${groupOf(current.program)}`)
 })
 useLastPlace(() => (record.value && partName.value ? `${record.value.name} · ${partName.value}` : null))
-watch(() => (record.value && partName.value ? `${record.value.name} · ${partName.value}` : ''), (title) => {
-  if (title) emit('title', title)
-}, { immediate: true })
 
 const pendingKeys = computed(() => (pending.value && !result.value ? pending.value.keys : []))
 
@@ -699,34 +690,32 @@ const nextLabel = computed(() => {
 
 <template>
   <component :is="embedded ? 'div' : 'main'" class="practice" :class="embedded ? 'practice--embedded' : 'page page--fill'">
-    <!-- Inside «Теория» that screen's header is the only one: the title goes up there and the controls move into it. -->
-    <PageHeader
-      v-show="!embedded"
-      :title="partName || t('songs.title')"
-      :back="backTo"
-      :back-label="t('songs.backToMap')"
-    >
+    <!-- Inside «Теория» that screen's drawer is the only one: the title goes up there and the controls move into it. -->
+    <PageHeader v-if="!embedded" :title="partName || t('songs.title')" :back="backTo" :back-label="t('songs.backToMap')">
       <template #subtitle>
         <p v-if="record" class="text-muted text-sm">{{ record.name }}<template v-if="part">, {{ t('songs.channel', { n: part.channel + 1 }) }}</template></p>
       </template>
-      <Teleport defer to="#page-actions" :disabled="!embedded">
-        <USwitch v-model="guided" size="lg" :label="t('songs.guided')" />
-        <USwitch v-if="!onPads" v-model="anyOctave" size="lg" :label="t('songs.anyOctave')" />
-        <!-- Tips open on tap: tooltips never show on a touch screen. -->
-        <UPopover :content="{ side: 'bottom', align: 'end' }">
-          <UButton icon="i-lucide-circle-help" color="neutral" variant="ghost" size="lg" :aria-label="t('songs.tips')" />
-          <template #content>
-            <div class="tips">
-              <p v-if="guided && unit">{{ t(`songs.ladderHint.${unit.kind}`) }}</p>
-              <p class="text-muted">{{ onPads ? t('songs.padsPlaying') : guided ? t('songs.padsGuided') : t('songs.padsFree') }}</p>
-            </div>
-          </template>
-        </UPopover>
-        <!-- Inside «Теория» its own header already has the map. -->
-        <OctaveMapButton v-if="!onPads && !embedded" :window-start="windowStart" />
-        <SoundControl :fixed-instrument="partName" :fixed-label="onPads ? t('sound.yourPads', { name: partName }) : undefined" />
-      </Teleport>
     </PageHeader>
+    <!-- The switches go into the drawer: this screen's own, or «Теория»'s when the piece is shown inside it. -->
+    <Teleport defer to="#page-actions">
+      <USwitch v-model="guided" size="lg" :label="t('songs.guided')" />
+      <USwitch v-if="!onPads" v-model="anyOctave" size="lg" :label="t('songs.anyOctave')" />
+      <!-- Tips open on tap: tooltips never show on a touch screen. -->
+      <UPopover :content="{ side: 'bottom', align: 'end' }">
+        <UButton icon="i-lucide-circle-help" color="neutral" variant="ghost" size="lg" :label="t('songs.tips')" />
+        <template #content>
+          <div class="tips">
+            <p v-if="guided && unit">{{ t(`songs.ladderHint.${unit.kind}`) }}</p>
+            <p class="text-muted">{{ onPads ? t('songs.padsPlaying') : guided ? t('songs.padsGuided') : t('songs.padsFree') }}</p>
+          </div>
+        </template>
+      </UPopover>
+      <SoundControl :fixed-instrument="partName" :fixed-label="onPads ? t('sound.yourPads', { name: partName }) : undefined" />
+    </Teleport>
+    <!-- The map goes to the footer; inside «Теория» that screen puts its own there. -->
+    <Teleport v-if="!onPads && !embedded" defer to="#footer-tools">
+      <OctaveMapButton :window-start="windowStart" />
+    </Teleport>
 
     <UAlert v-if="notFound" class="mt-6" color="warning" variant="subtle" icon="i-lucide-circle-help" :title="t('songs.partNotFound')" />
 

@@ -50,6 +50,12 @@
   box-shadow: 0 0 0 1.5px color-mix(in oklab, var(--color-active) 50%, transparent) inset;
 }
 
+/* The piece being played now (inside «Теория»): chosen like a level. */
+.level--piece.level--on {
+  color: var(--color-on-fill);
+  box-shadow: none;
+}
+
 .level--closed {
   opacity: 0.5;
 }

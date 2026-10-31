@@ -9,6 +9,7 @@ import FormOrder from '@/pages/theory/FormOrder.vue'
 import NoteStaff, { type StaffNote } from '@/components/NoteStaff.vue'
 import OctaveMap from '@/components/OctaveMap.vue'
 import NoteReading from '@/pages/theory/NoteReading.vue'
+import SongPractice from '@/pages/SongPractice.vue'
 import PianoKeyboard from '@/components/PianoKeyboard.vue'
 import PianoMap from '@/components/PianoMap.vue'
 import { STAFF_COLOURS } from '@/components/staffDrawing'
@@ -19,6 +20,7 @@ import { useProgress } from '@/composables/useProgress'
 import { SETTLE_MS, useSettled } from '@/composables/useSettled'
 import { useShortScreen } from '@/composables/useShortScreen'
 import { useSynth } from '@/composables/useSynth'
+import { useTheoryPiece } from '@/composables/useTheoryPiece'
 import { useTheoryPieces } from '@/composables/useTheoryPieces'
 import { useWakeLock } from '@/composables/useWakeLock'
 import { KEYBOARD_KEYS } from '@/lib/keyboard'
@@ -51,6 +53,8 @@ const { playCue } = useSynth()
 const { localName } = useNoteNames()
 const windowStart = useKeyboardWindow()
 const { piecesAfter } = useTheoryPieces(props.section)
+/** A piece played inside the section: the task waits, its keys belong to the piece. */
+const { piece: openPiece, closePiece } = useTheoryPiece()
 const levels = NOTE_SECTIONS[props.section]
 const short = useShortScreen()
 
@@ -127,6 +131,7 @@ function waitForHint() {
 
 function openLevel(id: number) {
   if (!isOpenHere(id)) return
+  closePiece()
   level.value = id
 }
 
@@ -173,7 +178,7 @@ watch(() => heldNotes.value.length, (count) => {
 
 watch(check, (status) => {
   // An articulation is judged when the key is let go (see below), not when it goes down.
-  if (buttonTask.value || task.value.articulation || status !== 'right' || solved.value || !armed.value || phase.value !== 'task' || info.value.readingBpm !== undefined) return
+  if (openPiece.value || buttonTask.value || task.value.articulation || status !== 'right' || solved.value || !armed.value || phase.value !== 'task' || info.value.readingBpm !== undefined) return
   // A bar: on to its next note; the bar is one answer, counted when its last note is played.
   const length = task.value.chain?.length ?? task.value.chordSteps?.chords.length ?? sequenceKeys.value?.length
   if (length && barIndex.value < length - 1) {
@@ -257,7 +262,7 @@ const chordHint = computed(() => {
 let articulationDown: { at: number, velocity: number | null } | null = null
 onEvent((event) => {
   const kind = task.value.articulation
-  if (!kind || solved.value || phase.value !== 'task') return
+  if (!kind || openPiece.value || solved.value || phase.value !== 'task') return
   if (event.type === 'noteOn' && event.note === target.value) {
     articulationDown = { at: performance.now(), velocity: event.source === 'midi' ? event.velocity : null }
     articulationHint.value = null
@@ -487,8 +492,8 @@ const INTRO_NOTES: Partial<Record<NoteIntroId, { show: 'treble' | 'bass' | 'gran
           type="button"
           role="tab"
           class="level"
-          :class="{ 'level--on': tab.id === level, 'level--done': tab.stars === 3 }"
-          :aria-selected="tab.id === level"
+          :class="{ 'level--on': !openPiece && tab.id === level, 'level--done': tab.stars === 3 }"
+          :aria-selected="!openPiece && tab.id === level"
           :disabled="!tab.open"
           @click="openLevel(tab.id)"
         >
@@ -497,7 +502,14 @@ const INTRO_NOTES: Partial<Record<NoteIntroId, { show: 'treble' | 'bass' | 'gran
         </button>
         <!-- The piece after this group of levels, open with the level's last star (as in «Ритм»). -->
         <template v-for="piece in piecesAfter(tab.id)" :key="piece.id">
-          <RouterLink v-if="piece.to && tab.stars === 3" :to="piece.to" class="level level--piece" :aria-label="t('theory.playPiece', { name: piece.title })">
+          <RouterLink
+            v-if="piece.to && tab.stars === 3"
+            :to="piece.to"
+            class="level level--piece"
+            :class="{ 'level--on': openPiece?.key === piece.key }"
+            :aria-current="openPiece?.key === piece.key ? 'page' : undefined"
+            :aria-label="t('theory.playPiece', { name: piece.title })"
+          >
             <UIcon name="i-lucide-music" class="size-4" />
           </RouterLink>
           <span v-else class="level level--piece level--closed" role="img" :aria-label="t('theory.notes.pieceLocked', { name: piece.title, tab: tabName(tab.id) })">
@@ -516,8 +528,10 @@ const INTRO_NOTES: Partial<Record<NoteIntroId, { show: 'treble' | 'bass' | 'gran
     <span id="notes-actions" class="row-actions" />
   </div>
 
+  <!-- A piece is played right here: the level row stays, only this content becomes its practice. -->
+  <SongPractice v-if="openPiece" :key="openPiece.key" :song-id="openPiece.songId" :channel="openPiece.channel" embedded />
   <!-- «Читаем с ритмом»: a melody in time instead of one note at a time. -->
-  <NoteReading v-if="reading" :level="info" :level-done="levelDone" actions-to="#notes-actions" @passed="onMelodyPassed">
+  <NoteReading v-else-if="reading" :level="info" :level-done="levelDone" actions-to="#notes-actions" @passed="onMelodyPassed">
     <template #done>
       <template v-for="piece in piecesAfter(level)" :key="piece.id">
         <UButton v-if="piece.to" :to="piece.to" icon="i-lucide-music" size="xl" color="success" :label="t('theory.playPiece', { name: piece.title })" />

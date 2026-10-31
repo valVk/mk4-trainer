@@ -246,11 +246,17 @@ const levelItems = computed(() => LEVELS.map((item) => ({ label: String(item.id)
 
 <template>
   <main class="page page--fill train">
-    <PageHeader :title="t('trainChoice.chords')" back="/train" :back-label="t('train.title')">
+    <PageHeader :title="t('trainChoice.chords')" back="/train" :back-label="t('train.title')" />
+    <!-- Sound and MK4 state live in the drawer, the map in the footer: the content gets the height. -->
+    <Teleport defer to="#footer-tools">
       <OctaveMapButton :window-start="start" show-on-shift />
+    </Teleport>
+    <Teleport defer to="#page-actions">
       <SoundControl />
+    </Teleport>
+    <Teleport defer to="#drawer-status">
       <MidiStatus />
-    </PageHeader>
+    </Teleport>
 
     <div class="flex flex-wrap items-center justify-between gap-4 mt-6">
       <div class="levels">

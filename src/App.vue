@@ -53,7 +53,11 @@ setAppMk4Actions({
   <UApp :locale="ru">
     <div class="shell">
       <RouterView />
-      <footer class="footer text-dimmed text-xs tabular-nums">{{ footer }}</footer>
+      <footer class="footer text-dimmed text-xs tabular-nums">
+        {{ footer }}
+        <!-- Small tools of the screen (the octave map), quiet like the version. -->
+        <div id="footer-tools" class="footer__tools" />
+      </footer>
     </div>
     <PwaUpdate />
     <SoundGate />
@@ -121,7 +125,17 @@ setAppMk4Actions({
 }
 
 .footer {
+  position: relative;
   padding: 0.75rem 1rem;
   text-align: center;
+}
+
+.footer__tools {
+  position: absolute;
+  top: 50%;
+  right: clamp(1rem, 2.5vw, 2rem);
+  display: flex;
+  gap: 0.25rem;
+  transform: translateY(-50%);
 }
 </style>

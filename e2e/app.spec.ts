@@ -19,12 +19,14 @@ test('asks for sound once, and «Пока без звука» holds for the visi
   await page.getByRole('button', { name: 'Пока без звука' }).click()
   await expect(page.getByRole('button', { name: 'Включить звук' })).toBeHidden()
 
-  // Moving to another screen with sound inside the app does not ask again.
+  // Moving to another screen with sound inside the app does not ask again. Back and Home are in the drawer.
+  await page.getByRole('button', { name: /^Меню/ }).click()
   await page.getByRole('link', { name: 'Главная' }).first().click()
   await page.getByRole('link', { name: 'Тренировка' }).click()
   await page.getByRole('link', { name: 'Аккорды' }).click()
   await page.locator('main.train').waitFor()
   await expect(page.getByRole('button', { name: 'Включить звук' })).toBeHidden()
+  await page.getByRole('button', { name: /^Меню/ }).click()
   await expect(page.getByRole('button', { name: 'Звук выключен' })).toBeVisible()
 })
 
