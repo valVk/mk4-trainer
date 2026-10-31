@@ -589,7 +589,7 @@ const levelTabs = computed(() => RHYTHM_LEVELS.map((item) => ({ id: item.id, ope
 
   <!-- Played on a real keyboard: any key, on the MK4 or here on the screen, sounds like the piano. In two hands the
        lower octave is the left hand. Pad 1 still taps too. -->
-  <PianoKeyboard class="rhythm-keys" :class="{ 'rhythm-keys--intro': phase === 'intro' }" :start="windowStart" :held="heldNotes" @press="pressNote" @release="releaseNote" />
+  <PianoKeyboard class="rhythm-keys" fill :start="windowStart" :held="heldNotes" @press="pressNote" @release="releaseNote" />
   </template>
 </template>
 
@@ -727,39 +727,24 @@ const levelTabs = computed(() => RHYTHM_LEVELS.map((item) => ({ id: item.id, ope
 
 
 
-/* The keyboard to play on: low, the staff and the card get the height. Any key is a tap. */
-/* The buttons left the space above the keys: the keys take it, bigger to play on a tablet. */
+/* The keys take the height the task leaves (fill); this is only how low they may get when the task is tall. */
 .rhythm-keys {
-  --keys-height: clamp(6rem, 22vh, 14rem);
+  --keys-height: clamp(4.5rem, 14vh, 9rem);
   width: 100%;
   margin-top: 0.75rem;
 }
 
-/* The intro is read, not played: its examples get the room. */
-.rhythm-keys--intro {
-  --keys-height: clamp(4.5rem, 12vh, 7rem);
-}
-
 @media (max-height: 720px) {
   .rhythm-keys {
-    --keys-height: clamp(5rem, 17vh, 8rem);
+    --keys-height: clamp(3.5rem, 11vh, 6rem);
     margin-top: 0.375rem;
-  }
-
-  .rhythm-keys--intro {
-    --keys-height: clamp(4rem, 11vh, 5rem);
   }
 }
 
 @media (orientation: landscape) and (max-height: 500px) {
   .rhythm-keys {
-    --keys-height: 4rem;
+    --keys-height: 2rem;
     margin-top: 0.25rem;
-  }
-
-  /* A phone has no room for both: the intro is read, the keys come back with the task. */
-  .rhythm-keys--intro {
-    display: none;
   }
 
   .staff-box {

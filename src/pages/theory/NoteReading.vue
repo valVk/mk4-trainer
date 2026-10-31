@@ -189,7 +189,7 @@ const countIn = useCountIn(() => ({
     />
   </Teleport>
 
-  <PianoKeyboard class="note-keys" :start="windowStart" :held="heldNotes" @press="pressNote" @release="releaseNote" />
+  <PianoKeyboard class="note-keys" fill :start="windowStart" :held="heldNotes" @press="pressNote" @release="releaseNote" />
 </template>
 
 <style scoped src="./theory.css"></style>

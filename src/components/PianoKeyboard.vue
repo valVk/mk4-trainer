@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onBeforeUnmount } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 
 import { useNoteNames } from '@/composables/useNoteNames'
 import { KEYBOARD_KEYS, keyboardKeys } from '@/lib/keyboard'
@@ -18,6 +18,11 @@ const props = withDefaults(defineProps<{
   /** Black keys named only from the pressed keys around them (G pressed: G♯ above, G♭ below), as in chords. */
   contextNames?: boolean
   showIntervals?: boolean
+  /**
+   * Take the height left on the screen (docs/ui-rules.md): never lower than --keys-height, never higher than
+   * --keys-max. The page's other content must not grow (flex: none), so the keys get the rest.
+   */
+  fill?: boolean
 }>(), {
   held: () => [],
   hint: () => [],
@@ -25,6 +30,7 @@ const props = withDefaults(defineProps<{
   showNames: false,
   contextNames: false,
   showIntervals: false,
+  fill: false,
 })
 
 const emit = defineEmits<{
@@ -33,6 +39,24 @@ const emit = defineEmits<{
 }>()
 
 const { localName } = useNoteNames()
+
+// Fill (docs/ui-rules.md): the box takes the height the page leaves; the keys get that height in pixels (a percentage
+// would collapse the white keys), kept between --keys-height and --keys-max by CSS.
+const root = ref<HTMLDivElement | null>(null)
+const gapsEl = ref<HTMLDivElement | null>(null)
+const fillHeight = ref<number | null>(null)
+let fillObserver: ResizeObserver | null = null
+function measureFill() {
+  if (!root.value) return
+  fillHeight.value = Math.max(0, root.value.clientHeight - (gapsEl.value?.offsetHeight ?? 0))
+}
+onMounted(() => {
+  if (!props.fill || !root.value) return
+  fillObserver = new ResizeObserver(measureFill)
+  fillObserver.observe(root.value)
+  measureFill()
+})
+onBeforeUnmount(() => fillObserver?.disconnect())
 
 const keys = computed(() => keyboardKeys(props.start))
 const whiteCount = computed(() => keys.value.filter((key) => !key.black).length)
@@ -99,8 +123,8 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
-  <div class="piano">
-    <div v-if="showIntervals" class="gaps" aria-hidden="true">
+  <div ref="root" class="piano" :class="{ 'piano--fill': fill, 'piano--gaps': showIntervals }">
+    <div v-if="showIntervals" ref="gapsEl" class="gaps" aria-hidden="true">
       <div
         v-for="gap in gaps"
         :key="`${gap.left}-${gap.semitones}`"
@@ -113,6 +137,7 @@ onBeforeUnmount(() => {
 
     <div
       class="keys"
+      :style="fill && fillHeight !== null ? { height: `${fillHeight}px` } : undefined"
       role="group"
       :aria-label="`${midiName(start)} – ${midiName(start + KEYBOARD_KEYS - 1)}`"
       @pointerdown="onDown"
@@ -316,6 +341,28 @@ onBeforeUnmount(() => {
   .key--held {
     transform: none;
   }
+}
+
+/* Filling: the keys grow into the room the page leaves, between their low and high marks. */
+.piano--fill {
+  display: flex;
+  flex-direction: column;
+  /* Room beyond the high mark stays above the keys: they always sit at the bottom. */
+  justify-content: flex-end;
+  /* Grows from nothing, so its size is the room left, not its content's. */
+  flex: 1 1 0;
+  min-height: var(--keys-height, clamp(8rem, 30vh, 15rem));
+}
+
+/* The interval numbers above take their own room. */
+.piano--fill.piano--gaps {
+  min-height: calc(var(--keys-height, clamp(8rem, 30vh, 15rem)) + 2.75rem);
+}
+
+.piano--fill .keys {
+  flex: none;
+  min-height: var(--keys-height, clamp(8rem, 30vh, 15rem));
+  max-height: var(--keys-max, min(46vh, 26rem));
 }
 
 /* Short landscape screens (Galaxy Tab S10 FE: 1152 x ~650 CSS px) */

@@ -51,6 +51,9 @@ size, word and badge rules below still apply to them.
 - Every screen fits **without scrolling** on the Tab S10+ (1280×800), the Tab S10 FE (1232×650) and a phone in
   landscape (844×390), on every level and every phase, not only the first one. Big type is bounded by the height too
   (`min(…vw, …vh)`), and the keys give room first on short screens.
+- **The keys take the room the task leaves** (`PianoKeyboard fill`): the task is as tall as its content, the keys
+  grow to the footer between `--keys-height` (how low they may get) and `--keys-max`. Never a fixed small keyboard
+  under empty space.
 - Landscape only; check light and dark theme.
 
 ## Typography and words

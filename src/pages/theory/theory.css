@@ -32,7 +32,8 @@
 
 .task {
   position: relative;
-  flex: 1;
+  /* Its content's height; the keys take the rest of the screen (PianoKeyboard fill). */
+  flex: 0 1 auto;
   display: flex;
   flex-direction: column;
   /* Top-aligned, not centred: the title stays put when the content under it changes. */

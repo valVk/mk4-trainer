@@ -325,6 +325,7 @@ const levelItems = computed(() => LEVELS.map((item) => ({ label: String(item.id)
 
     <PianoKeyboard
       class="chord-keys"
+      fill
       :start="start"
       :held="heldNotes"
       :hint="showHighlight && !solved ? target : []"
@@ -396,7 +397,8 @@ const levelItems = computed(() => LEVELS.map((item) => ({ label: String(item.id)
 
 
 .task {
-  flex: 1;
+  /* Its content's height; the keys take the rest (docs/ui-rules.md). */
+  flex: 0 1 auto;
   display: flex;
   flex-direction: column;
   /* Top-aligned: the task's words stay put when the feedback under them changes. */

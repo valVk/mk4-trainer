@@ -660,6 +660,7 @@ const INTRO_NOTES: Partial<Record<NoteIntroId, { show: 'treble' | 'bass' | 'gran
 
     <PianoKeyboard
       v-if="keysShown"
+      fill
       class="note-keys"
       :class="{ 'note-keys--low': phase === 'intro' }"
       :start="windowStart"
