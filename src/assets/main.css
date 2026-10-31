@@ -140,7 +140,7 @@ body {
  */
 :focus-visible {
   outline: none !important;
-  box-shadow: inset 0 0 0 2px var(--color-focus) !important;
+  box-shadow: inset 0 0 0 1.5px var(--color-focus) !important;
   color: var(--color-focus) !important;
 }
 
@@ -160,10 +160,29 @@ body {
   --ui-text-dimmed: color-mix(in oklab, var(--color-on-focus) 65%, transparent);
 }
 
+/* A switch that is off under the knob: no ring round the track (it reads as a border); the thumb and the label turn
+   peach. A switch that is on fills peach like any selected element. */
+[role="switch"][aria-checked="false"]:focus-visible {
+  box-shadow: none !important;
+}
+
+[role="switch"][aria-checked="false"]:focus-visible [data-slot="thumb"] {
+  background: var(--color-focus);
+}
+
+/* On: its track shows through the switch's transparent border, so the track itself turns peach too. */
+[role="switch"][aria-checked="true"]:focus-visible {
+  background-color: var(--color-focus) !important;
+}
+
+[data-slot="root"]:has([role="switch"]:focus-visible) [data-slot="label"] {
+  color: var(--color-focus);
+}
+
 /* The current step (blue ring and tint) under the knob: the same in peach; its label keeps its colour. */
 :focus-visible[aria-current]:not([aria-current="false"]) {
   box-shadow:
-    inset 0 0 0 2px var(--color-focus),
+    inset 0 0 0 1.5px var(--color-focus),
     inset 0 0 0 100vmax color-mix(in oklab, var(--color-focus) 14%, var(--ui-bg-elevated)) !important;
   color: inherit !important;
 }
