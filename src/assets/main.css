@@ -39,26 +39,59 @@
   --ease-out: cubic-bezier(0.23, 1, 0.32, 1);
 }
 
-/* Nuxt UI semantic tokens mapped to the MK4 palette */
-:root {
-  --rubber: #d5dae6;
-  --rubber-edge: #b9c0d2;
-  --key-white: #fbfcff;
-  --key-black: #232740;
+/* Nuxt UI semantic tokens mapped to the MK4 palette. `.theme-light` repeats the light theme for a part of the page
+   (the dev colour sheet shows both side by side), as `.dark` does for the dark one. */
+:root,
+.theme-light {
+  /*
+   * The light theme is the MK4 itself (the owner's photo of the white MPK mini IV, plan step 30): the panel's warm
+   * light greys, the black buttons, the display's blue for «selected», the pads' cyan light for «right», Akai red
+   * for the beat and mistakes. The pad hues and the meanings are set here, not only in @theme, because a theme
+   * block must name them itself (a `var()` is resolved once, where it is declared).
+   */
+  --color-pad-tomato: #d9443a;
+  --color-pad-sun: #ffc53d;
+  --color-pad-aqua: #1fb5aa;
+  --color-pad-sky: #4f7fe8;
+  --color-active: #4f7fe8;
+  --color-active-deep: #2f5fcc;
+  --color-correct: #1fb5aa;
+  /* Deeper than the sun: stars and the exam must read on the light panel. */
+  --color-attention: #e39d00;
+  --color-wrong: #d9443a;
+  --color-beat: #d9443a;
+  --color-on-attention: #121212;
+  /* The exam badge: filled on the light panel, where an outline alone is lost; golden, not brown, and its text a
+     soft charcoal rather than black. */
+  --exam-fill: #f4b41a;
+  --exam-text: #3a3733;
+
+  /* Nuxt UI's state colours, set here too so they follow `.theme-light` and `.dark` inside a page. Primary is the
+     same blue as «selected». */
+  --ui-primary: var(--color-active);
+  --ui-success: var(--color-correct);
+  --ui-warning: var(--color-attention);
+  --ui-error: var(--color-wrong);
+  --ui-text-inverted: #fff;
+  --ui-bg-inverted: #121212;
+  --rubber: #cfcfc9;
+  --rubber-edge: #b3b3ab;
+  --key-white: #f7f7f4;
+  --key-black: #121212;
   /* White keys stay light in both themes, so their labels keep fixed dark colors */
-  --key-label: #4b5275;
-  --key-label-dim: #7d84a3;
-  --star-off: #b9c0d2;
+  --key-label: #3c3c38;
+  --key-label-dim: #8a8a83;
+  --star-off: #b3b3ab;
   /* The MK4 display on the panel drawing: dark glass, pale blue letters. */
   --mk4-display: #1c2135;
   --mk4-display-text: #9fb5ff;
   /* Key labels on the grey (outside the window) keys of the on-screen piano. */
   --key-label-outside: #c9cee2;
 
-  /* Where the MK4 display knob is (the focus): peach, apart from the blue of «selected» and the sun of stars (the
-     owner's pick, F5 on /dev/focus). Deeper in the light theme, so the ring and the label read on a light ground. */
-  --color-focus: #c4753a;
-  --color-on-focus: #fff;
+  /* Where the MK4 display knob is (the focus): orange, apart from the blue of «selected» and the amber of stars. A
+     clear orange on the light panel (the dark theme has the owner's peach, F5 on /dev/focus), with soft charcoal text. */
+  --color-focus: #ff8a1f;
+  --color-on-focus: #3a3733;
 
   /* Rings that mark a state (selected, current, done, the knob's place): thin, and one width everywhere. */
   --ring-width: 1.5px;
@@ -69,24 +102,45 @@
   --shadow-soft: rgb(0 0 0 / 0.35);
   --shadow-strong: rgb(0 0 0 / 0.5);
 
-  --ui-bg: #e9edf5;
-  --ui-bg-muted: #e1e6f0;
-  --ui-bg-elevated: #f6f8fc;
-  --ui-bg-accented: #d5dae6;
-  --ui-text: #1e2240;
-  --ui-text-highlighted: #1e2240;
-  --ui-text-toned: #3a4062;
-  --ui-text-muted: #5b6283;
-  --ui-text-dimmed: #8a90ab;
-  --ui-border: #cfd5e3;
-  --ui-border-muted: #dde2ec;
-  --ui-border-accented: #b9c0d2;
+  --ui-bg: #e4e4df;
+  --ui-bg-muted: #dadad4;
+  --ui-bg-elevated: #f1f1ee;
+  --ui-bg-accented: #d2d2cc;
+  --ui-text: #1f1f1d;
+  --ui-text-highlighted: #121212;
+  --ui-text-toned: #3c3c38;
+  --ui-text-muted: #5f5f59;
+  --ui-text-dimmed: #8a8a83;
+  --ui-border: #c9c9c2;
+  --ui-border-muted: #d6d6d0;
+  --ui-border-accented: #b3b3ab;
   --ui-radius: 0.5rem;
   /* Widest page: a Galaxy Tab S10+ in landscape is 1400 CSS px, the S10 Ultra 1480. */
   --page-max: 92rem;
 }
 
 .dark {
+  /* The dark theme keeps the app's own palette. */
+  --color-pad-tomato: #ff5a4e;
+  --color-pad-sun: #ffc53d;
+  --color-pad-aqua: #22b8a6;
+  --color-pad-sky: #3d7bff;
+  --color-active: #3d7bff;
+  --color-active-deep: #2a5ad1;
+  --color-correct: #22b8a6;
+  --color-attention: #ffc53d;
+  --color-wrong: #ff5a4e;
+  --color-beat: #ff5a4e;
+  /* Text on the sun fill: the app's near-black, not a brown. */
+  --color-on-attention: #141729;
+  --exam-fill: transparent;
+  --exam-text: var(--color-attention);
+  --ui-primary: var(--ui-color-primary-400);
+  --ui-success: var(--ui-color-success-400);
+  --ui-warning: var(--ui-color-warning-400);
+  --ui-error: var(--ui-color-error-400);
+  --ui-text-inverted: var(--ui-color-neutral-900);
+  --ui-bg-inverted: #fff;
   --rubber: #23283f;
   --rubber-edge: #0c0e1a;
   --key-white: #e9ecf6;
@@ -94,7 +148,7 @@
   --star-off: #4a5175;
 
   --color-focus: #e9a86f;
-  --color-on-focus: #2a1500;
+  --color-on-focus: #141729;
 
   --ui-bg: #141729;
   --ui-bg-muted: #191d32;
@@ -119,7 +173,12 @@ html {
   overscroll-behavior: none;
 }
 
-html.dark {
+.theme-light {
+  color-scheme: light;
+}
+
+html.dark,
+.dark {
   color-scheme: dark;
 }
 
@@ -192,6 +251,19 @@ body {
   color: inherit !important;
 }
 
+/* A level's exam (plan steps 28-29): another phase, clearly. Outlined on the dark ground, filled on the light one. */
+.exam {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.375rem;
+  padding: 0.25rem 0.75rem;
+  border-radius: 999px;
+  font-weight: 600;
+  color: var(--exam-text);
+  background: var(--exam-fill);
+  box-shadow: 0 0 0 var(--ring-width) var(--color-attention) inset;
+}
+
 /* Page frame shared by every screen. Low specificity, so a page's own rules win. */
 :where(.page) {
   width: 100%;
@@ -199,6 +271,16 @@ body {
   margin: 0 auto;
   /* The header is one small row: little room above it. */
   padding: clamp(0.5rem, 1.5vh, 1rem) clamp(1rem, 3vw, 2.5rem) clamp(0.75rem, 3.5vh, 2.5rem);
+}
+
+/*
+ * Phones in landscape (about 390-430 CSS px high, plan step 30): the whole interface one size smaller, so the
+ * screens fit like on the tablet. Everything sized in rem follows the root size.
+ */
+@media (orientation: landscape) and (max-height: 500px) {
+  html {
+    font-size: 12px;
+  }
 }
 
 /* The drawer (PageHeader) pushes the whole page aside as it slides in, as in Material UI. */

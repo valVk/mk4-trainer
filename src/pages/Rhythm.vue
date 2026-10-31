@@ -301,7 +301,7 @@ function listenExample() {
 }
 
 /* Tablet landscape (Galaxy Tab S10+ is 1400 x ~800 CSS px): metronome left, latency check right, no scroll. */
-@media (min-width: 961px) and (orientation: landscape) {
+@media (min-width: 700px) and (orientation: landscape) {
   .layout {
     flex: 1;
     display: grid;

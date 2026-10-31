@@ -77,7 +77,13 @@ const router = createRouter({
       component: () => import('@/pages/MidiTest.vue'),
     },
     // Development only: the owner picks how the MK4 knob's place looks.
-    ...(import.meta.env.DEV ? [{ path: '/dev/focus', name: 'dev-focus', component: () => import('@/pages/dev/FocusPlayground.vue') }] : []),
+    ...(import.meta.env.DEV
+      ? [
+          { path: '/dev/focus', name: 'dev-focus', component: () => import('@/pages/dev/FocusPlayground.vue') },
+          // Both themes side by side, every colour.
+          { path: '/dev/colors', name: 'dev-colors', component: () => import('@/pages/dev/ColorsPlayground.vue') },
+        ]
+      : []),
   ],
 })
 

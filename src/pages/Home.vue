@@ -182,8 +182,8 @@ const { profile, lastPlace } = useProgress()
   --pad-padding: clamp(1.25rem, 4cqi, 2rem);
 }
 
-/* Tablet landscape (Galaxy Tab S10+ is 1400 x ~800 CSS px): the pads fill the screen height. */
-@media (min-width: 961px) and (orientation: landscape) {
+/* Landscape, from a phone to a desktop (Galaxy Tab S10+ is 1400 x ~800 CSS px): the pads fill the screen height. */
+@media (min-width: 700px) and (orientation: landscape) {
   .home {
     align-items: stretch;
     padding-block: 4.5rem 1.5rem;
@@ -205,7 +205,7 @@ const { profile, lastPlace } = useProgress()
   }
 }
 
-@media (min-width: 961px) and (orientation: landscape) and (max-height: 700px) {
+@media (min-width: 700px) and (orientation: landscape) and (max-height: 700px) {
   .home {
     padding-block: 4rem 1rem;
   }
@@ -220,8 +220,8 @@ const { profile, lastPlace } = useProgress()
   }
 }
 
-/* Tablet portrait and narrower: text above, pads full width below */
-@media (max-width: 960px) {
+/* Portrait and narrow windows: text above, pads full width below. Phones in landscape keep the two columns. */
+@media (max-width: 699px), (orientation: portrait) {
   .home {
     grid-template-columns: minmax(0, 1fr);
     align-content: center;

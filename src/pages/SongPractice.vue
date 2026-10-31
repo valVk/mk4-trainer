@@ -862,18 +862,6 @@ const nextLabel = computed(() => {
 </template>
 
 <style scoped>
-/* The phrase's exam (its last rung): calm, but clearly another phase. */
-.exam {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.375rem;
-  padding: 0.25rem 0.75rem;
-  border-radius: 999px;
-  font-weight: 600;
-  color: var(--color-attention);
-  box-shadow: 0 0 0 var(--ring-width) var(--color-attention) inset;
-}
-
 .practice {
   padding: clamp(0.75rem, 3vh, 2rem) clamp(1rem, 2.5vw, 2rem);
 }
@@ -1068,7 +1056,7 @@ const nextLabel = computed(() => {
 .stage { order: 7; }
 .reset { order: 8; }
 
-@media (min-width: 961px) and (orientation: landscape) {
+@media (min-width: 700px) and (orientation: landscape) {
   /* Exactly the screen height above the footer: the phrase list scrolls inside its column. */
   .practice {
     flex: 1 1 0;

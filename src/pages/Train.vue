@@ -419,18 +419,6 @@ const levelItems = computed(() => LEVELS.map((item) => ({ label: String(item.id)
 </template>
 
 <style scoped>
-/* The exam: calm, but clearly another phase. */
-.exam {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.375rem;
-  padding: 0.25rem 0.75rem;
-  border-radius: 999px;
-  font-weight: 600;
-  color: var(--color-attention);
-  box-shadow: 0 0 0 var(--ring-width) var(--color-attention) inset;
-}
-
 /* Takes the task's place while open, so the keyboard stays on screen */
 .level-done {
   align-items: center;

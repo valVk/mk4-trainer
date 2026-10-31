@@ -87,7 +87,7 @@ defineEmits<{ select: [index: number] }>()
 }
 
 /* Tablet landscape: the units are a column beside the stage, one line each. */
-@media (min-width: 961px) and (orientation: landscape) {
+@media (min-width: 700px) and (orientation: landscape) {
   .unit {
     min-width: 0;
     flex-direction: row;
