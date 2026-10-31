@@ -1,6 +1,6 @@
 import { expect, test, type Page } from '@playwright/test'
 
-import { keyFor, open, storedSetting } from './helpers'
+import { keyFor, open, reload, storeSetting, storedSetting } from './helpers'
 
 // «Теория» → «Ноты», level Н1: the name of a note → press its key, any octave.
 const LETTER: Record<string, string> = { до: 'C', ре: 'D', ми: 'E', фа: 'F', соль: 'G', ля: 'A', си: 'B' }
@@ -114,4 +114,16 @@ test('a piece plays inside «Теория», and back returns to the level', asy
   await page.getByRole('button', { name: 'К уровню' }).click()
   await expect(page).toHaveURL(/\/train\/theory\?section=notes$/)
   await expect(page.getByRole('button', { name: 'Послушать' })).toBeHidden()
+})
+
+test('«С подсказкой» lights the key after a wait; switched off, nothing lights', async ({ page }) => {
+  await openNames(page)
+  await expect(page.locator('.key--hint')).toHaveCount(0)
+  await expect(page.locator('.key--hint')).toHaveCount(1, { timeout: 4000 })
+
+  await storeSetting(page, 'guide', false)
+  await reload(page)
+  await page.getByRole('button', { name: 'Понятно' }).click()
+  await page.waitForTimeout(3000)
+  await expect(page.locator('.key--hint')).toHaveCount(0)
 })

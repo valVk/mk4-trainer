@@ -61,7 +61,7 @@ const settledCheck = computed(() => checkTask(task.value, settledHeld.value, ste
  * only when it sounds as a chord (its keys down together, none extra).
  */
 const exam = computed(() => isExam(correctIn(level.value)))
-const guideOn = computed(() => progress.chordsGuide.value && !exam.value)
+const guideOn = computed(() => progress.guide.value && !exam.value)
 /** When each held key went down: the exam asks the chord's keys to land together. */
 const downAt = new Map<number, number>()
 onEvent((event) => {
@@ -280,7 +280,7 @@ const levelItems = computed(() => LEVELS.map((item) => ({ label: String(item.id)
         :disabled="exam"
         size="lg"
         :label="exam ? t('train.guideExam') : t('train.guide')"
-        @update:model-value="progress.setChordsGuide($event)"
+        @update:model-value="progress.setGuide($event)"
       />
       <SoundControl />
     </Teleport>

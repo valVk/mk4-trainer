@@ -24,7 +24,7 @@ import { useTheoryPiece } from '@/composables/useTheoryPiece'
 import { useTheoryPieces } from '@/composables/useTheoryPieces'
 import { useWakeLock } from '@/composables/useWakeLock'
 import { KEYBOARD_KEYS } from '@/lib/keyboard'
-import { STAR_THRESHOLDS } from '@/lib/levels'
+import { EXAM_STARS, STAR_THRESHOLDS, isCleanChord } from '@/lib/levels'
 import { barKeys, barVexSpelling, keyOf, spelled, vexInKey, type Alter, type BarNote, type Spelled } from '@/lib/accidentals'
 import { NOTE_SECTIONS, SEVENTH_TYPES, articulationVerdict, checkNote, checkVoicing, countsForStars, currentNoteLevel, isNoteLevelOpen, nextTask, noteStars, type NoteIntroId, type NoteSectionId, type NoteTask } from '@/lib/noteLevels'
 import { keySignatureName } from '@/lib/notation'
@@ -62,6 +62,13 @@ const passed = computed(() => progress.noteProgress.value[props.section])
 const level = ref(currentNoteLevel(passed.value, levels))
 const info = computed(() => levels.find((item) => item.id === level.value)!)
 const stars = computed(() => noteStars(passed.value, level.value, levels))
+/**
+ * Help is the app's «С подсказкой» switch (plan step 29), as in chords: on, the key lights up after a teacher's wait
+ * and a chain shows its chord; off, nothing lights. From two stars the level is in its exam: no help, and a chord
+ * counts only when its keys go down together.
+ */
+const exam = computed(() => stars.value >= EXAM_STARS)
+const guideOn = computed(() => progress.guide.value && !exam.value)
 const levelTabs = computed(() => levels.map((item) => ({ id: item.id, open: isNoteLevelOpen(item.id, passed.value, levels), stars: noteStars(passed.value, item.id, levels) })))
 /** «Н3», «П2»: the level's short name in this section. */
 const tabName = (id: number) => t(`theory.sectionTab.${props.section}`, { n: id })
@@ -122,6 +129,7 @@ function newTask(previous: NoteTask | null) {
 function waitForHint() {
   clearTimeout(hintTimer)
   keyHint.value = false
+  if (!guideOn.value) return
   // Melodies have no single key; the timed level would give the answer away; chains light up (or not) on their own.
   if (info.value.timed !== undefined || info.value.readingBpm !== undefined || buttonTask.value || task.value.chain) return
   hintTimer = setTimeout(() => {
@@ -176,8 +184,30 @@ watch(() => heldNotes.value.length, (count) => {
   if (count === 0) armed.value = true
 })
 
+// Turned on in the middle of a task: the wait starts now.
+watch(guideOn, (on) => {
+  if (on && !solved.value) waitForHint()
+})
+
+/** When each held key went down (ms), from the events themselves: the exam asks a chord's keys to land together. */
+const chordDownAt = new Map<number, number>()
+onEvent((event) => {
+  if (event.type === 'noteOn') chordDownAt.set(event.note, performance.now())
+  else if (event.type === 'noteOff') chordDownAt.delete(event.note)
+})
+/** An exam chord played key by key: said once, then the keys go up and it is tried again. */
+const notTogether = ref(false)
+watch(() => heldNotes.value.length, (count) => {
+  if (count === 0) notTogether.value = false
+})
+
 watch(check, (status) => {
   // An articulation is judged when the key is let go (see below), not when it goes down.
+  if (notTogether.value) return
+  if (status === 'right' && exam.value && currentChord.value && !isCleanChord(heldNotes.value.map((note) => chordDownAt.get(note) ?? 0))) {
+    notTogether.value = true
+    return
+  }
   if (openPiece.value || buttonTask.value || task.value.articulation || status !== 'right' || solved.value || !armed.value || phase.value !== 'task' || info.value.readingBpm !== undefined) return
   // A bar: on to its next note; the bar is one answer, counted when its last note is played.
   const length = task.value.chain?.length ?? task.value.chordSteps?.chords.length ?? sequenceKeys.value?.length
@@ -232,6 +262,7 @@ const hintKey = computed(() => {
 
 /** Keys lit as the hint: a chain on its first level always, a chord or a note after the wait. */
 const hintKeys = computed<number[]>(() => {
+  if (!guideOn.value) return []
   if (chainChord.value) return info.value.chainHints ? chainChord.value.keys : []
   if (!keyHint.value) return []
   if (currentChord.value) return currentChord.value.keys
@@ -520,6 +551,20 @@ const INTRO_NOTES: Partial<Record<NoteIntroId, { show: 'treble' | 'bass' | 'gran
       </template>
     </div>
     <span class="stars" :aria-label="t('train.stars', { n: stars })">{{ '★'.repeat(stars) }}<span class="stars__off">{{ '★'.repeat(3 - stars) }}</span></span>
+    <span v-if="exam && !reading" class="exam">
+      <UIcon name="i-lucide-graduation-cap" class="size-5" />
+      {{ t('train.exam') }}
+    </span>
+    <!-- The app's help switch, in the drawer; a level's exam turns it off. -->
+    <Teleport defer to="#page-actions">
+      <USwitch
+        :model-value="guideOn"
+        :disabled="exam"
+        size="lg"
+        :label="exam ? t('train.guideExam') : t('train.guide')"
+        @update:model-value="progress.setGuide($event)"
+      />
+    </Teleport>
     <!-- Where the keys are, in the row. The octave moves with the MK4's Octave buttons or Z and X (owner's choice). -->
     <span v-if="keysShown && !reading" class="hands">
       <span class="hands__label text-toned">{{ t('theory.notes.underHands', { octaves: underHands }) }}</span>
@@ -620,6 +665,7 @@ const INTRO_NOTES: Partial<Record<NoteIntroId, { show: 'treble' | 'bass' | 'gran
           {{ shiftNeeded > 0 ? t('theory.notes.octaveUp') : t('theory.notes.octaveDown') }}
         </p>
         <p v-else-if="settledCheck === 'octave' && !solved" class="pill" role="status">{{ t('theory.notes.otherOctave') }}</p>
+        <p v-else-if="notTogether && !solved" class="pill" role="status">{{ t('train.notTogether') }}</p>
         <p v-else-if="articulationHint && !solved" class="pill" role="status">{{ articulationHint }}</p>
         <p v-else-if="settledCheck === 'wrong' && !solved" class="pill" role="status">{{ chordHint ?? stepHint ?? t('theory.notes.notThis') }}</p>
       </template>
