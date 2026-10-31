@@ -9,6 +9,11 @@ import { scaleKeys } from '@/lib/scales'
 // relative minors inside. Tap a key: its scale goes up, then its tonic chord sounds. Signs per key: ♯ to the right
 // of C, ♭ to the left.
 
+const props = defineProps<{
+  /** A chord to light up (the chain of «Функции»): ring and position, C at the top. */
+  lit?: { minor: boolean, position: number } | null
+}>()
+
 const { t } = useI18n()
 const { playChord } = useSynth()
 
@@ -64,7 +69,7 @@ const signs = (signature: number) => (signature === 0 ? '' : signature > 0 ? `${
       <path
         :d="sector(i, MIDDLE, OUTER)"
         class="sector"
-        :class="{ 'sector--on': selected === label }"
+:class="{ 'sector--on': selected === label || (props.lit && !props.lit.minor && props.lit.position === i) }"
         role="button"
         :aria-label="t('theory.scales.circlePlay', { key: label })"
         @click="play(label, pc, false)"
@@ -74,7 +79,7 @@ const signs = (signature: number) => (signature === 0 ? '' : signature > 0 ? `${
       <path
         :d="sector(i, INNER, MIDDLE)"
         class="sector sector--minor"
-        :class="{ 'sector--on': selected === MINORS[i] }"
+:class="{ 'sector--on': selected === MINORS[i] || (props.lit?.minor && props.lit.position === i) }"
         role="button"
         :aria-label="t('theory.scales.circlePlay', { key: MINORS[i] })"
         @click="play(MINORS[i]!, (pc + 9) % 12, true)"

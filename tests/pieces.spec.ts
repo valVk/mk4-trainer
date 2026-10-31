@@ -39,8 +39,10 @@ describe.each(PIECES.map((piece) => [piece.title, piece] as const))('%s', (_, pi
 
   it('reads back as a song with its meter, every voice and the part to learn', () => {
     expect(song.timeSignature).toEqual(piece.meter)
-    expect(song.parts.map((part) => part.channel).sort()).toEqual(piece.voices.map((item) => item.channel).sort())
-    expect(learner.notes.length).toBe(piece.voices.find((item) => item.channel === piece.learner)!.notes.filter((note, index, notes) => note.key !== null && !notes[index - 1]?.tie).length)
+    // Several voices may share a channel (chords in the left hand): one part each.
+    expect(song.parts.map((part) => part.channel).sort()).toEqual([...new Set(piece.voices.map((item) => item.channel))].sort())
+    const sounded = piece.voices.filter((item) => item.channel === piece.learner).flatMap((item) => item.notes.filter((note, index, notes) => note.key !== null && !notes[index - 1]?.tie))
+    expect(learner.notes.length).toBe(sounded.length)
   })
 
   it('fits the 25 keys of the MK4 (plan: every built-in piece)', () => {

@@ -56,7 +56,8 @@ function listen() {
 
 watch(() => [props.answer, props.options], () => {
   wrong.value = []
-  if (!props.staffNotes) timers.push(setTimeout(listen, FIRST_PLAY_MS))
+  // Heard tasks sound by themselves; a staff with sound (a bar to harmonise) too.
+  if (props.sound) timers.push(setTimeout(listen, FIRST_PLAY_MS))
 }, { immediate: true })
 
 onBeforeUnmount(() => timers.forEach(clearTimeout))
@@ -72,8 +73,8 @@ const lastWrong = computed(() => props.options.find((option) => option.id === wr
 
 <template>
   <NoteStaff v-if="staffNotes" :notes="staffNotes" show="treble" :key-signature="keySignature" playable :scale="2" fit class="choice__staff" />
-  <div v-else class="choice__ear">
-    <UButton icon="i-lucide-ear" color="neutral" variant="soft" size="xl" :label="t('theory.choice.listenAgain')" @click="listen" />
+  <div v-if="sound" class="choice__ear" :class="{ 'choice__ear--small': staffNotes }">
+    <UButton icon="i-lucide-ear" color="neutral" variant="soft" :size="staffNotes ? 'lg' : 'xl'" :label="t('theory.choice.listenAgain')" @click="listen" />
     <p v-if="soundStatus !== 'ready'" class="text-toned">{{ t('theory.choice.needSound') }}</p>
   </div>
   <div class="choice__options" role="group" :aria-label="t('theory.choice.optionsLabel')">
@@ -100,6 +101,10 @@ const lastWrong = computed(() => props.options.find((option) => option.id === wr
   align-self: center;
 }
 
+.choice__ear--small {
+  flex: 0 0 auto;
+}
+
 .choice__ear {
   flex: 1;
   display: flex;
@@ -116,7 +121,7 @@ const lastWrong = computed(() => props.options.find((option) => option.id === wr
 }
 
 .option {
-  min-height: 3.5rem;
+  min-height: 3.25rem;
   padding: 0.5rem 1rem;
   border-radius: 0.875rem;
   font-family: var(--font-display);

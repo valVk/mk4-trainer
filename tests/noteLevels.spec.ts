@@ -3,9 +3,10 @@ import { describe, expect, it } from 'vitest'
 import { keyOf } from '@/lib/accidentals'
 import { interval, intervalBetween, type IntervalId } from '@/lib/intervals'
 import { KEY_INFO } from '@/lib/scales'
+import { checkChord } from '@/lib/theory'
 
 import { KEYBOARD_KEYS } from '@/lib/keyboard'
-import { INTERVAL_LEVELS, NOTE_LEVELS, SCALE_LEVELS, makeChoice, type NoteTask, checkNote, countsForStars, makeMelody, noteStars, readMarks, readingPasses, currentNoteLevel, isNoteLevelOpen, nextTask, makeKeyBar, ACCIDENTAL_LEVELS, parseNoteProgress } from '@/lib/noteLevels'
+import { FUNCTION_LEVELS, INTERVAL_LEVELS, NOTE_LEVELS, SCALE_LEVELS, checkVoicing, makeChoice, type NoteTask, checkNote, countsForStars, makeMelody, noteStars, readMarks, readingPasses, currentNoteLevel, isNoteLevelOpen, nextTask, makeKeyBar, ACCIDENTAL_LEVELS, parseNoteProgress } from '@/lib/noteLevels'
 import { octaveShift } from '@/lib/staff'
 
 const level = (id: number) => NOTE_LEVELS.find((item) => item.id === id)!
@@ -300,5 +301,53 @@ describe('«Гаммы»', () => {
       expect(sequence.keys).toEqual(sequence.written.map((note) => keyOf(note) + sequence.shift!))
       expect(Math.max(...sequence.keys)).toBeLessThanOrEqual(72)
     }
+  })
+})
+
+describe('«Функции»', () => {
+  const at = (id: number) => FUNCTION_LEVELS.find((item) => item.id === id)!
+  const seeded = (seed: number) => {
+    let state = seed * 2654435761
+    return () => {
+      state = (state + 0x6d2b79f5) | 0
+      let x = Math.imul(state ^ (state >>> 15), 1 | state)
+      x = (x + Math.imul(x ^ (x >>> 7), 61 | x)) ^ x
+      return ((x ^ (x >>> 14)) >>> 0) / 4294967296
+    }
+  }
+
+  it('asks chords whose own voicing is right and inside C3-C5', () => {
+    for (const id of [1, 2, 3, 4, 5]) {
+      for (let seed = 0; seed < 40; seed++) {
+        const chord = nextTask(at(id), null, seeded(seed)).chordQuestion!.chord
+        expect(checkChord(chord.keys, chord.target).status).toBe('correct')
+        expect(Math.min(...chord.keys)).toBeGreaterThanOrEqual(48)
+        expect(Math.max(...chord.keys)).toBeLessThanOrEqual(72)
+      }
+    }
+  })
+
+  it('asks the inversion on the inversion level, root position elsewhere', () => {
+    const inversions = new Set(Array.from({ length: 40 }, (_, seed) => nextTask(at(2), null, seeded(seed)).chordQuestion!.inversion))
+    expect(inversions).toEqual(new Set([1, 2]))
+    expect(nextTask(at(1), null, seeded(3)).chordQuestion!.inversion).toBe(0)
+  })
+
+  it('harmonises bars with T, S or D', () => {
+    const answers = new Set(Array.from({ length: 60 }, (_, seed) => nextTask(at(6), null, seeded(seed)).harmony!.answer))
+    expect(answers).toEqual(new Set(['T', 'S', 'D']))
+  })
+
+  it('plays the A minor chain on the first chain levels, any of the twelve on the last', () => {
+    expect(nextTask(at(7), null, seeded(1)).chain!.map((chord) => chord.name)).toEqual(['Am', 'Dm', 'G', 'C'])
+    const starts = new Set(Array.from({ length: 200 }, (_, seed) => nextTask(at(9), null, seeded(seed)).chain![0]!.position))
+    expect(starts.size).toBe(12)
+  })
+
+  it('takes a voicing only when exactly its keys are down', () => {
+    expect(checkVoicing([57, 64, 72], [{ key: 57, time: 0 }, { key: 64, time: 0 }, { key: 72, time: 0.01 }])).toBe('right')
+    expect(checkVoicing([57, 64, 72], [{ key: 57, time: 0 }, { key: 64, time: 0 }])).toBe('partial')
+    // The third under the fifth: the same chord, not the voicing asked for.
+    expect(checkVoicing([57, 64, 72], [{ key: 57, time: 0 }, { key: 60, time: 0 }, { key: 64, time: 0 }])).toBe('wrong')
   })
 })

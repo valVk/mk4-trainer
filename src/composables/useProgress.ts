@@ -48,7 +48,7 @@ const RHYTHM_KEY = 'theoryRhythm'
 /** «Теория» → «Ритм»: tries and misses by kind of note, for the weak spots. */
 const RHYTHM_WEAK_KEY = 'theoryRhythmWeak'
 /** «Теория» → «Ноты» and «Полутоны и знаки»: notes found per level, one setting per section. */
-const SECTION_KEYS: Readonly<Record<NoteSectionId, string>> = { notes: 'theoryNotes', accidentals: 'theoryAccidentals', intervals: 'theoryIntervals', scales: 'theoryScales' }
+const SECTION_KEYS: Readonly<Record<NoteSectionId, string>> = { notes: 'theoryNotes', accidentals: 'theoryAccidentals', intervals: 'theoryIntervals', scales: 'theoryScales', functions: 'theoryFunctions' }
 /** How late this child's taps arrive after the click, per input: the last checks on the «Ритм» page (median is used). */
 const LATENCY_KEY = 'tapLatencyMs'
 /** Where step 5 kept the pad map before the database existed. */
@@ -70,7 +70,7 @@ const trainLevel = ref<number | null>(null)
 const songView = ref<SongView>('fall')
 const rhythmProgress = ref<Record<number, RhythmLevelProgress>>({})
 const rhythmWeak = ref<Partial<Record<RhythmKind, KindStats>>>({})
-const noteProgress = ref<Record<NoteSectionId, Record<number, NoteLevelProgress>>>({ notes: {}, accidentals: {}, intervals: {}, scales: {} })
+const noteProgress = ref<Record<NoteSectionId, Record<number, NoteLevelProgress>>>({ notes: {}, accidentals: {}, intervals: {}, scales: {}, functions: {} })
 const songs = shallowRef<SongSummary[]>([])
 // Applying stored settings must not write them straight back.
 let applying = false

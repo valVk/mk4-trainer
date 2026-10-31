@@ -23,7 +23,7 @@ const windowStart = useKeyboardWindow()
 const SECTIONS = ['rhythm', 'notes', 'accidentals', 'intervals', 'scales', 'functions', 'sevenths'] as const
 type Section = typeof SECTIONS[number]
 /** Sections built so far; the others wait for their plan step. */
-const READY: readonly Section[] = ['rhythm', 'notes', 'accidentals', 'intervals', 'scales']
+const READY: readonly Section[] = ['rhythm', 'notes', 'accidentals', 'intervals', 'scales', 'functions']
 
 const section = computed<Section>(() => {
   const asked = route.query.section

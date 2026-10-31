@@ -33,7 +33,7 @@ export interface PieceVoice {
 export type PieceKind = 'melody' | 'rhythm'
 
 /** Sections of «Теория» that end their level groups with pieces. */
-export type TheorySection = 'rhythm' | 'notes' | 'accidentals' | 'intervals' | 'scales'
+export type TheorySection = 'rhythm' | 'notes' | 'accidentals' | 'intervals' | 'scales' | 'functions'
 
 export interface Piece {
   /** Stable id; the version goes up whenever the notes change, so saved copies are refreshed. */
@@ -389,7 +389,30 @@ const YOLKA_G: Piece = {
   ],
 }
 
-export const PIECES: readonly Piece[] = [FUR_ELISE, ODE, CHIZHIK, WALTZ, YOLKA, ENTERTAINER, ROW, DRUMMER, ODE_RIGHT, ODE_D, YOLKA_F, YOLKA_G]
+// «Ода к радости» with the left hand on chords (plan step 23): T and D under the melody, a chord a bar. C as C3-E3-G3,
+// G as D3-G3-B3 (its second inversion: the hand barely moves). Both hands inside the MK4 out of the box (C3-C5).
+const ODE_CHORD_TONES = [
+  'C3/1 D3/1 C3/1 D3/1 C3/1 D3/1 C3/1 D3/2 C3/2',
+  'E3/1 G3/1 E3/1 G3/1 E3/1 G3/1 E3/1 G3/2 E3/2',
+  'G3/1 B3/1 G3/1 B3/1 G3/1 B3/1 G3/1 B3/2 G3/2',
+]
+const ODE_LEFT: Piece = {
+  id: 'ode-left-chords',
+  version: 1,
+  title: 'Ода к радости — левая рука T и D',
+  short: 'Ода: аккорды',
+  kind: 'melody',
+  meter: { numerator: 4, denominator: 4 },
+  bpm: 66,
+  learner: 1,
+  after: { section: 'functions', level: 6 },
+  voices: [
+    { channel: 0, program: 0, notes: ODE_MELODY },
+    ...ODE_CHORD_TONES.map((tones) => ({ channel: 1, program: 0, velocity: 80, notes: voice(tones) })),
+  ],
+}
+
+export const PIECES: readonly Piece[] = [FUR_ELISE, ODE, CHIZHIK, WALTZ, YOLKA, ENTERTAINER, ROW, DRUMMER, ODE_RIGHT, ODE_D, YOLKA_F, YOLKA_G, ODE_LEFT]
 
 /** The file name a piece is stored under: built in, with its version. */
 export function pieceFileName(piece: Pick<Piece, 'id' | 'version'>): string {

@@ -8,6 +8,9 @@ import { RHYTHM_LEVELS, makeTask, passes } from './rhythmLevels'
 import { STAR_THRESHOLDS, starsFor } from './levels'
 import { barKeys, keyOf, spelled, stepTarget, type Alter, type BarNote, type KeySignature, type Letter, type Spelled, type StepTask } from './accidentals'
 import { interval, type IntervalId } from './intervals'
+import { circleChain, type CircleChord } from './circle'
+import { chordTask, degreeChord, functionChord, type ChordTask, type FunctionId } from './functions'
+import type { ChordType } from './theory'
 import { KEYS, KEY_INFO, RESOLUTION, parallelKey, relativeKey, spellScale, transpose, type KeyName, type ScaleKind } from './scales'
 import { pitch } from './staff'
 import { pitchClass } from './theory'
@@ -16,12 +19,15 @@ export type NoteIntroId = 'keyboard' | 'names' | 'treble' | 'bass' | 'grand' | '
   | 'semitone' | 'sharpFlat' | 'natural' | 'double' | 'enharmonic' | 'keySignature'
   | 'perfect' | 'thirds' | 'sixths' | 'byEar' | 'harmonic' | 'byNotes'
   | 'majorSteps' | 'minorSteps' | 'scaleVariants' | 'circle' | 'stable' | 'transpose'
+  | 'mainTriads' | 'inversions' | 'degrees' | 'minorDominant' | 'symbols' | 'harmonize' | 'chain' | 'chainNoHints' | 'allChains'
 
 /** How the task is shown: the note's name only, a step from a key on the keyboard, or the note on a staff. */
 /** `ear` and `read`: an interval to name with buttons, heard or read from the staff (plan step 21). */
 export type NoteShow = 'name' | 'step' | 'bar' | 'ear' | 'read' | 'treble' | 'bass' | 'grand'
   /** Plan step 22: build a scale, name a key, finish a melody, move a melody up. */
   | 'scale' | 'keyChoice' | 'resolve' | 'transpose'
+  /** Plan step 23: play a chord, choose T/S/D for a bar, play a chain around the circle. */
+  | 'chord' | 'harmony' | 'chain'
 
 export interface NoteLevel {
   id: number
@@ -46,10 +52,17 @@ export interface NoteLevel {
   options?: number
   /** Scales to build on a `scale` level. */
   scales?: readonly ScaleKind[]
+  /** `chord` levels: how the chord is asked, in which keys, in which inversions. */
+  chordMode?: 'function' | 'degree' | 'symbol'
+  chordKeys?: readonly KeyName[]
+  inversions?: readonly number[]
+  /** `chain` levels: the inner-ring positions the chains start from, and whether the keys light up. */
+  chainStarts?: readonly number[]
+  chainHints?: boolean
 }
 
 /** Sections of «Теория» built from note-finding levels. */
-export type NoteSectionId = 'notes' | 'accidentals' | 'intervals' | 'scales'
+export type NoteSectionId = 'notes' | 'accidentals' | 'intervals' | 'scales' | 'functions'
 
 const keys = (names: string) => names.trim().split(/\s+/).map(pitch)
 const writtenAs = (names: string) => names.trim().split(/\s+/).map(spelled)
@@ -142,7 +155,86 @@ export const SCALE_LEVELS: readonly NoteLevel[] = [
   { id: 6, show: 'transpose', keys: [], anyOctave: false, introduces: ['transpose'], stars: [3, 6, 10] },
 ]
 
-export const NOTE_SECTIONS: Readonly<Record<NoteSectionId, readonly NoteLevel[]>> = { notes: NOTE_LEVELS, accidentals: ACCIDENTAL_LEVELS, intervals: INTERVAL_LEVELS, scales: SCALE_LEVELS }
+// «Теория» → «Функции» (plan step 23): main triads and their inversions, triads on the degrees, D in minor, chord
+// symbols, choosing T/S/D for a melody, and the owner's «Цепочка по кругу». Every chord inside C3-C5.
+export const FUNCTION_LEVELS: readonly NoteLevel[] = [
+  { id: 1, show: 'chord', keys: [], anyOctave: true, introduces: ['mainTriads'], chordMode: 'function', chordKeys: ['C', 'G', 'F'], inversions: [0] },
+  { id: 2, show: 'chord', keys: [], anyOctave: true, introduces: ['inversions'], chordMode: 'function', chordKeys: ['C', 'G', 'F'], inversions: [1, 2] },
+  { id: 3, show: 'chord', keys: [], anyOctave: true, introduces: ['degrees'], chordMode: 'degree', chordKeys: ['C', 'G', 'Am', 'Em'], inversions: [0] },
+  { id: 4, show: 'chord', keys: [], anyOctave: true, introduces: ['minorDominant'], chordMode: 'function', chordKeys: ['Am', 'Em', 'Dm'], inversions: [0] },
+  { id: 5, show: 'chord', keys: [], anyOctave: true, introduces: ['symbols'], chordMode: 'symbol', inversions: [0, 1] },
+  { id: 6, show: 'harmony', keys: [], anyOctave: true, introduces: ['harmonize'] },
+  { id: 7, show: 'chain', keys: [], anyOctave: false, introduces: ['chain'], chainStarts: [0], chainHints: true, stars: [3, 6, 10] },
+  { id: 8, show: 'chain', keys: [], anyOctave: false, introduces: ['chainNoHints'], chainStarts: [0], chainHints: false, stars: [3, 6, 10] },
+  { id: 9, show: 'chain', keys: [], anyOctave: false, introduces: ['allChains'], chainStarts: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11], chainHints: false, stars: [6, 12, 24] },
+]
+
+export const NOTE_SECTIONS: Readonly<Record<NoteSectionId, readonly NoteLevel[]>> = { notes: NOTE_LEVELS, accidentals: ACCIDENTAL_LEVELS, intervals: INTERVAL_LEVELS, scales: SCALE_LEVELS, functions: FUNCTION_LEVELS }
+
+/** A chord to play, and how it was asked: a function or a degree in a key, or a symbol. */
+export interface ChordQuestion {
+  chord: ChordTask
+  key?: KeyName
+  fn?: FunctionId
+  degree?: number
+  inversion: number
+}
+
+/** Symbols asked on the symbol level: chords of C, G, F and A minor, some as slash chords (their 6 chords). */
+const SYMBOL_CHORDS: readonly { root: number, type: ChordType }[] = [
+  { root: 0, type: 'maj' }, { root: 7, type: 'maj' }, { root: 5, type: 'maj' }, { root: 9, type: 'min' }, { root: 2, type: 'min' }, { root: 4, type: 'min' },
+]
+
+export function makeChordQuestion(level: NoteLevel, previous: ChordQuestion | null, random: () => number = Math.random): ChordQuestion {
+  const pick = <T>(items: readonly T[]): T => items[Math.floor(random() * items.length)]!
+  const inversion = pick(level.inversions ?? [0])
+  if (level.chordMode === 'symbol') {
+    const options = SYMBOL_CHORDS.filter((item) => item.root !== previous?.chord.target.root || item.type !== previous.chord.target.type)
+    const chosen = pick(options)
+    return { chord: chordTask(chosen.root, chosen.type, inversion), inversion }
+  }
+  const key = pick<KeyName>(level.chordKeys ?? ['C'])
+  if (level.chordMode === 'degree') {
+    const degree = pick([1, 2, 3, 4, 5, 6, 7].filter((item) => item !== previous?.degree))
+    return { chord: degreeChord(key, degree, inversion), key, degree, inversion }
+  }
+  const fn = pick((['T', 'S', 'D'] as FunctionId[]).filter((item) => item !== previous?.fn || key !== previous?.key))
+  return { chord: functionChord(key, fn, inversion), key, fn, inversion }
+}
+
+/** A bar of a known melody to harmonise with T, S or D (the chord the piece really uses there). */
+export interface HarmonyQuestion {
+  key: KeyName
+  written: Spelled[]
+  answer: FunctionId
+}
+
+const HARMONY_BARS: readonly { key: KeyName, notes: string, answer: FunctionId }[] = [
+  { key: 'C', notes: 'E4 E4 F4 G4', answer: 'T' },
+  { key: 'C', notes: 'G4 F4 E4 D4', answer: 'D' },
+  { key: 'C', notes: 'C4 C4 D4 E4', answer: 'T' },
+  { key: 'C', notes: 'E4 D4 D4', answer: 'D' },
+  { key: 'F', notes: 'A4 A4 G4 A4', answer: 'T' },
+  { key: 'F', notes: 'A4 A4 Bb4 G4', answer: 'D' },
+  { key: 'F', notes: 'D4 D4 Bb4 Bb4', answer: 'S' },
+  { key: 'F', notes: 'A4 G4 F4 F4', answer: 'T' },
+]
+
+export function makeHarmony(previous: HarmonyQuestion | null, random: () => number = Math.random): HarmonyQuestion {
+  const bars = HARMONY_BARS.filter((bar) => bar.notes !== previous?.written.map((note) => `${'CDEFGAB'[note.letter]}${note.alter === -1 ? 'b' : ''}${note.octave}`).join(' '))
+  const bar = bars[Math.floor(random() * bars.length)]!
+  return { key: bar.key, written: bar.notes.split(' ').map(spelled), answer: bar.answer }
+}
+
+/** Whether exactly these keys are down (a voicing), a neighbour brushed with them forgiven. */
+export function checkVoicing(expected: readonly number[], held: readonly Press[]): 'empty' | 'right' | 'partial' | 'wrong' {
+  if (held.length === 0) return 'empty'
+  const hits = held.filter((item) => expected.includes(item.key))
+  const others = held.filter((item) => !expected.includes(item.key))
+  const allIn = expected.every((key) => held.some((item) => item.key === key))
+  if (allIn && others.every((item) => isGraze(item, hits, 1))) return 'right'
+  return others.length === 0 ? 'partial' : 'wrong'
+}
 
 /** Notes played one after the other (a scale, a melody moved up), with what the staff shows for them. */
 export interface NoteSequence {
@@ -327,6 +419,12 @@ export interface NoteTask {
   keyChoice?: KeyChoice
   /** A melody to finish: `key` is where it resolves. */
   resolution?: Resolution
+  /** A chord to play (plan step 23). */
+  chordQuestion?: ChordQuestion
+  /** A bar to harmonise with a button. */
+  harmony?: HarmonyQuestion
+  /** Four chords around the circle, played one after the other in the fixed voicing. */
+  chain?: CircleChord[]
 }
 
 export interface IntervalChoice {
@@ -373,6 +471,12 @@ export function nextTask(level: NoteLevel, previous: NoteTask | null, random: ()
   if (level.show === 'scale' || level.show === 'transpose') {
     const sequence = level.show === 'scale' ? makeScaleSequence(level, previous?.sequence ?? null, random) : makeTransposition(previous?.sequence ?? null, random)
     return { key: sequence.keys[0]!, sequence }
+  }
+  if (level.show === 'chord') return { key: 0, chordQuestion: makeChordQuestion(level, previous?.chordQuestion ?? null, random) }
+  if (level.show === 'harmony') return { key: 0, harmony: makeHarmony(previous?.harmony ?? null, random) }
+  if (level.show === 'chain') {
+    const starts = (level.chainStarts ?? [0]).filter((start) => start !== previous?.chain?.[0]?.position || (level.chainStarts?.length ?? 1) === 1)
+    return { key: 0, chain: circleChain(starts[Math.floor(random() * starts.length)]!) }
   }
   if (level.show === 'keyChoice') return { key: 0, keyChoice: makeKeyChoice(level, previous?.keyChoice?.answer ?? null, random) }
   if (level.show === 'resolve') {

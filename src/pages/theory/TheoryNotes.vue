@@ -23,10 +23,12 @@ import { useWakeLock } from '@/composables/useWakeLock'
 import { KEYBOARD_KEYS } from '@/lib/keyboard'
 import { STAR_THRESHOLDS } from '@/lib/levels'
 import { barKeys, barVexSpelling, keyOf, spelled, vexInKey, type Alter, type BarNote, type Spelled } from '@/lib/accidentals'
-import { NOTE_SECTIONS, checkNote, countsForStars, currentNoteLevel, isNoteLevelOpen, nextTask, noteStars, type NoteIntroId, type NoteSectionId, type NoteTask } from '@/lib/noteLevels'
+import { NOTE_SECTIONS, checkNote, checkVoicing, countsForStars, currentNoteLevel, isNoteLevelOpen, nextTask, noteStars, type NoteIntroId, type NoteSectionId, type NoteTask } from '@/lib/noteLevels'
 import { keySignatureName } from '@/lib/notation'
 import { KEY_HINT_DELAY_MS } from '@/lib/practice'
 import { KEY_INFO, scaleKeys } from '@/lib/scales'
+import { functionChord } from '@/lib/functions'
+import { checkChord } from '@/lib/theory'
 import { octaveShift, pitch, windowOctaves } from '@/lib/staff'
 import { pitchClass } from '@/lib/theory'
 
@@ -78,6 +80,10 @@ const armed = ref(true)
 /** Keys played one after the other: a bar (П5), a scale or a moved melody (Г1–Г3, Г6). */
 const sequenceKeys = computed(() => task.value.bar?.keys ?? task.value.sequence?.keys ?? null)
 const target = computed(() => sequenceKeys.value ? sequenceKeys.value[barIndex.value]! : task.value.key)
+/** The chord of a chain to play now (Ф7–Ф9). */
+const chainChord = computed(() => task.value.chain?.[barIndex.value] ?? null)
+/** Answered with buttons: the keys are free to try things on. */
+const buttonTask = computed(() => Boolean(task.value.choice || task.value.keyChoice || task.value.harmony))
 const solved = ref(false)
 const levelDone = ref(false)
 const keyHint = ref(false)
@@ -106,7 +112,8 @@ function newTask(previous: NoteTask | null) {
 function waitForHint() {
   clearTimeout(hintTimer)
   keyHint.value = false
-  if (info.value.timed !== undefined || info.value.readingBpm !== undefined || task.value.choice || task.value.keyChoice) return
+  // Melodies have no single key; the timed level would give the answer away; chains light up (or not) on their own.
+  if (info.value.timed !== undefined || info.value.readingBpm !== undefined || buttonTask.value || task.value.chain) return
   hintTimer = setTimeout(() => {
     keyHint.value = true
   }, KEY_HINT_DELAY_MS)
@@ -139,21 +146,30 @@ watch(heldNotes, (held) => {
   for (const key of downAt.keys()) if (!held.includes(key)) downAt.delete(key)
 })
 
-const check = computed(() => checkNote(target.value, presses.value, info.value.anyOctave))
+/** How the chord task stands: the chord with its inversion (Ф1–Ф5). */
+const chordStatus = computed(() => (task.value.chordQuestion ? checkChord(heldNotes.value, task.value.chordQuestion.chord.target).status : null))
+const check = computed(() => {
+  if (task.value.chordQuestion) return chordStatus.value === 'empty' ? 'empty' : chordStatus.value === 'correct' ? 'right' : 'wrong'
+  if (chainChord.value) {
+    const voicing = checkVoicing(chainChord.value.keys, presses.value)
+    return voicing === 'right' ? 'right' : voicing === 'empty' ? 'empty' : 'wrong'
+  }
+  return checkNote(target.value, presses.value, info.value.anyOctave)
+})
 // «Wrong» and «other octave» wait until the fingers have landed.
 const settledHeld = useSettled(heldNotes, (next) => (next.length === 0 ? 0 : SETTLE_MS))
 // Tasks answered with buttons: the keys are free to try things on, never «wrong».
-const settledCheck = computed(() => (settledHeld.value.length === 0 || !armed.value || task.value.choice || task.value.keyChoice ? 'empty' : check.value))
+const settledCheck = computed(() => (settledHeld.value.length === 0 || !armed.value || buttonTask.value ? 'empty' : check.value))
 
 watch(() => heldNotes.value.length, (count) => {
   if (count === 0) armed.value = true
 })
 
 watch(check, (status) => {
-  if (task.value.choice || task.value.keyChoice || status !== 'right' || solved.value || !armed.value || phase.value !== 'task' || info.value.readingBpm !== undefined) return
+  if (buttonTask.value || status !== 'right' || solved.value || !armed.value || phase.value !== 'task' || info.value.readingBpm !== undefined) return
   // A bar: on to its next note; the bar is one answer, counted when its last note is played.
-  const keys = sequenceKeys.value
-  if (keys && barIndex.value < keys.length - 1) {
+  const length = task.value.chain?.length ?? sequenceKeys.value?.length
+  if (length && barIndex.value < length - 1) {
     barIndex.value++
     armed.value = false
     playCue('step')
@@ -194,12 +210,40 @@ onBeforeUnmount(() => {
 })
 
 /** Octave buttons the target needs on an exact level; 0 when it is under the hands (or any octave counts). */
-const shiftNeeded = computed(() => (info.value.anyOctave || task.value.choice || task.value.keyChoice ? 0 : octaveShift(target.value, windowStart.value)))
+const shiftNeeded = computed(() => (info.value.anyOctave || buttonTask.value || task.value.chain || task.value.chordQuestion ? 0 : octaveShift(target.value, windowStart.value)))
 /** The key to light up as a hint: the target itself, or on «any octave» the same note inside the window. */
 const hintKey = computed(() => {
   if (!info.value.anyOctave) return shiftNeeded.value === 0 ? target.value : null
   for (let key = windowStart.value; key < windowStart.value + KEYBOARD_KEYS; key++) if (pitchClass(key) === pitchClass(target.value)) return key
   return null
+})
+
+/** Keys lit as the hint: a chain on its first level always, a chord or a note after the wait. */
+const hintKeys = computed<number[]>(() => {
+  if (chainChord.value) return info.value.chainHints ? chainChord.value.keys : []
+  if (!keyHint.value) return []
+  if (task.value.chordQuestion) return task.value.chordQuestion.chord.keys
+  return hintKey.value === null ? [] : [hintKey.value]
+})
+
+/** What is wrong with a chord, in words, once the fingers have settled. */
+const chordHint = computed(() => {
+  const question = task.value.chordQuestion
+  if (question) {
+    const status = chordStatus.value
+    if (status === 'incomplete') return t('theory.functions.missing')
+    if (status === 'extra') return t('theory.functions.extra')
+    if (status === 'wrongInversion') return t('theory.functions.bass', { note: name(question.chord.keys[0]!) })
+    return t('theory.functions.otherChord')
+  }
+  const chord = chainChord.value
+  if (!chord) return null
+  // A note of the voicing not down: name it and its role («в Dm нужна ля — квинта»); all there but placed wrong: the third goes up.
+  const missing = chord.keys.findIndex((key) => !heldNotes.value.includes(key))
+  if (missing === -1) return null
+  const pcs = new Set(heldNotes.value.map(pitchClass))
+  if (chord.keys.every((key) => pcs.has(pitchClass(key)))) return t('theory.functions.chainVoicing')
+  return t('theory.functions.chainMissing', { chord: chord.name, note: name(chord.keys[missing]!), role: t(`theory.functions.roles.${chord.roles[missing]}`) })
 })
 
 /** «Читаем с ритмом» runs its own attempts (NoteReading) once its intro is closed. */
@@ -287,9 +331,23 @@ const prompt = computed(() => {
   if (show === 'scale' && sequence?.scale) return t('theory.scales.buildPrompt', { scale: t(`theory.scales.kinds.${sequence.scale.kind}`, { key: t(`theory.scales.tonics.${sequence.scale.key}`) }) })
   if (show === 'transpose' && sequence) return t(sequence.shift === 1 ? 'theory.scales.transposeSemitone' : 'theory.scales.transposeTone')
   if (show === 'keyChoice') return t('theory.scales.keyPrompt')
+  if (show === 'chord') return t('theory.functions.chordPrompt')
+  if (show === 'harmony') return t('theory.functions.harmonyPrompt', { key: t(`theory.scales.keys.${task.value.harmony?.key ?? 'C'}`) })
+  if (show === 'chain') return t('theory.functions.chainPrompt')
   if (show === 'resolve') return t('theory.scales.resolvePrompt', { key: t(`theory.scales.keys.${task.value.resolution?.key ?? 'C'}`) })
   return info.value.anyOctave ? t('theory.notes.findAny') : t('theory.notes.findExact')
 })
+/** A chord asked in words: «S в соль мажоре», «T6 в до мажоре», «III ступень в ля миноре», or just «C/E». */
+const chordWords = computed(() => {
+  const question = task.value.chordQuestion
+  if (!question) return ''
+  if (!question.key) return question.chord.symbol
+  const inKey = t(`theory.scales.keysIn.${question.key}`)
+  if (question.degree) return t('theory.functions.degreeIn', { degree: ROMAN[question.degree - 1], key: inKey })
+  return `${question.fn}${['', '6', '⁶₄'][question.inversion]} ${inKey}`
+})
+const ROMAN = ['I', 'II', 'III', 'IV', 'V', 'VI', 'VII']
+
 /** A scale after a wrong key: how far the next note is, «тон», «полутон» or «полтора тона». */
 const stepHint = computed(() => {
   const sequence = task.value.sequence
@@ -309,6 +367,18 @@ const choiceTask = computed(() => {
       sound: info.value.show === 'read' ? undefined : { keys: notes.map(keyOf), together: choice.harmonic },
       keySignature: undefined as string | undefined,
       wrongText: (label: string) => t(info.value.show === 'read' ? 'theory.intervals.notThisRead' : 'theory.intervals.notThis', { name: label }),
+    }
+  }
+  const harmony = task.value.harmony
+  if (harmony) {
+    const signature = KEY_INFO[harmony.key].signature
+    return {
+      answer: harmony.answer as string,
+      options: (['T', 'S', 'D'] as const).map((fn) => ({ id: fn as string, label: t(`theory.functions.names.${fn}`, { chord: functionChord(harmony.key, fn).symbol }) })),
+      staffNotes: harmony.written.map((note) => ({ key: keyOf(note), vex: vexInKey(note, signature) })),
+      sound: { keys: harmony.written.map(keyOf), together: false },
+      keySignature: keySignatureName(signature),
+      wrongText: (label: string) => t('theory.functions.notThisFunction', { name: label }),
     }
   }
   const keyChoice = task.value.keyChoice
@@ -347,6 +417,9 @@ const INTRO_KEYS: Partial<Record<NoteIntroId, { lit: number[], from?: number, to
   majorSteps: [{ lit: scaleKeys(60, 'major') }],
   minorSteps: [{ lit: scaleKeys(57, 'minor'), from: 57, to: 69 }],
   scaleVariants: [{ lit: scaleKeys(57, 'harmonicMinor'), from: 57, to: 69 }, { lit: scaleKeys(57, 'melodicMinor'), from: 57, to: 69 }],
+  mainTriads: [{ lit: [60, 64, 67], from: 60, to: 76 }, { lit: [65, 69, 72], from: 60, to: 76 }, { lit: [67, 71, 74], from: 60, to: 76 }],
+  inversions: [{ lit: [64, 67, 72], from: 60, to: 76 }, { lit: [67, 72, 76], from: 60, to: 76 }],
+  minorDominant: [{ lit: [57, 60, 64], from: 57, to: 72 }, { lit: [64, 68, 71], from: 57, to: 72 }],
 }
 /** The key-signature intro: in G major F sounds as F♯; a natural makes it F up to the bar line. */
 const keyBarIntro = (): StaffNote[] => {
@@ -421,13 +494,13 @@ const INTRO_NOTES: Partial<Record<NoteIntroId, { show: 'treble' | 'bass' | 'gran
       <template v-if="phase === 'intro'">
         <p class="prompt text-highlighted">{{ t('theory.intro.title') }}</p>
         <div class="intro">
-          <div v-for="id in info.introduces" :key="id" class="intro__item" :class="{ 'intro__item--wide': id === 'keyboard' || id === 'names' || id === 'ledgers' || id === 'majorSteps' || id === 'minorSteps' }">
+          <div v-for="id in info.introduces" :key="id" class="intro__item" :class="{ 'intro__item--wide': ['keyboard', 'names', 'ledgers', 'majorSteps', 'minorSteps', 'mainTriads', 'circle', 'chain'].includes(id), 'intro__item--side': id === 'circle' || id === 'chain' }">
             <!-- Steps and intervals counted in keys: the number over the keys is the semitones. -->
           <div v-if="INTRO_KEYS[id]" class="steps-pictures">
             <ChordDiagram v-for="item in INTRO_KEYS[id]" :key="item.lit.join()" :lit="item.lit" :from="item.from ?? 60" :to="item.to ?? 72" />
           </div>
           <!-- Tap a key on the circle: its scale and its tonic chord sound. -->
-          <CircleOfFifths v-else-if="id === 'circle'" />
+          <CircleOfFifths v-else-if="id === 'circle' || id === 'chain'" class="intro__circle" :lit="id === 'chain' ? { minor: true, position: 0 } : null" />
           <PianoMap v-else-if="id === 'keyboard'" :window-start="windowStart" class="intro__map" />
             <!-- Live: press Octave + or − and keys, and watch the band and the notes move. -->
             <OctaveMap v-else-if="id === 'ledgers'" :window-start="windowStart" :held="heldNotes" :scale="short ? 0.7 : 0.9" />
@@ -444,7 +517,8 @@ const INTRO_NOTES: Partial<Record<NoteIntroId, { show: 'treble' | 'bass' | 'gran
       </template>
 
       <template v-else>
-        <p class="prompt text-highlighted">
+        <!-- The chain needs no line over it (owner's choice): the circle takes that height. -->
+        <p v-if="info.show !== 'chain'" class="prompt text-highlighted">
           {{ prompt }}
         </p>
         <p v-if="info.show === 'name'" class="big-name" :class="{ 'big-name--right': solved }">{{ name(target) }}</p>
@@ -453,6 +527,21 @@ const INTRO_NOTES: Partial<Record<NoteIntroId, { show: 'treble' | 'bass' | 'gran
           {{ t('theory.accidentals.stepFrom', { name: name(task.step.from), step: stepWords }) }}
           <span v-if="solved" class="big-name__answer">→ {{ name(target) }}</span>
         </p>
+        <!-- A chord: asked in words or as a symbol; the symbol shows once it is played. -->
+        <p v-else-if="task.chordQuestion" class="big-name big-name--step" :class="{ 'big-name--right': solved }">
+          {{ chordWords }}
+          <span v-if="solved && task.chordQuestion.key" class="big-name__answer">→ {{ task.chordQuestion.chord.symbol }}</span>
+        </p>
+        <!-- A chain around the circle: the chord to play now big, the four in a row, the circle with it lit. -->
+        <div v-else-if="task.chain" class="chain">
+          <CircleOfFifths class="chain__circle" :lit="chainChord ? { minor: chainChord.minor, position: chainChord.position } : null" />
+          <div class="chain__names">
+            <p class="big-name" :class="{ 'big-name--right': solved }">{{ chainChord?.name }}</p>
+            <ol class="chain__row">
+              <li v-for="(chord, i) in task.chain" :key="chord.name" :class="{ 'chain__done': solved || i < barIndex, 'chain__now': !solved && i === barIndex }">{{ chord.name }}</li>
+            </ol>
+          </div>
+        </div>
         <ChoiceTask
           v-else-if="choiceTask"
           :answer="choiceTask.answer"
@@ -473,7 +562,7 @@ const INTRO_NOTES: Partial<Record<NoteIntroId, { show: 'treble' | 'bass' | 'gran
           {{ shiftNeeded > 0 ? t('theory.notes.octaveUp') : t('theory.notes.octaveDown') }}
         </p>
         <p v-else-if="settledCheck === 'octave' && !solved" class="pill" role="status">{{ t('theory.notes.otherOctave') }}</p>
-        <p v-else-if="settledCheck === 'wrong' && !solved" class="pill" role="status">{{ stepHint ?? t('theory.notes.notThis') }}</p>
+        <p v-else-if="settledCheck === 'wrong' && !solved" class="pill" role="status">{{ chordHint ?? stepHint ?? t('theory.notes.notThis') }}</p>
       </template>
 
       <div v-if="levelDone" class="result result--passed" role="status">
@@ -500,7 +589,7 @@ const INTRO_NOTES: Partial<Record<NoteIntroId, { show: 'treble' | 'bass' | 'gran
       :class="{ 'note-keys--low': phase === 'intro' }"
       :start="windowStart"
       :held="heldNotes"
-      :hint="phase === 'task' && keyHint && !solved && hintKey !== null ? [hintKey] : []"
+      :hint="phase === 'task' && !solved ? hintKeys : []"
     :mark="phase === 'task' ? task.step?.from ?? (task.sequence?.scale ? task.sequence.keys[0] : null) ?? null : null"
       @press="pressNote"
       @release="releaseNote"
@@ -521,6 +610,20 @@ const INTRO_NOTES: Partial<Record<NoteIntroId, { show: 'treble' | 'bass' | 'gran
   min-height: 6rem;
   width: min(100%, 36rem);
   align-self: center;
+}
+
+.intro .intro__circle {
+  /* Big enough to read the keys and tap them: the text stands beside it, so it can take the card's height. */
+  height: min(26rem, 46vh);
+  max-height: none;
+  width: auto;
+}
+
+.intro__item--side {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: center;
+  gap: 2rem;
 }
 
 .intro__staff {
@@ -588,9 +691,51 @@ const INTRO_NOTES: Partial<Record<NoteIntroId, { show: 'treble' | 'bass' | 'gran
   color: var(--color-pad-aqua);
 }
 
+.chain {
+  flex: 1;
+  display: grid;
+  /* The circle takes all the height the card has left; the names take the rest of the width. */
+  grid-template-columns: auto 1fr;
+  grid-template-rows: minmax(0, 1fr);
+  align-items: center;
+  gap: 2rem;
+  min-height: 0;
+}
+
+.chain .chain__circle {
+  height: 100%;
+  width: auto;
+  max-height: none;
+  aspect-ratio: 1;
+}
+
+.chain__names {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1rem;
+}
+
+.chain__row {
+  display: flex;
+  gap: 1.25rem;
+  font-family: var(--font-display);
+  font-size: 1.5rem;
+  font-weight: 700;
+  color: var(--ui-text-muted);
+}
+
+.chain__done {
+  color: var(--color-pad-aqua);
+}
+
+.chain__now {
+  color: var(--color-pad-sky);
+}
+
 .steps-pictures {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(12rem, 1fr));
   gap: 1.5rem;
 }
 
@@ -682,6 +827,7 @@ const INTRO_NOTES: Partial<Record<NoteIntroId, { show: 'treble' | 'bass' | 'gran
   .intro .intro__map {
     max-height: 6.5rem;
   }
+
 
   .note-keys--low {
     --keys-height: 6rem;
