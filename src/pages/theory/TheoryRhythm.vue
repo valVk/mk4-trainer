@@ -4,6 +4,7 @@ import { useI18n } from 'vue-i18n'
 
 import RhythmStaff from '@/components/RhythmStaff.vue'
 import { useMetronome } from '@/composables/useMetronome'
+import { useMk4Actions } from '@/composables/useMk4Actions'
 import { padsPlayMusic, usePadActions } from '@/composables/usePadActions'
 import { useProgress } from '@/composables/useProgress'
 import { useRhythmPlayer } from '@/composables/useRhythmPlayer'
@@ -190,6 +191,15 @@ function startMetronome() {
   const { meter } = task.value
   metronome.start({ bpm: bpm.value, beats: meter.numerator })
 }
+// The MK4's transport (plan step 26): ■/▶ plays the attempt or stops it, Loop and ● start it again, Shift+Tap
+// Tempo is this screen's metronome.
+useMk4Actions({
+  playStop: () => (phase.value === 'playing' ? stopAttempt() : startAttempt()),
+  again: () => startAttempt(),
+  record: () => startAttempt(),
+  metronome: () => toggleMetronome(),
+})
+
 function toggleMetronome() {
   if (metronomeOn.value) metronome.stop()
   else startMetronome()

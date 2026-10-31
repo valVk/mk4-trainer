@@ -5,6 +5,7 @@ import { useI18n } from 'vue-i18n'
 import PianoKeyboard from '@/components/PianoKeyboard.vue'
 import RhythmStaff from '@/components/RhythmStaff.vue'
 import { useKeyboardWindow } from '@/composables/useKeyboardWindow'
+import { useMk4Actions } from '@/composables/useMk4Actions'
 import { useNoteSource } from '@/composables/useNoteSource'
 import { useRhythmPlayer } from '@/composables/useRhythmPlayer'
 import { useShortScreen } from '@/composables/useShortScreen'
@@ -70,6 +71,19 @@ function next() {
   score.value = null
   phase.value = 'ready'
 }
+
+// The MK4's transport (plan step 26): ■/▶ plays or stops, Loop and ● start again.
+useMk4Actions({
+  playStop: () => {
+    if (phase.value !== 'playing') start()
+    else {
+      player.stop()
+      phase.value = 'ready'
+    }
+  },
+  again: () => start(),
+  record: () => start(),
+})
 
 watch(() => player.playing.value, (on) => {
   if (on || phase.value !== 'playing') return

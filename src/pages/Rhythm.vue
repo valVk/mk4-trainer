@@ -5,6 +5,7 @@ import { useI18n } from 'vue-i18n'
 import PageHeader from '@/components/PageHeader.vue'
 import RhythmStaff from '@/components/RhythmStaff.vue'
 import { useMetronome } from '@/composables/useMetronome'
+import { useMk4Actions } from '@/composables/useMk4Actions'
 import { usePadActions } from '@/composables/usePadActions'
 import { useRhythmPlayer } from '@/composables/useRhythmPlayer'
 import { useWakeLock } from '@/composables/useWakeLock'
@@ -26,6 +27,9 @@ usePadActions({
 })
 
 onBeforeUnmount(() => metronome.stop())
+
+// The MK4's ■/▶ starts and stops the metronome here (Shift+Tap Tempo does it anywhere).
+useMk4Actions({ playStop: () => metronome.toggle() })
 
 const bpm = computed({
   get: () => settings.value.bpm,

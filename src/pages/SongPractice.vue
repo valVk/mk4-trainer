@@ -14,6 +14,7 @@ import SongStaff from '@/components/SongStaff.vue'
 import SoundControl from '@/components/SoundControl.vue'
 import UnitList from '@/components/UnitList.vue'
 import { useMetronome } from '@/composables/useMetronome'
+import { useMk4Actions } from '@/composables/useMk4Actions'
 import { useNoteNames } from '@/composables/useNoteNames'
 import { useNoteSource } from '@/composables/useNoteSource'
 import { padsPlayMusic, usePadActions } from '@/composables/usePadActions'
@@ -447,6 +448,13 @@ function nextRung() {
     startAttempt()
   }
 }
+
+// The MK4's transport (plan step 26): ■/▶ plays and pauses, Loop and ● start the attempt again.
+useMk4Actions({
+  playStop: () => void withSound(togglePlay),
+  again: () => void withSound(startAttempt),
+  record: () => void withSound(startAttempt),
+})
 
 function listen() {
   listenOnce.value = true

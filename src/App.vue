@@ -6,8 +6,12 @@ import { useRouter } from 'vue-router'
 import PwaUpdate from '@/components/PwaUpdate.vue'
 import SoundGate from '@/components/SoundGate.vue'
 import { useNoteSource } from '@/composables/useNoteSource'
+import { setAppMk4Actions } from '@/composables/useMk4Actions'
+import { useMetronome } from '@/composables/useMetronome'
 import { usePadActions } from '@/composables/usePadActions'
 import { useProgress } from '@/composables/useProgress'
+import { moveFocus } from '@/lib/focusMove'
+import { addTap, knobBpm, tapBpm } from '@/lib/mk4Control'
 
 // Connect the MK4 right away when MIDI is already allowed; otherwise the «Подключить MK4» button asks.
 void useNoteSource().autoConnectMidi()
@@ -22,6 +26,25 @@ const footer = t('app.footer', { year: new Date().getFullYear(), version: __APP_
 usePadActions({
   train: () => router.push('/train'),
   lab: () => router.push('/lab'),
+})
+
+// The MK4's own buttons and knobs (plan step 26), as Ableton's script uses them: Tap Tempo sets the metronome's
+// tempo, Shift+Tap Tempo turns it on and off, the BPM knob turns the tempo, the display knob moves along the
+// screen's buttons and presses one, Undo goes back. A screen's own handlers (play, again, seek) come first.
+const metronome = useMetronome()
+let taps: number[] = []
+setAppMk4Actions({
+  tapTempo: () => {
+    taps = addTap(taps, performance.now())
+    const bpm = tapBpm(taps)
+    if (bpm) metronome.update({ bpm })
+  },
+  metronome: () => metronome.toggle(),
+  tempo: (value) => metronome.update({ bpm: knobBpm(value ?? 64) }),
+  next: () => moveFocus(1),
+  previous: () => moveFocus(-1),
+  select: () => (document.activeElement as HTMLElement | null)?.click(),
+  back: () => router.back(),
 })
 </script>
 

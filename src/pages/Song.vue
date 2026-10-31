@@ -7,6 +7,7 @@ import PageHeader from '@/components/PageHeader.vue'
 import SongClock from '@/components/SongClock.vue'
 import SoundControl from '@/components/SoundControl.vue'
 import { useProgress } from '@/composables/useProgress'
+import { useMk4Actions } from '@/composables/useMk4Actions'
 import { useSongPlayer } from '@/composables/useSongPlayer'
 import { useSynth } from '@/composables/useSynth'
 import type { SongProgress } from '@/db/schema'
@@ -197,6 +198,14 @@ async function togglePlay() {
   if (player.playing.value) player.pause()
   else if (await player.ensureLoaded()) player.play()
 }
+
+// The MK4's transport (plan step 26): ■/▶ plays and stops, Loop starts over, − and + skip back and forward.
+useMk4Actions({
+  playStop: () => void togglePlay(),
+  again: () => seekTo(0),
+  seekBack: () => skip(-SKIP_S),
+  seekForward: () => skip(SKIP_S),
+})
 </script>
 
 <template>
