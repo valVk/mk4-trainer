@@ -1,11 +1,15 @@
 <script setup lang="ts">
-import { onBeforeUnmount, ref, shallowRef } from 'vue'
+import { computed, onBeforeUnmount, ref, shallowRef } from 'vue'
 import { useI18n } from 'vue-i18n'
 
 import HeldNotesPanel from '@/components/HeldNotesPanel.vue'
+import Mk4Inventory from '@/components/Mk4Inventory.vue'
+import Mk4Panel from '@/components/Mk4Panel.vue'
 import PageHeader from '@/components/PageHeader.vue'
 import StatusLed from '@/components/StatusLed.vue'
+import { useKeyboardWindow } from '@/composables/useKeyboardWindow'
 import { useNoteSource } from '@/composables/useNoteSource'
+import { addMessage, clockTempo, type Inventory } from '@/lib/midiInventory'
 import { midiName } from '@/lib/theory'
 
 type EventKind = 'noteOn' | 'noteOff' | 'cc' | 'pitchBend' | 'program' | 'aftertouch' | 'other'
@@ -26,7 +30,23 @@ const LOG_LIMIT = 200
 const PAD_CHANNEL = 10
 
 const { t } = useI18n()
-const { connectMidi } = useNoteSource()
+const { connectMidi, padMap } = useNoteSource()
+const keysStart = useKeyboardWindow()
+
+/** «Журнал» of raw messages, «Элементы» found (plan step 25), the MK4 drawn with what each control does. */
+const VIEWS = ['log', 'elements', 'panel'] as const
+const view = ref<typeof VIEWS[number]>('log')
+const inventory = shallowRef<Inventory>(new Map())
+const clockTicks: number[] = []
+const tempo = ref<number | null>(null)
+const pads = computed(() => ({ channel: padMap.value.channel, notes: padMap.value.notes }))
+const deviceName = computed(() => inputs.value.find((item) => item.connected)?.name ?? 'MIDI')
+/** Ticks while the page is open, so a control just touched is lit for a moment. */
+const now = ref(performance.now())
+const ticker = setInterval(() => {
+  now.value = performance.now()
+}, 100)
+onBeforeUnmount(() => clearInterval(ticker))
 
 const isSecure = window.isSecureContext
 const hasWebMidi = 'requestMIDIAccess' in navigator
@@ -54,8 +74,15 @@ function onMessage(event: MIDIMessageEvent) {
   const data = event.data
   if (!data || data.length === 0) return
   const status = data[0] ?? 0
-  // Skip clock and active sensing, they flood the log.
-  if (status === 0xf8 || status === 0xfe) return
+  // MIDI Clock: timed for the tempo it beats (the MK4's Tap Tempo), kept out of the log like active sensing.
+  if (status === 0xf8) {
+    clockTicks.push(performance.now())
+    if (clockTicks.length > 100) clockTicks.shift()
+    tempo.value = clockTempo(clockTicks)
+    return
+  }
+  if (status === 0xfe) return
+  inventory.value = addMessage(inventory.value, data, pads.value, performance.now())
   const data2 = data[2] ?? 0
   const input = event.target as MIDIInput | null
   const row = inputs.value.find((item) => item.id === input?.id)
@@ -91,7 +118,8 @@ function refreshInputs() {
 async function connect() {
   error.value = ''
   try {
-    access.value = await navigator.requestMIDIAccess({ sysex: false })
+    // SysEx too: the MK4's Octave buttons (and maybe more of its controls) speak it.
+    access.value = await navigator.requestMIDIAccess({ sysex: true })
     access.value.onstatechange = refreshInputs
     refreshInputs()
     // Same permission, so the shared note source (held notes panel) connects without a second prompt.
@@ -162,6 +190,14 @@ onBeforeUnmount(() => {
       </section>
 
       <div class="flex flex-col gap-6 min-w-0">
+      <div class="views" role="tablist" :aria-label="t('mk4.viewsLabel')">
+        <button v-for="item in VIEWS" :key="item" type="button" role="tab" class="view" :class="{ 'view--on': view === item }" :aria-selected="view === item" @click="view = item">
+          {{ t(`mk4.views.${item}`) }}
+        </button>
+      </div>
+      <Mk4Inventory v-if="view === 'elements'" :inventory="inventory" :tempo="tempo" :device="deviceName" :pads="pads" :now="now" @clear="inventory = new Map()" />
+      <Mk4Panel v-else-if="view === 'panel'" :inventory="inventory" :keys-start="keysStart" :pads="pads" :now="now" />
+      <template v-else>
       <HeldNotesPanel />
 
       <UCard variant="subtle" :ui="{ header: 'flex items-center justify-between min-h-16 py-3', body: 'p-0 sm:p-0' }">
@@ -203,6 +239,7 @@ onBeforeUnmount(() => {
           </li>
         </ol>
       </UCard>
+      </template>
       </div>
     </div>
   </main>
@@ -277,5 +314,25 @@ onBeforeUnmount(() => {
   .layout {
     grid-template-columns: minmax(0, 1fr);
   }
+}
+.views {
+  display: flex;
+  gap: 0.375rem;
+}
+
+.view {
+  min-height: 2.5rem;
+  padding: 0 0.875rem;
+  border-radius: 0.625rem;
+  font-weight: 600;
+  color: var(--ui-text-toned);
+  background: var(--ui-bg-elevated);
+  box-shadow: 0 0 0 1px var(--ui-border) inset;
+}
+
+.view--on {
+  color: #fff;
+  background: var(--color-pad-sky);
+  box-shadow: none;
 }
 </style>

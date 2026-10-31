@@ -28,6 +28,7 @@ import { isValidPadMap, type PadMap } from '@/lib/noteSource'
 import { PIECES, buildPieceMidi, builtinId, pieceFileName } from '@/lib/pieces'
 import { parseSongView, type SongView } from '@/lib/practice'
 import type { Rhythm, RhythmScore } from '@/lib/rhythm'
+import { parsePanelSettings, type PanelAction, type PanelSettings } from '@/lib/mk4Layout'
 import { NOTE_SECTIONS, parseNoteProgress, type NoteLevelProgress, type NoteSectionId } from '@/lib/noteLevels'
 import { addKindStats, parseKindStats, parseRhythmProgress, type KindStats, type RhythmKind, type RhythmLevelProgress } from '@/lib/rhythmLevels'
 import { parseSong, songNameFromFile } from '@/lib/song'
@@ -49,6 +50,8 @@ const RHYTHM_KEY = 'theoryRhythm'
 const RHYTHM_WEAK_KEY = 'theoryRhythmWeak'
 /** «Теория» → «Ноты» and «Полутоны и знаки»: notes found per level, one setting per section. */
 const SECTION_KEYS: Readonly<Record<NoteSectionId, string>> = { notes: 'theoryNotes', accidentals: 'theoryAccidentals', intervals: 'theoryIntervals', scales: 'theoryScales', functions: 'theoryFunctions', sevenths: 'theorySevenths' }
+/** The MK4 panel: the message each control sends and what it does (plan step 25). */
+const MK4_PANEL_KEY = 'mk4Panel'
 /** How late this child's taps arrive after the click, per input: the last checks on the «Ритм» page (median is used). */
 const LATENCY_KEY = 'tapLatencyMs'
 /** Where step 5 kept the pad map before the database existed. */
@@ -70,6 +73,7 @@ const trainLevel = ref<number | null>(null)
 const songView = ref<SongView>('fall')
 const rhythmProgress = ref<Record<number, RhythmLevelProgress>>({})
 const rhythmWeak = ref<Partial<Record<RhythmKind, KindStats>>>({})
+const mk4Panel = ref<PanelSettings>({ learnt: {}, actions: {} })
 const noteProgress = ref<Record<NoteSectionId, Record<number, NoteLevelProgress>>>({ notes: {}, accidentals: {}, intervals: {}, scales: {}, functions: {}, sevenths: {} })
 const songs = shallowRef<SongSummary[]>([])
 // Applying stored settings must not write them straight back.
@@ -138,6 +142,7 @@ async function loadProfileData(database: TrainerDb, current: Profile): Promise<v
   songView.value = parseSongView(await getSetting<unknown>(database, current.id, SONG_VIEW_KEY))
   rhythmProgress.value = parseRhythmProgress(await getSetting<unknown>(database, current.id, RHYTHM_KEY))
   rhythmWeak.value = parseKindStats(await getSetting<unknown>(database, current.id, RHYTHM_WEAK_KEY))
+  mk4Panel.value = parsePanelSettings(await getSetting<unknown>(database, current.id, MK4_PANEL_KEY))
   const sections = Object.keys(SECTION_KEYS) as NoteSectionId[]
   const loaded = await Promise.all(sections.map(async (section) => parseNoteProgress(await getSetting<unknown>(database, current.id, SECTION_KEYS[section]), NOTE_SECTIONS[section])))
   noteProgress.value = Object.fromEntries(sections.map((section, i) => [section, loaded[i]!])) as Record<NoteSectionId, Record<number, NoteLevelProgress>>
@@ -260,6 +265,26 @@ async function addNoteCorrect(level: number, section: NoteSectionId = 'notes'): 
   const profileId = profile.value?.id
   if (profileId === undefined) return
   await safely((database) => setSetting(database, profileId, SECTION_KEYS[section], plain(next)))
+}
+
+/** Teaches the app a control's message, or forgets it (null); its action goes with it when forgotten. */
+async function setMk4Control(control: string, message: string | null, action?: PanelAction): Promise<void> {
+  const learnt = { ...mk4Panel.value.learnt }
+  const actions = { ...mk4Panel.value.actions }
+  // A message belongs to one control: learning it again moves it.
+  for (const [id, known] of Object.entries(learnt)) if (known === message) delete learnt[id]
+  if (message === null) {
+    delete learnt[control]
+    delete actions[control]
+  } else learnt[control] = message
+  if (action !== undefined) {
+    if (action === 'none') delete actions[control]
+    else actions[control] = action
+  }
+  mk4Panel.value = { learnt, actions }
+  const profileId = profile.value?.id
+  if (profileId === undefined) return
+  await safely((database) => setSetting(database, profileId, MK4_PANEL_KEY, plain(mk4Panel.value)))
 }
 
 async function setSongView(view: SongView): Promise<void> {
@@ -410,6 +435,7 @@ export function useProgress() {
     rhythmProgress: readonly(rhythmProgress),
     rhythmWeak: readonly(rhythmWeak),
     noteProgress: readonly(noteProgress),
+    mk4Panel: readonly(mk4Panel),
     songs: readonly(songs),
     init,
     record,
@@ -419,6 +445,7 @@ export function useProgress() {
     addRhythmPass,
     addRhythmStats,
     addNoteCorrect,
+    setMk4Control,
     switchProfile,
     addProfile,
     renameProfile,

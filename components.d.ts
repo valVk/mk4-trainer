@@ -18,6 +18,8 @@ declare module 'vue' {
     InstrumentPicker: typeof import('./src/components/InstrumentPicker.vue')['default']
     IntervalBar: typeof import('./src/components/IntervalBar.vue')['default']
     MidiStatus: typeof import('./src/components/MidiStatus.vue')['default']
+    Mk4Inventory: typeof import('./src/components/Mk4Inventory.vue')['default']
+    Mk4Panel: typeof import('./src/components/Mk4Panel.vue')['default']
     NoteFall: typeof import('./src/components/NoteFall.vue')['default']
     NoteStaff: typeof import('./src/components/NoteStaff.vue')['default']
     OctaveMap: typeof import('./src/components/OctaveMap.vue')['default']

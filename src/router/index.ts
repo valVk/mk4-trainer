@@ -71,6 +71,8 @@ const router = createRouter({
     },
     {
       path: '/midi-test',
+      // The short address works too: the MK4 check is where its controls are found and mapped (plan step 25).
+      alias: '/midi',
       name: 'midi-test',
       component: () => import('@/pages/MidiTest.vue'),
     },
