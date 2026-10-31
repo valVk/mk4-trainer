@@ -1,6 +1,6 @@
 # Академия клавиш (Keys Academy, repo mk4-trainer)
 
-A personal piano academy for a child, played on an **Akai MPK Mini IV** (MK4: 25 keys and 8 pads) connected to a
+A personal piano academy for a beginner student, played on an **Akai MPK Mini IV** (MK4: 25 keys and 8 pads) connected to a
 tablet. It teaches chords, a music theory course, songs and rhythm, works offline as a PWA,
 and saves progress on the device for each player. The interface is in Russian.
 
@@ -8,9 +8,9 @@ Live: https://valvk.github.io/mk4-trainer/
 
 ## What is inside
 
-| Screen | What the child does |
+| Screen | What the student does |
 |---|---|
-| **Тренировка** (`/train`) | 8 levels: find a note, major and minor triads on white keys, then from any note, build by the 4 + 3 / 3 + 4 formula, inversions, dim/aug/sus, seventh chords, progressions. Stars per level (5, 10, 20 correct answers); hints fade after 3 right answers in a row. The app reopens on the level the child was on. |
+| **Тренировка** (`/train`) | 8 levels: find a note, major and minor triads on white keys, then from any note, build by the 4 + 3 / 3 + 4 formula, inversions, dim/aug/sus, seventh chords, progressions. Stars per level (5, 10, 20 correct answers); hints fade after 3 right answers in a row. The app reopens on the level the student was on. |
 | **Лаборатория** (`/lab`) | Free play: the app names the chord, interval or note being held and shows the intervals between the keys. |
 | **Песни** (`/songs`) | Import a MIDI file. The song map shows every part across the bars and its sections. Parts can be muted, and each has its own volume, saved with the song. Playback can start anywhere, with rewind, fast forward and section skip. |
 | Song practice (`/songs/:id/:channel`) | Learn one part with the teacher's ladder: listen, play with the song waiting for you, then play in tempo at 60%, 80% and 100%. Phrases first, then sections, then the whole part. Melodic parts with up to 8 notes and drums can be played on the pads. |
@@ -20,10 +20,10 @@ Live: https://valvk.github.io/mk4-trainer/
 
 The app is built for landscape on the tablet; in portrait on a touch device it asks to turn the tablet.
 
-### How it treats the child
+### How it treats the student
 
 Scoring and feedback follow how hands and ears actually work:
-- Timing is judged against what the child hears (audio output delay plus the measured delay of each input).
+- Timing is judged against what the student hears (audio output delay plus the measured delay of each input).
 - Warnings wait until the fingers have settled on a chord.
 - A neighbour key brushed together with the right one is not a mistake.
 - One press counts once, and pressing every key does not pass.
