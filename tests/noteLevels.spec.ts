@@ -2,11 +2,12 @@ import { describe, expect, it } from 'vitest'
 
 import { keyOf } from '@/lib/accidentals'
 import { interval, intervalBetween, type IntervalId } from '@/lib/intervals'
+import { playOrder } from '@/lib/form'
 import { KEY_INFO } from '@/lib/scales'
 import { checkChord } from '@/lib/theory'
 
 import { KEYBOARD_KEYS } from '@/lib/keyboard'
-import { FUNCTION_LEVELS, INTERVAL_LEVELS, NOTE_LEVELS, SCALE_LEVELS, checkVoicing, makeChoice, type NoteTask, checkNote, countsForStars, makeMelody, noteStars, readMarks, readingPasses, currentNoteLevel, isNoteLevelOpen, nextTask, makeKeyBar, ACCIDENTAL_LEVELS, parseNoteProgress } from '@/lib/noteLevels'
+import { FUNCTION_LEVELS, INTERVAL_LEVELS, NOTE_LEVELS, SCALE_LEVELS, SEVENTH_LEVELS, SEVENTH_TYPES, articulationVerdict, checkVoicing, dominantSeventh, makeChoice, type NoteTask, checkNote, countsForStars, makeMelody, noteStars, readMarks, readingPasses, currentNoteLevel, isNoteLevelOpen, nextTask, makeKeyBar, ACCIDENTAL_LEVELS, parseNoteProgress } from '@/lib/noteLevels'
 import { octaveShift } from '@/lib/staff'
 
 const level = (id: number) => NOTE_LEVELS.find((item) => item.id === id)!
@@ -349,5 +350,55 @@ describe('«Функции»', () => {
     expect(checkVoicing([57, 64, 72], [{ key: 57, time: 0 }, { key: 64, time: 0 }])).toBe('partial')
     // The third under the fifth: the same chord, not the voicing asked for.
     expect(checkVoicing([57, 64, 72], [{ key: 57, time: 0 }, { key: 60, time: 0 }, { key: 64, time: 0 }])).toBe('wrong')
+  })
+})
+
+describe('«Септаккорды»', () => {
+  const at = (id: number) => SEVENTH_LEVELS.find((item) => item.id === id)!
+  const seeded = (seed: number) => {
+    let state = seed * 2654435761
+    return () => {
+      state = (state + 0x6d2b79f5) | 0
+      let x = Math.imul(state ^ (state >>> 15), 1 | state)
+      x = (x + Math.imul(x ^ (x >>> 7), 61 | x)) ^ x
+      return ((x ^ (x >>> 14)) >>> 0) / 4294967296
+    }
+  }
+
+  it('asks all seven seventh chords and D7 inversions, voiced inside C3-C5', () => {
+    const types = new Set<string>()
+    for (const id of [1, 3]) {
+      for (let seed = 0; seed < 80; seed++) {
+        const chord = nextTask(at(id), null, seeded(seed)).chordQuestion!.chord
+        if (id === 1) types.add(chord.target.type)
+        expect(checkChord(chord.keys, chord.target).status).toBe('correct')
+        expect(Math.min(...chord.keys)).toBeGreaterThanOrEqual(48)
+        expect(Math.max(...chord.keys)).toBeLessThanOrEqual(72)
+      }
+    }
+    expect(types).toEqual(new Set(SEVENTH_TYPES))
+  })
+
+  it('builds D7 on the fifth degree, from the harmonic minor in minor', () => {
+    expect(dominantSeventh('C').symbol).toBe('G7')
+    expect(dominantSeventh('Am').symbol).toBe('E7')
+    expect(dominantSeventh('C', 1).symbol).toBe('G7/B')
+    const steps = nextTask(at(2), null, seeded(4)).chordSteps!
+    expect(steps.chords.map((chord) => chord.target.type)).toEqual(['7', expect.stringMatching(/maj|min/)])
+  })
+
+  it('asks the order of bars with the answer from the form', () => {
+    const task = nextTask(at(4), null, seeded(2))
+    expect(task.form!.order).toEqual(playOrder(task.form!.bars))
+  })
+
+  it('judges articulation by hold time and, for an accent, by velocity', () => {
+    expect(articulationVerdict('staccato', 0.2, null)).toBe('right')
+    expect(articulationVerdict('staccato', 0.5, null)).toBe('shorter')
+    expect(articulationVerdict('tenuto', 0.3, null)).toBe('longer')
+    expect(articulationVerdict('accent', 0.3, 60)).toBe('louder')
+    expect(articulationVerdict('accent', 0.3, 110)).toBe('right')
+    // The screen and computer keys have no velocity: an accent counts.
+    expect(articulationVerdict('accent', 0.3, null)).toBe('right')
   })
 })

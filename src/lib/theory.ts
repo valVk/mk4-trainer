@@ -4,6 +4,8 @@
 export type PitchClass = number
 
 export type ChordType = 'maj' | 'min' | 'dim' | 'aug' | 'sus2' | 'sus4' | '6' | '7' | 'maj7' | 'm7'
+  /** The rest of the seven seventh chords (plan step 24). */
+  | 'mMaj7' | 'm7b5' | 'dim7' | 'augMaj7'
 
 // One table drives both building and recognition, so they cannot drift apart.
 export const CHORD_FORMULAS: Readonly<Record<ChordType, readonly number[]>> = {
@@ -17,6 +19,10 @@ export const CHORD_FORMULAS: Readonly<Record<ChordType, readonly number[]>> = {
   '7': [0, 4, 7, 10],
   maj7: [0, 4, 7, 11],
   m7: [0, 3, 7, 10],
+  mMaj7: [0, 3, 7, 11],
+  m7b5: [0, 3, 6, 10],
+  dim7: [0, 3, 6, 9],
+  augMaj7: [0, 4, 8, 11],
 }
 
 export const CHORD_TYPES = Object.keys(CHORD_FORMULAS) as ChordType[]
@@ -32,6 +38,10 @@ export const CHORD_SYMBOLS: Readonly<Record<ChordType, string>> = {
   '7': '7',
   maj7: 'maj7',
   m7: 'm7',
+  mMaj7: 'm(maj7)',
+  m7b5: 'm7b5',
+  dim7: 'dim7',
+  augMaj7: 'maj7#5',
 }
 
 const SHARP_NAMES = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'] as const
@@ -188,13 +198,17 @@ export function prefersFlats(root: PitchClass, mode: Mode = 'ionian'): boolean {
 }
 
 const ROMAN = ['I', 'II', 'III', 'IV', 'V', 'VI', 'VII'] as const
-const LOWERCASE_TYPES: ReadonlySet<ChordType> = new Set(['min', 'dim', 'm7'])
+const LOWERCASE_TYPES: ReadonlySet<ChordType> = new Set(['min', 'dim', 'm7', 'mMaj7', 'm7b5', 'dim7'])
 const ROMAN_SUFFIX: Partial<Record<ChordType, string>> = {
   dim: '°',
   aug: '+',
   '7': '7',
   m7: '7',
   maj7: 'maj7',
+  mMaj7: '(maj7)',
+  m7b5: 'ø7',
+  dim7: '°7',
+  augMaj7: '+maj7',
   '6': '6',
   sus2: 'sus2',
   sus4: 'sus4',

@@ -33,7 +33,7 @@ export interface PieceVoice {
 export type PieceKind = 'melody' | 'rhythm'
 
 /** Sections of «Теория» that end their level groups with pieces. */
-export type TheorySection = 'rhythm' | 'notes' | 'accidentals' | 'intervals' | 'scales' | 'functions'
+export type TheorySection = 'rhythm' | 'notes' | 'accidentals' | 'intervals' | 'scales' | 'functions' | 'sevenths'
 
 export interface Piece {
   /** Stable id; the version goes up whenever the notes change, so saved copies are refreshed. */
@@ -412,7 +412,39 @@ const ODE_LEFT: Piece = {
   ],
 }
 
-export const PIECES: readonly Piece[] = [FUR_ELISE, ODE, CHIZHIK, WALTZ, YOLKA, ENTERTAINER, ROW, DRUMMER, ODE_RIGHT, ODE_D, YOLKA_F, YOLKA_G, ODE_LEFT]
+// The final piece of the course (plan step 24): «The Entertainer», first theme, both hands. The right hand plays the
+// theme as in the rhythm piece; the left hand an oom-pah: the bass on the first beat, the chord on the second (C, G7,
+// and the D7 the theme passes through), all in C3-C4. The tune goes up to E5, so the two hands are learnt as parts,
+// one after the other, as the plan says when 25 keys are not enough for both at once.
+const ENTERTAINER_HARMONY = ['', 'C', 'C', 'G7', 'C', 'C', 'C', 'D7', 'G7', 'C', 'C', 'G7', 'C', 'C', 'C', 'G7', 'C'] as const
+const ENTERTAINER_CHORDS: Record<string, { bass: string, chord: [string, string, string] }> = {
+  C: { bass: 'C3', chord: ['E3', 'G3', 'C4'] },
+  G7: { bass: 'G3', chord: ['F3', 'B3', 'D4'] },
+  D7: { bass: 'D3', chord: ['F#3', 'A3', 'C4'] },
+}
+const leftHand = (part: 'bass' | 0 | 1 | 2) => voice(ENTERTAINER_HARMONY.map((name) => {
+  if (!name) return 'r/2'
+  const chord = ENTERTAINER_CHORDS[name]!
+  return part === 'bass' ? `${chord.bass}/4 r/4` : `r/4 ${chord.chord[part]}/4`
+}).join(' '))
+const ENTERTAINER_HANDS: Piece = {
+  id: 'entertainer-hands',
+  version: 1,
+  title: 'The Entertainer — двумя руками',
+  short: 'Entertainer',
+  kind: 'melody',
+  meter: { numerator: 2, denominator: 4 },
+  bpm: 56,
+  learner: 0,
+  after: { section: 'sevenths', level: 5 },
+  voices: [
+    { channel: 0, program: 0, notes: ENTERTAINER_MELODY },
+    { channel: 1, program: 0, velocity: 75, notes: leftHand('bass') },
+    ...([0, 1, 2] as const).map((part) => ({ channel: 1, program: 0, velocity: 60, notes: leftHand(part) })),
+  ],
+}
+
+export const PIECES: readonly Piece[] = [FUR_ELISE, ODE, CHIZHIK, WALTZ, YOLKA, ENTERTAINER, ROW, DRUMMER, ODE_RIGHT, ODE_D, YOLKA_F, YOLKA_G, ODE_LEFT, ENTERTAINER_HANDS]
 
 /** The file name a piece is stored under: built in, with its version. */
 export function pieceFileName(piece: Pick<Piece, 'id' | 'version'>): string {

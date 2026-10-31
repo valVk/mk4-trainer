@@ -5,6 +5,7 @@ import { useI18n } from 'vue-i18n'
 import ChordDiagram from '@/components/ChordDiagram.vue'
 import CircleOfFifths from '@/components/CircleOfFifths.vue'
 import ChoiceTask from '@/pages/theory/ChoiceTask.vue'
+import FormOrder from '@/pages/theory/FormOrder.vue'
 import NoteStaff, { type StaffNote } from '@/components/NoteStaff.vue'
 import OctaveMap from '@/components/OctaveMap.vue'
 import NoteReading from '@/pages/theory/NoteReading.vue'
@@ -23,7 +24,7 @@ import { useWakeLock } from '@/composables/useWakeLock'
 import { KEYBOARD_KEYS } from '@/lib/keyboard'
 import { STAR_THRESHOLDS } from '@/lib/levels'
 import { barKeys, barVexSpelling, keyOf, spelled, vexInKey, type Alter, type BarNote, type Spelled } from '@/lib/accidentals'
-import { NOTE_SECTIONS, checkNote, checkVoicing, countsForStars, currentNoteLevel, isNoteLevelOpen, nextTask, noteStars, type NoteIntroId, type NoteSectionId, type NoteTask } from '@/lib/noteLevels'
+import { NOTE_SECTIONS, SEVENTH_TYPES, articulationVerdict, checkNote, checkVoicing, countsForStars, currentNoteLevel, isNoteLevelOpen, nextTask, noteStars, type NoteIntroId, type NoteSectionId, type NoteTask } from '@/lib/noteLevels'
 import { keySignatureName } from '@/lib/notation'
 import { KEY_HINT_DELAY_MS } from '@/lib/practice'
 import { KEY_INFO, scaleKeys } from '@/lib/scales'
@@ -45,7 +46,7 @@ const NEXT_DELAY_MS = 700
 const { t } = useI18n()
 useWakeLock()
 const progress = useProgress()
-const { heldNotes, pressNote, releaseNote } = useNoteSource()
+const { heldNotes, pressNote, releaseNote, onEvent } = useNoteSource()
 const { playCue } = useSynth()
 const { localName } = useNoteNames()
 const windowStart = useKeyboardWindow()
@@ -77,13 +78,17 @@ const task = ref<NoteTask>(nextTask(info.value, null))
 const barIndex = ref(0)
 /** After a note of a bar is found, the next counts only once the keys are up: the same key twice is two presses. */
 const armed = ref(true)
+/** What to change in an articulation (С5): shorter, longer, louder. */
+const articulationHint = ref<string | null>(null)
 /** Keys played one after the other: a bar (П5), a scale or a moved melody (Г1–Г3, Г6). */
 const sequenceKeys = computed(() => task.value.bar?.keys ?? task.value.sequence?.keys ?? null)
 const target = computed(() => sequenceKeys.value ? sequenceKeys.value[barIndex.value]! : task.value.key)
 /** The chord of a chain to play now (Ф7–Ф9). */
 const chainChord = computed(() => task.value.chain?.[barIndex.value] ?? null)
-/** Answered with buttons: the keys are free to try things on. */
-const buttonTask = computed(() => Boolean(task.value.choice || task.value.keyChoice || task.value.harmony))
+/** Answered with buttons (or taps on bars): the keys are free to try things on. */
+const buttonTask = computed(() => Boolean(task.value.choice || task.value.keyChoice || task.value.harmony || task.value.form))
+/** The chord to play now: a chord task, or the current one of chords in a row (D7 → T). */
+const currentChord = computed(() => task.value.chordQuestion?.chord ?? task.value.chordSteps?.chords[barIndex.value] ?? null)
 const solved = ref(false)
 const levelDone = ref(false)
 const keyHint = ref(false)
@@ -101,6 +106,7 @@ function newTask(previous: NoteTask | null) {
   task.value = nextTask(info.value, previous)
   barIndex.value = 0
   armed.value = true
+  articulationHint.value = null
   solved.value = false
   slowAnswer.value = false
   taskNumber.value++
@@ -147,9 +153,9 @@ watch(heldNotes, (held) => {
 })
 
 /** How the chord task stands: the chord with its inversion (Ф1–Ф5). */
-const chordStatus = computed(() => (task.value.chordQuestion ? checkChord(heldNotes.value, task.value.chordQuestion.chord.target).status : null))
+const chordStatus = computed(() => (currentChord.value ? checkChord(heldNotes.value, currentChord.value.target).status : null))
 const check = computed(() => {
-  if (task.value.chordQuestion) return chordStatus.value === 'empty' ? 'empty' : chordStatus.value === 'correct' ? 'right' : 'wrong'
+  if (currentChord.value) return chordStatus.value === 'empty' ? 'empty' : chordStatus.value === 'correct' ? 'right' : 'wrong'
   if (chainChord.value) {
     const voicing = checkVoicing(chainChord.value.keys, presses.value)
     return voicing === 'right' ? 'right' : voicing === 'empty' ? 'empty' : 'wrong'
@@ -166,9 +172,10 @@ watch(() => heldNotes.value.length, (count) => {
 })
 
 watch(check, (status) => {
-  if (buttonTask.value || status !== 'right' || solved.value || !armed.value || phase.value !== 'task' || info.value.readingBpm !== undefined) return
+  // An articulation is judged when the key is let go (see below), not when it goes down.
+  if (buttonTask.value || task.value.articulation || status !== 'right' || solved.value || !armed.value || phase.value !== 'task' || info.value.readingBpm !== undefined) return
   // A bar: on to its next note; the bar is one answer, counted when its last note is played.
-  const length = task.value.chain?.length ?? sequenceKeys.value?.length
+  const length = task.value.chain?.length ?? task.value.chordSteps?.chords.length ?? sequenceKeys.value?.length
   if (length && barIndex.value < length - 1) {
     barIndex.value++
     armed.value = false
@@ -210,7 +217,7 @@ onBeforeUnmount(() => {
 })
 
 /** Octave buttons the target needs on an exact level; 0 when it is under the hands (or any octave counts). */
-const shiftNeeded = computed(() => (info.value.anyOctave || buttonTask.value || task.value.chain || task.value.chordQuestion ? 0 : octaveShift(target.value, windowStart.value)))
+const shiftNeeded = computed(() => (info.value.anyOctave || buttonTask.value || task.value.chain || currentChord.value ? 0 : octaveShift(target.value, windowStart.value)))
 /** The key to light up as a hint: the target itself, or on «any octave» the same note inside the window. */
 const hintKey = computed(() => {
   if (!info.value.anyOctave) return shiftNeeded.value === 0 ? target.value : null
@@ -222,18 +229,18 @@ const hintKey = computed(() => {
 const hintKeys = computed<number[]>(() => {
   if (chainChord.value) return info.value.chainHints ? chainChord.value.keys : []
   if (!keyHint.value) return []
-  if (task.value.chordQuestion) return task.value.chordQuestion.chord.keys
+  if (currentChord.value) return currentChord.value.keys
   return hintKey.value === null ? [] : [hintKey.value]
 })
 
 /** What is wrong with a chord, in words, once the fingers have settled. */
 const chordHint = computed(() => {
-  const question = task.value.chordQuestion
+  const question = currentChord.value
   if (question) {
     const status = chordStatus.value
     if (status === 'incomplete') return t('theory.functions.missing')
     if (status === 'extra') return t('theory.functions.extra')
-    if (status === 'wrongInversion') return t('theory.functions.bass', { note: name(question.chord.keys[0]!) })
+    if (status === 'wrongInversion') return t('theory.functions.bass', { note: name(question.keys[0]!) })
     return t('theory.functions.otherChord')
   }
   const chord = chainChord.value
@@ -244,6 +251,22 @@ const chordHint = computed(() => {
   const pcs = new Set(heldNotes.value.map(pitchClass))
   if (chord.keys.every((key) => pcs.has(pitchClass(key)))) return t('theory.functions.chainVoicing')
   return t('theory.functions.chainMissing', { chord: chord.name, note: name(chord.keys[missing]!), role: t(`theory.functions.roles.${chord.roles[missing]}`) })
+})
+
+// Articulation (С5): the right key, judged by how long it is held and how hard it is hit, when it is let go.
+let articulationDown: { at: number, velocity: number | null } | null = null
+onEvent((event) => {
+  const kind = task.value.articulation
+  if (!kind || solved.value || phase.value !== 'task') return
+  if (event.type === 'noteOn' && event.note === target.value) {
+    articulationDown = { at: performance.now(), velocity: event.source === 'midi' ? event.velocity : null }
+    articulationHint.value = null
+  } else if (event.type === 'noteOff' && event.note === target.value && articulationDown) {
+    const verdict = articulationVerdict(kind, (performance.now() - articulationDown.at) / 1000, articulationDown.velocity)
+    articulationDown = null
+    if (verdict === 'right') answeredRight()
+    else articulationHint.value = t(`theory.sevenths.articulationHints.${verdict}`)
+  }
 })
 
 /** «Читаем с ритмом» runs its own attempts (NoteReading) once its intro is closed. */
@@ -313,7 +336,11 @@ const staffKeySignature = computed(() => {
   if (task.value.resolution) return keySignatureName(KEY_INFO[task.value.resolution.key].signature)
   return undefined
 })
-const staffNotes = computed<StaffNote[]>(() => task.value.bar ? barNotes.value : task.value.sequence ? sequenceNotes.value : task.value.resolution ? resolutionNotes.value : [{
+/** VexFlow's codes for the signs of С5. */
+const ARTICULATION_CODES = { staccato: 'a.', tenuto: 'a-', accent: 'a>' } as const
+const staffNotes = computed<StaffNote[]>(() => task.value.articulation
+  ? [{ key: target.value, articulation: ARTICULATION_CODES[task.value.articulation], colour: solved.value ? STAFF_COLOURS.onTime : undefined, label: solved.value ? name(target.value) : undefined }]
+  : task.value.bar ? barNotes.value : task.value.sequence ? sequenceNotes.value : task.value.resolution ? resolutionNotes.value : [{
   key: target.value,
   written: task.value.written,
   label: solved.value ? (task.value.written ? writtenName(task.value.written) : name(target.value)) : undefined,
@@ -332,6 +359,9 @@ const prompt = computed(() => {
   if (show === 'transpose' && sequence) return t(sequence.shift === 1 ? 'theory.scales.transposeSemitone' : 'theory.scales.transposeTone')
   if (show === 'keyChoice') return t('theory.scales.keyPrompt')
   if (show === 'chord') return t('theory.functions.chordPrompt')
+  if (show === 'chordSteps') return t('theory.sevenths.resolvePrompt')
+  if (show === 'form') return t('theory.sevenths.formPrompt')
+  if (show === 'articulation') return t(`theory.sevenths.articulationPrompts.${task.value.articulation ?? 'staccato'}`)
   if (show === 'harmony') return t('theory.functions.harmonyPrompt', { key: t(`theory.scales.keys.${task.value.harmony?.key ?? 'C'}`) })
   if (show === 'chain') return t('theory.functions.chainPrompt')
   if (show === 'resolve') return t('theory.scales.resolvePrompt', { key: t(`theory.scales.keys.${task.value.resolution?.key ?? 'C'}`) })
@@ -341,7 +371,10 @@ const prompt = computed(() => {
 const chordWords = computed(() => {
   const question = task.value.chordQuestion
   if (!question) return ''
-  if (!question.key) return question.chord.symbol
+  const type = question.chord.target.type
+  if (!question.key) return SEVENTH_TYPES.includes(type) ? t(`lab.type.${type}`, { root: name(question.chord.target.root) }) : question.chord.symbol
+  // D7 and its inversions: D⁶₅, D⁴₃, D₂.
+  if (type === '7') return `${['D7', 'D⁶₅', 'D⁴₃', 'D₂'][question.inversion]} ${t(`theory.scales.keysIn.${question.key}`)}`
   const inKey = t(`theory.scales.keysIn.${question.key}`)
   if (question.degree) return t('theory.functions.degreeIn', { degree: ROMAN[question.degree - 1], key: inKey })
   return `${question.fn}${['', '6', '⁶₄'][question.inversion]} ${inKey}`
@@ -420,6 +453,9 @@ const INTRO_KEYS: Partial<Record<NoteIntroId, { lit: number[], from?: number, to
   mainTriads: [{ lit: [60, 64, 67], from: 60, to: 76 }, { lit: [65, 69, 72], from: 60, to: 76 }, { lit: [67, 71, 74], from: 60, to: 76 }],
   inversions: [{ lit: [64, 67, 72], from: 60, to: 76 }, { lit: [67, 72, 76], from: 60, to: 76 }],
   minorDominant: [{ lit: [57, 60, 64], from: 57, to: 72 }, { lit: [64, 68, 71], from: 57, to: 72 }],
+  sevenths: [{ lit: [60, 64, 67, 71], from: 60, to: 72 }, { lit: [60, 64, 67, 70], from: 60, to: 72 }, { lit: [60, 63, 66, 69], from: 60, to: 72 }],
+  dominantSeventh: [{ lit: [55, 59, 62, 65], from: 53, to: 72 }, { lit: [60, 64, 67], from: 53, to: 72 }],
+  seventhInversions: [{ lit: [59, 62, 65, 67], from: 55, to: 72 }, { lit: [62, 65, 67, 71], from: 55, to: 72 }, { lit: [65, 67, 71, 74], from: 55, to: 76 }],
 }
 /** The key-signature intro: in G major F sounds as F♯; a natural makes it F up to the bar line. */
 const keyBarIntro = (): StaffNote[] => {
@@ -532,6 +568,14 @@ const INTRO_NOTES: Partial<Record<NoteIntroId, { show: 'treble' | 'bass' | 'gran
           {{ chordWords }}
           <span v-if="solved && task.chordQuestion.key" class="big-name__answer">→ {{ task.chordQuestion.chord.symbol }}</span>
         </p>
+        <!-- Chords in a row: D7, then where it resolves. -->
+        <p v-else-if="task.chordSteps" class="big-name big-name--step">
+          <span v-for="(chord, i) in task.chordSteps.chords" :key="i" :class="{ 'big-name__answer': solved || i < barIndex, 'chain__now': !solved && i === barIndex }">
+            {{ i === 0 ? 'D7' : 'T' }}<template v-if="solved || i < barIndex"> ({{ chord.symbol }})</template><template v-if="i === 0"> → </template>
+          </span>
+          <span class="steps-key">{{ t(`theory.scales.keysIn.${task.chordSteps.key}`) }}</span>
+        </p>
+        <FormOrder v-else-if="task.form" :bars="task.form.bars" :order="task.form.order" :solved="solved" @right="answeredRight" />
         <!-- A chain around the circle: the chord to play now big, the four in a row, the circle with it lit. -->
         <div v-else-if="task.chain" class="chain">
           <CircleOfFifths class="chain__circle" :lit="chainChord ? { minor: chainChord.minor, position: chainChord.position } : null" />
@@ -562,6 +606,7 @@ const INTRO_NOTES: Partial<Record<NoteIntroId, { show: 'treble' | 'bass' | 'gran
           {{ shiftNeeded > 0 ? t('theory.notes.octaveUp') : t('theory.notes.octaveDown') }}
         </p>
         <p v-else-if="settledCheck === 'octave' && !solved" class="pill" role="status">{{ t('theory.notes.otherOctave') }}</p>
+        <p v-else-if="articulationHint && !solved" class="pill" role="status">{{ articulationHint }}</p>
         <p v-else-if="settledCheck === 'wrong' && !solved" class="pill" role="status">{{ chordHint ?? stepHint ?? t('theory.notes.notThis') }}</p>
       </template>
 
@@ -685,6 +730,12 @@ const INTRO_NOTES: Partial<Record<NoteIntroId, { show: 'treble' | 'bass' | 'gran
 .big-name--step {
   font-size: clamp(2rem, 7vh, 3.5rem);
   text-align: center;
+}
+
+.steps-key {
+  display: block;
+  font-size: 0.5em;
+  color: var(--ui-text-muted);
 }
 
 .big-name__answer {

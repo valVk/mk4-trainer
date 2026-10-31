@@ -170,10 +170,10 @@ describe('diatonic chords', () => {
     expect(diatonicChords(9, 'aeolian').map((c) => c.type)).toEqual(['min', 'dim', 'maj', 'min', 'min', 'maj', 'maj'])
   })
 
-  it('derives seventh chords, leaving unknown ones as null', () => {
+  it('derives seventh chords, the half-diminished one on VII included', () => {
     const chords = diatonicChords(0, 'ionian', 4)
-    expect(chords.map((c) => c.type)).toEqual(['maj7', 'm7', 'm7', 'maj7', '7', 'm7', null])
-    expect(chords.map((c) => c.roman)).toEqual(['Imaj7', 'ii7', 'iii7', 'IVmaj7', 'V7', 'vi7', 'VII?'])
+    expect(chords.map((c) => c.type)).toEqual(['maj7', 'm7', 'm7', 'maj7', '7', 'm7', 'm7b5'])
+    expect(chords.map((c) => c.roman)).toEqual(['Imaj7', 'ii7', 'iii7', 'IVmaj7', 'V7', 'vi7', 'viiø7'])
   })
 
   it('resolves I-V-vi-IV in G major', () => {

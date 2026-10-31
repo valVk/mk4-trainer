@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { onBeforeUnmount, onMounted, ref, watch } from 'vue'
-import { Accidental, Annotation, AnnotationVerticalJustify, Formatter, GhostNote, Stave, StaveConnector, StaveNote, Voice, type Note } from 'vexflow/bravura'
+import { Accidental, Annotation, Articulation, ModifierPosition, AnnotationVerticalJustify, Formatter, GhostNote, Stave, StaveConnector, StaveNote, Voice, type Note } from 'vexflow/bravura'
 
 import { paintNote, STAFF_COLOURS, staffContext } from '@/components/staffDrawing'
 import { useNoteSource } from '@/composables/useNoteSource'
@@ -22,6 +22,8 @@ export interface StaffNote {
   label?: string
   /** CSS colour: right and wrong answers. */
   colour?: string
+  /** A sign above the note: VexFlow's code ('a.' staccato, 'a-' tenuto, 'a>' accent). */
+  articulation?: string
 }
 
 const props = defineProps<{
@@ -71,6 +73,7 @@ function staveNote(item: StaffNote, clef: StaffClef, alone: boolean): StaveNote 
   const spelled = item.vex ?? (item.written ? vexSpelling(item.written) : spellBar([[item.key]])[0]![0]!)
   const note = new StaveNote({ keys: [spelled.key], duration: 'w', clef, alignCenter: alone })
   if (spelled.accidental) note.addModifier(new Accidental(spelled.accidental), 0)
+  if (item.articulation) note.addModifier(new Articulation(item.articulation).setPosition(ModifierPosition.ABOVE), 0)
   if (item.label) {
     note.addModifier(new Annotation(item.label).setVerticalJustification(AnnotationVerticalJustify.BOTTOM).setFont('sans-serif', 13, 'bold'), 0)
   }

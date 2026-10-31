@@ -9,6 +9,7 @@ import { STAR_THRESHOLDS, starsFor } from './levels'
 import { barKeys, keyOf, spelled, stepTarget, type Alter, type BarNote, type KeySignature, type Letter, type Spelled, type StepTask } from './accidentals'
 import { interval, type IntervalId } from './intervals'
 import { circleChain, type CircleChord } from './circle'
+import { FORMS, playOrder, type FormBar } from './form'
 import { chordTask, degreeChord, functionChord, type ChordTask, type FunctionId } from './functions'
 import type { ChordType } from './theory'
 import { KEYS, KEY_INFO, RESOLUTION, parallelKey, relativeKey, spellScale, transpose, type KeyName, type ScaleKind } from './scales'
@@ -20,6 +21,7 @@ export type NoteIntroId = 'keyboard' | 'names' | 'treble' | 'bass' | 'grand' | '
   | 'perfect' | 'thirds' | 'sixths' | 'byEar' | 'harmonic' | 'byNotes'
   | 'majorSteps' | 'minorSteps' | 'scaleVariants' | 'circle' | 'stable' | 'transpose'
   | 'mainTriads' | 'inversions' | 'degrees' | 'minorDominant' | 'symbols' | 'harmonize' | 'chain' | 'chainNoHints' | 'allChains'
+  | 'sevenths' | 'dominantSeventh' | 'seventhInversions' | 'form' | 'articulation'
 
 /** How the task is shown: the note's name only, a step from a key on the keyboard, or the note on a staff. */
 /** `ear` and `read`: an interval to name with buttons, heard or read from the staff (plan step 21). */
@@ -28,6 +30,8 @@ export type NoteShow = 'name' | 'step' | 'bar' | 'ear' | 'read' | 'treble' | 'ba
   | 'scale' | 'keyChoice' | 'resolve' | 'transpose'
   /** Plan step 23: play a chord, choose T/S/D for a bar, play a chain around the circle. */
   | 'chord' | 'harmony' | 'chain'
+  /** Plan step 24: chords one after the other (D7 → T), the order of bars, a note played with a sign. */
+  | 'chordSteps' | 'form' | 'articulation'
 
 export interface NoteLevel {
   id: number
@@ -53,7 +57,7 @@ export interface NoteLevel {
   /** Scales to build on a `scale` level. */
   scales?: readonly ScaleKind[]
   /** `chord` levels: how the chord is asked, in which keys, in which inversions. */
-  chordMode?: 'function' | 'degree' | 'symbol'
+  chordMode?: 'function' | 'degree' | 'symbol' | 'seventh' | 'dominantInversion'
   chordKeys?: readonly KeyName[]
   inversions?: readonly number[]
   /** `chain` levels: the inner-ring positions the chains start from, and whether the keys light up. */
@@ -62,7 +66,7 @@ export interface NoteLevel {
 }
 
 /** Sections of «Теория» built from note-finding levels. */
-export type NoteSectionId = 'notes' | 'accidentals' | 'intervals' | 'scales' | 'functions'
+export type NoteSectionId = 'notes' | 'accidentals' | 'intervals' | 'scales' | 'functions' | 'sevenths'
 
 const keys = (names: string) => names.trim().split(/\s+/).map(pitch)
 const writtenAs = (names: string) => names.trim().split(/\s+/).map(spelled)
@@ -169,7 +173,42 @@ export const FUNCTION_LEVELS: readonly NoteLevel[] = [
   { id: 9, show: 'chain', keys: [], anyOctave: false, introduces: ['allChains'], chainStarts: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11], chainHints: false, stars: [6, 12, 24] },
 ]
 
-export const NOTE_SECTIONS: Readonly<Record<NoteSectionId, readonly NoteLevel[]>> = { notes: NOTE_LEVELS, accidentals: ACCIDENTAL_LEVELS, intervals: INTERVAL_LEVELS, scales: SCALE_LEVELS, functions: FUNCTION_LEVELS }
+// «Теория» → «Септаккорды» (plan step 24): the seven seventh chords, D7 and its resolution, its inversions, the
+// order bars are played in, and articulation. All chords inside C3-C5.
+export const SEVENTH_LEVELS: readonly NoteLevel[] = [
+  { id: 1, show: 'chord', keys: [], anyOctave: true, introduces: ['sevenths'], chordMode: 'seventh', inversions: [0] },
+  { id: 2, show: 'chordSteps', keys: [], anyOctave: true, introduces: ['dominantSeventh'], chordKeys: ['C', 'G', 'F', 'Am', 'Em', 'Dm'] },
+  { id: 3, show: 'chord', keys: [], anyOctave: true, introduces: ['seventhInversions'], chordMode: 'dominantInversion', chordKeys: ['C', 'G', 'Am'], inversions: [1, 2, 3] },
+  { id: 4, show: 'form', keys: [], anyOctave: true, introduces: ['form'] },
+  { id: 5, show: 'articulation', keys: keys('C4 D4 E4 F4 G4'), anyOctave: false, introduces: ['articulation'] },
+]
+
+export const NOTE_SECTIONS: Readonly<Record<NoteSectionId, readonly NoteLevel[]>> = { notes: NOTE_LEVELS, accidentals: ACCIDENTAL_LEVELS, intervals: INTERVAL_LEVELS, scales: SCALE_LEVELS, functions: FUNCTION_LEVELS, sevenths: SEVENTH_LEVELS }
+
+/** The seven seventh chords, in the order the video names them. */
+export const SEVENTH_TYPES: readonly ChordType[] = ['maj7', '7', 'm7', 'mMaj7', 'm7b5', 'dim7', 'augMaj7']
+
+/** D7 of a key: on the fifth degree (from the harmonic minor in minor keys), as a task. */
+export function dominantSeventh(key: KeyName, inversion = 0): ChordTask {
+  const fifth = degreeChord(key, 5)
+  return chordTask(fifth.target.root, '7', inversion, KEY_INFO[key].signature < 0)
+}
+
+/** A note to play with a sign: short (staccato), held (tenuto), or louder (accent). */
+export type Articulation = 'staccato' | 'tenuto' | 'accent'
+
+/** Staccato is let go within this many seconds; tenuto is held at least this long. */
+export const STACCATO_MAX_S = 0.3
+export const TENUTO_MIN_S = 0.6
+/** An accent is hit at least this hard (MK4 velocity, 1-127). */
+export const ACCENT_MIN_VELOCITY = 96
+
+/** Whether the note was played as its sign asks: hold time, and for an accent the velocity (when the input has one). */
+export function articulationVerdict(kind: Articulation, heldSeconds: number, velocity: number | null): 'right' | 'longer' | 'shorter' | 'louder' {
+  if (kind === 'staccato') return heldSeconds <= STACCATO_MAX_S ? 'right' : 'shorter'
+  if (kind === 'tenuto') return heldSeconds >= TENUTO_MIN_S ? 'right' : 'longer'
+  return velocity === null || velocity >= ACCENT_MIN_VELOCITY ? 'right' : 'louder'
+}
 
 /** A chord to play, and how it was asked: a function or a degree in a key, or a symbol. */
 export interface ChordQuestion {
@@ -188,6 +227,15 @@ const SYMBOL_CHORDS: readonly { root: number, type: ChordType }[] = [
 export function makeChordQuestion(level: NoteLevel, previous: ChordQuestion | null, random: () => number = Math.random): ChordQuestion {
   const pick = <T>(items: readonly T[]): T => items[Math.floor(random() * items.length)]!
   const inversion = pick(level.inversions ?? [0])
+  if (level.chordMode === 'seventh') {
+    const type = pick(SEVENTH_TYPES.filter((item) => item !== previous?.chord.target.type))
+    const root = pick([0, 2, 5, 7, 9])
+    return { chord: chordTask(root, type, inversion), inversion }
+  }
+  if (level.chordMode === 'dominantInversion') {
+    const key = pick<KeyName>(level.chordKeys ?? ['C'])
+    return { chord: dominantSeventh(key, inversion), key, fn: 'D', inversion }
+  }
   if (level.chordMode === 'symbol') {
     const options = SYMBOL_CHORDS.filter((item) => item.root !== previous?.chord.target.root || item.type !== previous.chord.target.type)
     const chosen = pick(options)
@@ -425,6 +473,12 @@ export interface NoteTask {
   harmony?: HarmonyQuestion
   /** Four chords around the circle, played one after the other in the fixed voicing. */
   chain?: CircleChord[]
+  /** Chords one after the other, any voicing (D7 → T), and the key they are in. */
+  chordSteps?: { key: KeyName, chords: ChordTask[] }
+  /** Bars to tap in the order they are played. */
+  form?: { bars: FormBar[], order: number[] }
+  /** A note to play with a sign. */
+  articulation?: Articulation
 }
 
 export interface IntervalChoice {
@@ -471,6 +525,21 @@ export function nextTask(level: NoteLevel, previous: NoteTask | null, random: ()
   if (level.show === 'scale' || level.show === 'transpose') {
     const sequence = level.show === 'scale' ? makeScaleSequence(level, previous?.sequence ?? null, random) : makeTransposition(previous?.sequence ?? null, random)
     return { key: sequence.keys[0]!, sequence }
+  }
+  if (level.show === 'chordSteps') {
+    const keys = (level.chordKeys ?? ['C']).filter((name) => name !== previous?.chordSteps?.key)
+    const key = keys[Math.floor(random() * keys.length)] ?? 'C'
+    return { key: 0, chordSteps: { key, chords: [dominantSeventh(key), functionChord(key, 'T')] } }
+  }
+  if (level.show === 'form') {
+    const forms = FORMS.filter((form) => form !== previous?.form?.bars)
+    const bars = forms[Math.floor(random() * forms.length)]!
+    return { key: 0, form: { bars, order: playOrder(bars) } }
+  }
+  if (level.show === 'articulation') {
+    const kinds: Articulation[] = ['staccato', 'tenuto', 'accent']
+    const kind = kinds.filter((item) => item !== previous?.articulation)[Math.floor(random() * 2)]!
+    return { key: level.keys[Math.floor(random() * level.keys.length)]!, articulation: kind }
   }
   if (level.show === 'chord') return { key: 0, chordQuestion: makeChordQuestion(level, previous?.chordQuestion ?? null, random) }
   if (level.show === 'harmony') return { key: 0, harmony: makeHarmony(previous?.harmony ?? null, random) }
