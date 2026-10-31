@@ -343,21 +343,34 @@ const timed = useTimedPresses({
 const windowStart = useKeyboardWindow()
 const { heldNotes, pressNote, releaseNote } = useNoteSource()
 
+/** The attempt is over and passed: «Дальше» instead of «Другой ритм». */
+const passedNow = computed(() => phase.value === 'result' && attemptPassed.value)
+
+/** The main button, last on the right and on pad 1: what «go on» means right now. */
+const primary = computed<{ icon: string, label: string, run: () => void }>(() => {
+  if (phase.value === 'intro') return { icon: 'i-lucide-check', label: t('theory.intro.ok'), run: closeIntro }
+  if (phase.value === 'playing') return { icon: 'i-lucide-square', label: t('theory.stop'), run: stopAttempt }
+  if (passedNow.value && wasPractice.value) return { icon: 'i-lucide-play', label: t('theory.atTempoOf', { bpm: levelBpm.value }), run: () => { pickTempo(null); startAttempt() } }
+  if (passedNow.value && levelDone.value && isOpen(level.value + 1, passed.value)) return { icon: 'i-lucide-arrow-right', label: t('theory.nextLevel'), run: () => openLevel(level.value + 1) }
+  if (passedNow.value) return { icon: 'i-lucide-arrow-right', label: t('theory.next'), run: nextTask }
+  if (phase.value === 'result' && offerSlow.value) return { icon: 'i-lucide-turtle', label: t('theory.slower'), run: startSlow }
+  return { icon: 'i-lucide-play', label: phase.value === 'result' ? t('theory.again') : t('theory.play'), run: startAttempt }
+})
+
+// The pads do what the buttons say (their numbers are on them); while an attempt plays they are drums instead.
 usePadActions({
   next: () => {
     // A piece inside the section has the pads.
-    if (openPiece.value) return
-    if (phase.value === 'ready' || phase.value === 'intro') startAttempt()
-    else if (phase.value === 'result') {
-      if (attemptPassed.value) nextTask()
-      else startAttempt()
-    }
+    if (!openPiece.value) primary.value.run()
   },
   listen: () => {
-    if (!openPiece.value) listen()
+    if (!openPiece.value && phase.value !== 'intro') listen()
+  },
+  hint: () => {
+    if (!openPiece.value && phase.value !== 'intro' && phase.value !== 'playing') toggleMetronome()
   },
   skip: () => {
-    if (!openPiece.value) nextTask()
+    if (!openPiece.value && phase.value !== 'intro' && !passedNow.value) nextTask()
   },
   levelDown: () => openLevel(level.value - 1),
   levelUp: () => openLevel(level.value + 1),
@@ -454,8 +467,82 @@ const levelTabs = computed(() => RHYTHM_LEVELS.map((item) => ({ id: item.id, ope
   <SongPractice v-if="openPiece" :key="openPiece.key" :song-id="openPiece.songId" :channel="openPiece.channel" embedded />
   <template v-else>
   <section class="task">
+    <!-- The title on the left, the buttons on its line on the right, like a transport next to a display: the notes
+         sit right over the keys. Each button shows its pad; pad 1 is always the main (last) one. -->
+    <div class="task-head">
+      <div class="task-head__text">
+        <p class="prompt text-highlighted">{{ phase === 'intro' ? t('theory.intro.title') : t(`theory.kind.${kind}`) }}</p>
+        <!-- What to press: the notes sit on one line and have no pitch, so any key will do. -->
+        <p v-if="phase !== 'intro'" class="how text-toned">{{ listeningFirst ? t('theory.listenFirst') : lowerTask ? t('theory.howTwoHands') : guideOn ? t('theory.how') : t('theory.howNoCounts') }}</p>
+      </div>
+      <div class="controls">
+        <template v-if="phase !== 'intro'">
+          <UButton
+            icon="i-lucide-timer"
+            :color="metronomeOn ? 'primary' : 'neutral'"
+            :variant="metronomeOn ? 'solid' : 'soft'"
+            size="lg"
+            class="metronome"
+            :disabled="phase === 'playing'"
+            :aria-pressed="metronomeOn"
+            :aria-label="t('songs.metronome')"
+            @click="toggleMetronome"
+          >
+            <template #trailing>
+              <!-- The beat, so it can be seen as well as heard; the strong beat is bigger. -->
+              <span v-if="metronomeOn && metronome.beat.value >= 0" :key="beatCount" class="beat" :class="{ 'beat--strong': metronome.beat.value === 0 }" aria-hidden="true" />
+              <UKbd v-else value="3" size="md" />
+            </template>
+          </UButton>
+          <UButton v-if="!passedNow" icon="i-lucide-shuffle" color="neutral" variant="soft" size="lg" :label="t('theory.other')" @click="nextTask">
+            <template #trailing>
+              <UKbd value="4" size="md" />
+            </template>
+          </UButton>
+          <UButton icon="i-lucide-ear" color="neutral" variant="soft" size="lg" :disabled="phase === 'playing'" :label="phase === 'result' ? t('theory.listenRight') : t('theory.listen')" @click="listen">
+            <template #trailing>
+              <UKbd value="2" size="md" />
+            </template>
+          </UButton>
+          <template v-if="passedNow && !wasPractice">
+            <UButton icon="i-lucide-rotate-ccw" color="neutral" variant="soft" size="lg" :label="t('theory.again')" @click="startAttempt" />
+            <!-- A piece that has just opened is named here, the moment it opens; the chip in the row stays small. -->
+            <template v-if="levelDone">
+              <template v-for="piece in piecesAfter(level)" :key="piece.id">
+                <UButton v-if="piece.to" :to="piece.to" icon="i-lucide-music" size="lg" color="success" :label="t('theory.playPiece', { name: piece.title })" />
+              </template>
+            </template>
+            <!-- One star opens the next level; more stars are for later, so going on is offered, not forced. -->
+            <UButton v-if="!levelDone && isOpen(level + 1, passed)" icon="i-lucide-skip-forward" color="neutral" variant="soft" size="lg" :label="t('theory.nextLevel')" @click="openLevel(level + 1)">
+              <template #trailing>
+                <UKbd value="8" size="md" />
+              </template>
+            </UButton>
+          </template>
+        </template>
+        <!-- The main action is always the last button, on the right (owner's rule). -->
+        <UButton :icon="primary.icon" size="lg" :label="primary.label" @click="primary.run">
+          <template #trailing>
+            <UKbd value="1" size="md" />
+          </template>
+        </UButton>
+      </div>
+      <div v-if="phase === 'result' && score" class="result" :class="attemptPassed ? 'result--passed' : 'result--again'" role="status">
+        <p class="result__title">
+          {{ levelDone ? t('theory.levelDone', { n: level })
+            : !attemptPassed ? t('theory.again')
+              : wasSlowAttempt ? t('theory.slowPassed')
+                : wasPractice ? t('theory.practicePassed', { bpm: practiceBpm, need: levelBpm })
+                  : t('theory.passed') }}
+        </p>
+        <!-- This attempt's stars: green notes against yellow ones. -->
+        <StarRating v-if="attemptPassed" :value="lastStars" size="md" />
+        <p class="text-toned">{{ hints.map((hint) => t(`theory.hints.${hint}`)).join(' ') }}</p>
+        <p v-if="attemptPassed && lastStars < MAX_STARS && !wasPractice" class="text-muted">{{ t('theory.moreStars') }}</p>
+      </div>
+    </div>
+
     <template v-if="phase === 'intro'">
-      <p class="prompt text-highlighted">{{ t('theory.intro.title') }}</p>
       <div class="intro">
         <div v-for="item in introRhythms" :key="item.id" class="intro__item">
           <RhythmStaff :rhythm="item.rhythm" :scale="introScale" counts />
@@ -476,11 +563,6 @@ const levelTabs = computed(() => RHYTHM_LEVELS.map((item) => ({ id: item.id, ope
       </div>
     </template>
     <template v-else>
-      <div>
-        <p class="prompt text-highlighted">{{ t(`theory.kind.${kind}`) }}</p>
-        <!-- What to press: the notes sit on one line and have no pitch, so any key will do. -->
-        <p class="how text-toned">{{ listeningFirst ? t('theory.listenFirst') : lowerTask ? t('theory.howTwoHands') : guideOn ? t('theory.how') : t('theory.howNoCounts') }}</p>
-      </div>
       <div class="staff-box">
         <template v-if="showNotes">
           <RhythmStaff
@@ -518,73 +600,7 @@ const levelTabs = computed(() => RHYTHM_LEVELS.map((item) => ({ id: item.id, ope
         <CountIn :value="countIn" />
       </div>
     </template>
-
-    <div v-if="phase === 'result' && score" class="result" :class="attemptPassed ? 'result--passed' : 'result--again'" role="status">
-      <p class="result__title">
-        {{ levelDone ? t('theory.levelDone', { n: level })
-          : !attemptPassed ? t('theory.again')
-            : wasSlowAttempt ? t('theory.slowPassed')
-              : wasPractice ? t('theory.practicePassed', { bpm: practiceBpm, need: levelBpm })
-                : t('theory.passed') }}
-      </p>
-      <!-- This attempt's stars: green notes against yellow ones. -->
-      <StarRating v-if="attemptPassed" :value="lastStars" size="md" />
-      <p class="text-toned">{{ hints.map((hint) => t(`theory.hints.${hint}`)).join(' ') }}</p>
-      <p v-if="attemptPassed && lastStars < MAX_STARS && !wasPractice" class="text-muted">{{ t('theory.moreStars') }}</p>
-    </div>
   </section>
-
-  <div class="controls">
-    <UButton v-if="phase === 'intro'" icon="i-lucide-check" size="lg" :label="t('theory.intro.ok')" @click="closeIntro" />
-    <template v-else>
-      <!-- Secondary first; the main action is always the last button, on the right (owner's rule). -->
-      <UButton
-        icon="i-lucide-timer"
-        :color="metronomeOn ? 'primary' : 'neutral'"
-        :variant="metronomeOn ? 'solid' : 'soft'"
-        size="lg"
-        class="metronome"
-        :disabled="phase === 'playing'"
-        :aria-pressed="metronomeOn"
-        :aria-label="t('songs.metronome')"
-        @click="toggleMetronome"
-      >
-        <template #trailing>
-          <!-- The beat, so it can be seen as well as heard; the strong beat is bigger. -->
-          <span v-if="metronomeOn && metronome.beat.value >= 0" :key="beatCount" class="beat" :class="{ 'beat--strong': metronome.beat.value === 0 }" aria-hidden="true" />
-        </template>
-      </UButton>
-      <UButton icon="i-lucide-shuffle" color="neutral" variant="soft" size="lg" :label="t('theory.other')" @click="nextTask" />
-      <UButton icon="i-lucide-ear" color="neutral" variant="soft" size="lg" :disabled="phase === 'playing'" :label="phase === 'result' ? t('theory.listenRight') : t('theory.listen')" @click="listen" />
-      <template v-if="phase === 'result' && attemptPassed && wasPractice">
-        <UButton icon="i-lucide-play" size="lg" :label="t('theory.atTempoOf', { bpm: levelBpm })" @click="pickTempo(null); startAttempt()" />
-      </template>
-      <template v-else-if="phase === 'result' && attemptPassed">
-        <UButton icon="i-lucide-rotate-ccw" color="neutral" variant="soft" size="lg" :label="t('theory.again')" @click="startAttempt" />
-        <!-- A piece that has just opened is named here, the moment it opens; the chip in the row stays small. -->
-        <template v-if="levelDone">
-          <template v-for="piece in piecesAfter(level)" :key="piece.id">
-            <UButton v-if="piece.to" :to="piece.to" icon="i-lucide-music" size="lg" color="success" :label="t('theory.playPiece', { name: piece.title })" />
-          </template>
-        </template>
-        <UButton v-if="levelDone && isOpen(level + 1, passed)" icon="i-lucide-arrow-right" size="lg" :label="t('theory.nextLevel')" @click="openLevel(level + 1)" />
-        <template v-else>
-          <!-- One star opens the next level; more stars are for later, so going on is offered, not forced. -->
-          <UButton v-if="isOpen(level + 1, passed)" icon="i-lucide-skip-forward" color="neutral" variant="soft" size="lg" :label="t('theory.nextLevel')" @click="openLevel(level + 1)" />
-          <UButton icon="i-lucide-arrow-right" size="lg" :label="t('theory.next')" @click="nextTask" />
-        </template>
-      </template>
-      <UButton v-if="phase === 'result' && offerSlow" icon="i-lucide-turtle" size="lg" :label="t('theory.slower')" @click="startSlow" />
-      <UButton
-        v-else-if="!(phase === 'result' && attemptPassed)"
-        :icon="phase === 'playing' ? 'i-lucide-square' : 'i-lucide-play'"
-        size="lg"
-        :label="phase === 'playing' ? t('theory.stop') : phase === 'result' ? t('theory.again') : t('theory.play')"
-        @click="phase === 'playing' ? stopAttempt() : startAttempt()"
-      />
-
-    </template>
-  </div>
 
   <!-- Played on a real keyboard: any key, on the MK4 or here on the screen, sounds like the piano. In two hands the
        lower octave is the left hand. Pad 1 still taps too. -->
@@ -595,6 +611,35 @@ const levelTabs = computed(() => RHYTHM_LEVELS.map((item) => ({ id: item.id, ope
 <style scoped src="./theory.css"></style>
 
 <style scoped>
+/* The title and the buttons share one line: the buttons go right, under the tempo, and wrap under the title only
+   when the screen is narrow. */
+.task-head {
+  position: relative;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 0.5rem 1.5rem;
+}
+
+.task-head__text {
+  flex: 1 1 18rem;
+  min-width: 0;
+}
+
+.task-head .controls {
+  margin-top: 0;
+  justify-content: flex-end;
+  margin-left: auto;
+}
+
+/* The verdict drops just under the buttons that act on it. */
+.task-head .result {
+  top: calc(100% + 0.5rem);
+  right: 0;
+  z-index: 2;
+}
+
 .staff-box {
   position: relative;
   min-height: 8rem;
