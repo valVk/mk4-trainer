@@ -6,6 +6,7 @@ import BeatRuler from '@/components/BeatRuler.vue'
 import CountIn from '@/components/CountIn.vue'
 import ExamBadge from '@/components/ExamBadge.vue'
 import HelpSwitch from '@/components/HelpSwitch.vue'
+import LevelRow from '@/components/LevelRow.vue'
 import PianoKeyboard from '@/components/PianoKeyboard.vue'
 import RhythmStaff from '@/components/RhythmStaff.vue'
 import StarRating from '@/components/StarRating.vue'
@@ -351,6 +352,10 @@ onBeforeUnmount(() => {
 const marks = computed<Record<number, NoteMark>>(() => Object.fromEntries((score.value?.results ?? []).map((result) => [result.index, noteMark(result)])))
 const lowerMarks = computed<Record<number, NoteMark>>(() => Object.fromEntries((scoreLower.value?.results ?? []).map((result) => [result.index, noteMark(result)])))
 const showNotes = computed(() => kind.value !== 'repeat' || phase.value === 'result')
+/** The intro example being heard, to move only its line. */
+const introHeard = ref<string | null>(null)
+/** The notes of the task in time, for the press-and-release bars under the staff. */
+const taskSounds = computed(() => sounds(task.value, bpm.value).filter((sound) => !sound.rest))
 /** The countdown before the first note, shown big. */
 const countIn = useCountIn(() => ({
   active: phase.value === 'playing',
@@ -364,40 +369,14 @@ const levelTabs = computed(() => RHYTHM_LEVELS.map((item) => ({ id: item.id, ope
 </script>
 
 <template>
-  <div class="levels-row">
-    <div class="levels" role="tablist" :aria-label="t('theory.levelsLabel')">
-      <template v-for="tab in levelTabs" :key="tab.id">
-        <button
-          type="button"
-          role="tab"
-          class="level"
-          :class="{ 'level--on': !openPiece && tab.id === level, 'level--done': tab.stars === 3 }"
-          :aria-selected="!openPiece && tab.id === level"
-          :disabled="!tab.open"
-          @click="openLevel(tab.id)"
-        >
-          <span>Р{{ tab.id }}</span>
-          <UIcon v-if="!tab.open" name="i-lucide-lock" class="size-3" />
-        </button>
-        <!-- The piece that ends this group of levels: open once the level has all its stars (plan step 18). -->
-        <template v-for="piece in piecesAfter(tab.id)" :key="piece.id">
-          <RouterLink
-            v-if="piece.to && tab.stars === 3"
-            :to="piece.to"
-            class="level level--piece"
-            :class="{ 'level--on': openPiece?.key === piece.key }"
-            :aria-current="openPiece?.key === piece.key ? 'page' : undefined"
-            :aria-label="t('theory.playPiece', { name: piece.title })"
-          >
-            <UIcon name="i-lucide-music" class="size-4" />
-          </RouterLink>
-          <span v-else class="level level--piece level--closed" role="img" :aria-label="t('theory.pieceLocked', { name: piece.title, n: tab.id })">
-            <UIcon name="i-lucide-music" class="size-3.5" />
-            <UIcon name="i-lucide-lock" class="size-3" />
-          </span>
-        </template>
-      </template>
-    </div>
+  <LevelRow
+    :tabs="levelTabs"
+    :current="openPiece ? null : level"
+    :pieces-after="piecesAfter"
+    :open-piece-key="openPiece?.key"
+    :label="t('theory.levelsLabel')"
+    @select="openLevel"
+  >
     <StarRating :value="stars" size="lg" />
     <ExamBadge v-if="exam" />
     <!-- The app's help switch, in the drawer; a level's exam turns it off. -->
@@ -442,7 +421,7 @@ const levelTabs = computed(() => RHYTHM_LEVELS.map((item) => ({ id: item.id, ope
         </div>
       </template>
     </UPopover>
-  </div>
+  </LevelRow>
 
   <!-- A piece is played right here: the level row stays, only this content becomes its practice. -->
   <SongPractice v-if="openPiece" :key="openPiece.key" :song-id="openPiece.songId" :channel="openPiece.channel" embedded />
@@ -453,8 +432,19 @@ const levelTabs = computed(() => RHYTHM_LEVELS.map((item) => ({ id: item.id, ope
       <div class="intro">
         <div v-for="item in introRhythms" :key="item.id" class="intro__item">
           <RhythmStaff :rhythm="item.rhythm" :scale="introScale" counts />
+          <!-- When to press and let go, drawn to time; the line moves while it is heard. -->
+          <BeatRuler
+            compact
+            class="intro__ruler"
+            :meter="item.rhythm.meter"
+            :bpm="bpm"
+            :quarters="totalQuarters(item.rhythm)"
+            :notes="sounds(item.rhythm, bpm).filter((sound) => !sound.rest)"
+            :get-position="() => (player.playing.value && introHeard === item.id ? player.heardPosition() : null)"
+            :get-taps="() => []"
+          />
           <p class="text-toned">{{ t(`theory.intro.${item.id}`) }}</p>
-          <UButton icon="i-lucide-ear" color="neutral" variant="soft" size="md" class="self-start" :label="t('theory.listen')" @click="player.play(item.rhythm, bpm)" />
+          <UButton icon="i-lucide-ear" color="neutral" variant="soft" size="md" class="self-start" :label="t('theory.listen')" @click="introHeard = item.id; player.play(item.rhythm, bpm)" />
         </div>
       </div>
     </template>
@@ -465,16 +455,28 @@ const levelTabs = computed(() => RHYTHM_LEVELS.map((item) => ({ id: item.id, ope
         <p class="how text-toned">{{ lowerTask ? t('theory.howTwoHands') : guideOn ? t('theory.how') : t('theory.howNoCounts') }}</p>
       </div>
       <div class="staff-box">
-        <RhythmStaff
-          v-if="showNotes"
-          :scale="staffScale"
-          :rhythm="task"
-          :counts="guideOn"
-          :lower="lowerTask"
-          :current="guideOn && phase === 'playing' && kind === 'read' ? player.current.value : null"
-          :marks="phase === 'result' ? marks : undefined"
-          :lower-marks="phase === 'result' ? lowerMarks : undefined"
-        />
+        <template v-if="showNotes">
+          <RhythmStaff
+            :scale="staffScale"
+            :rhythm="task"
+            :counts="guideOn"
+            :lower="lowerTask"
+            :current="guideOn && phase === 'playing' && kind === 'read' ? player.current.value : null"
+            :marks="phase === 'result' ? marks : undefined"
+            :lower-marks="phase === 'result' ? lowerMarks : undefined"
+          />
+          <!-- With the help on: when to press and when to let go, drawn to time under the notes. -->
+          <BeatRuler
+            v-if="guideOn && !lowerTask"
+            compact
+            :meter="task.meter"
+            :bpm="bpm"
+            :quarters="totalQuarters(task)"
+            :notes="taskSounds"
+            :get-position="() => (player.playing.value ? player.heardPosition() : null)"
+            :get-taps="() => timed.presses()"
+          />
+        </template>
         <!-- Notes hidden (listen and repeat): the bars, where the music is and the student's taps, to follow along. -->
         <div v-else class="hidden-notes">
           <BeatRuler
@@ -503,14 +505,14 @@ const levelTabs = computed(() => RHYTHM_LEVELS.map((item) => ({ id: item.id, ope
   </section>
 
   <div class="controls">
-    <UButton v-if="phase === 'intro'" icon="i-lucide-check" size="xl" :label="t('theory.intro.ok')" @click="closeIntro" />
+    <UButton v-if="phase === 'intro'" icon="i-lucide-check" size="lg" :label="t('theory.intro.ok')" @click="closeIntro" />
     <template v-else>
       <!-- Secondary first; the main action is always the last button, on the right (owner's rule). -->
       <UButton
         icon="i-lucide-timer"
         :color="metronomeOn ? 'primary' : 'neutral'"
         :variant="metronomeOn ? 'solid' : 'soft'"
-        size="xl"
+        size="lg"
         class="metronome"
         :disabled="phase === 'playing'"
         :aria-pressed="metronomeOn"
@@ -522,27 +524,27 @@ const levelTabs = computed(() => RHYTHM_LEVELS.map((item) => ({ id: item.id, ope
           <span v-if="metronomeOn && metronome.beat.value >= 0" :key="beatCount" class="beat" :class="{ 'beat--strong': metronome.beat.value === 0 }" aria-hidden="true" />
         </template>
       </UButton>
-      <UButton icon="i-lucide-shuffle" color="neutral" variant="ghost" size="xl" :label="t('theory.other')" @click="nextTask" />
-      <UButton icon="i-lucide-ear" color="neutral" variant="soft" size="xl" :disabled="phase === 'playing'" :label="phase === 'result' ? t('theory.listenRight') : t('theory.listen')" @click="listen" />
+      <UButton icon="i-lucide-shuffle" color="neutral" variant="soft" size="lg" :label="t('theory.other')" @click="nextTask" />
+      <UButton icon="i-lucide-ear" color="neutral" variant="soft" size="lg" :disabled="phase === 'playing'" :label="phase === 'result' ? t('theory.listenRight') : t('theory.listen')" @click="listen" />
       <template v-if="phase === 'result' && attemptPassed && wasPractice">
-        <UButton icon="i-lucide-play" size="xl" :label="t('theory.atTempoOf', { bpm: levelBpm })" @click="pickTempo(null); startAttempt()" />
+        <UButton icon="i-lucide-play" size="lg" :label="t('theory.atTempoOf', { bpm: levelBpm })" @click="pickTempo(null); startAttempt()" />
       </template>
       <template v-else-if="phase === 'result' && attemptPassed">
-        <UButton icon="i-lucide-rotate-ccw" color="neutral" variant="soft" size="xl" :label="t('theory.again')" @click="startAttempt" />
+        <UButton icon="i-lucide-rotate-ccw" color="neutral" variant="soft" size="lg" :label="t('theory.again')" @click="startAttempt" />
         <!-- A piece that has just opened is named here, the moment it opens; the chip in the row stays small. -->
         <template v-if="levelDone">
           <template v-for="piece in piecesAfter(level)" :key="piece.id">
-            <UButton v-if="piece.to" :to="piece.to" icon="i-lucide-music" size="xl" color="success" :label="t('theory.playPiece', { name: piece.title })" />
+            <UButton v-if="piece.to" :to="piece.to" icon="i-lucide-music" size="lg" color="success" :label="t('theory.playPiece', { name: piece.title })" />
           </template>
         </template>
-        <UButton v-if="levelDone && isOpen(level + 1, passed)" icon="i-lucide-arrow-right" size="xl" :label="t('theory.nextLevel')" @click="openLevel(level + 1)" />
-        <UButton v-else icon="i-lucide-arrow-right" size="xl" :label="t('theory.next')" @click="nextTask" />
+        <UButton v-if="levelDone && isOpen(level + 1, passed)" icon="i-lucide-arrow-right" size="lg" :label="t('theory.nextLevel')" @click="openLevel(level + 1)" />
+        <UButton v-else icon="i-lucide-arrow-right" size="lg" :label="t('theory.next')" @click="nextTask" />
       </template>
-      <UButton v-if="phase === 'result' && offerSlow" icon="i-lucide-turtle" size="xl" :label="t('theory.slower')" @click="startSlow" />
+      <UButton v-if="phase === 'result' && offerSlow" icon="i-lucide-turtle" size="lg" :label="t('theory.slower')" @click="startSlow" />
       <UButton
         v-else-if="!(phase === 'result' && attemptPassed)"
         :icon="phase === 'playing' ? 'i-lucide-square' : 'i-lucide-play'"
-        size="xl"
+        size="lg"
         :label="phase === 'playing' ? t('theory.stop') : phase === 'result' ? t('theory.again') : t('theory.play')"
         @click="phase === 'playing' ? stopAttempt() : startAttempt()"
       />
@@ -563,7 +565,8 @@ const levelTabs = computed(() => RHYTHM_LEVELS.map((item) => ({ id: item.id, ope
   position: relative;
   min-height: 8rem;
   display: flex;
-  align-items: center;
+  flex-direction: column;
+  justify-content: center;
 }
 
 .hidden-notes {

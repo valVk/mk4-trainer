@@ -3,14 +3,14 @@ import { expect, test, type Page } from '@playwright/test'
 import { keyFor, open, reload, storeSetting, storedSetting } from './helpers'
 
 const state = (page: Page) => page.evaluate(() => {
-  const s = (document.querySelector('.levels-row') as unknown as { __vueParentComponent: { setupState: Record<string, unknown> } }).__vueParentComponent.setupState
+  const s = (document.querySelector('.levels-row') as unknown as { __vueParentComponent: { parent: { setupState: Record<string, unknown> } } }).__vueParentComponent.parent.setupState
   return { phase: s.phase as string, passes: s.levelPasses as number, passed: s.attemptPassed as boolean }
 })
 
 /** Seconds from the first note, as heard, of every note of the task; plays them on a computer key. */
 async function playTask(page: Page, lateBy = 0) {
   const notes = await page.evaluate(() => {
-    const s = (document.querySelector('.levels-row') as unknown as { __vueParentComponent: { setupState: { bpm: number, task: { notes: { duration: string, rest?: boolean }[] } } } }).__vueParentComponent.setupState
+    const s = (document.querySelector('.levels-row') as unknown as { __vueParentComponent: { parent: { setupState: { bpm: number, task: { notes: { duration: string, rest?: boolean }[] } } } } }).__vueParentComponent.parent.setupState
     const quarters: Record<string, number> = { whole: 4, half: 2, quarter: 1, eighth: 0.5, sixteenth: 0.25 }
     let time = 0
     const out: { start: number, length: number }[] = []
@@ -22,7 +22,7 @@ async function playTask(page: Page, lateBy = 0) {
     return out
   })
   const at = (seconds: number) => page.waitForFunction(
-    (t) => (document.querySelector('.levels-row') as unknown as { __vueParentComponent: { setupState: { player: { heardPosition: () => number } } } }).__vueParentComponent.setupState.player.heardPosition() >= t,
+    (t) => (document.querySelector('.levels-row') as unknown as { __vueParentComponent: { parent: { setupState: { player: { heardPosition: () => number } } } } }).__vueParentComponent.parent.setupState.player.heardPosition() >= t,
     seconds,
     { polling: 'raf', timeout: 30_000 },
   )
@@ -78,7 +78,7 @@ test('saves progress of every level, not only the first', async ({ page }) => {
   await open(page, '/train/theory')
   // Two levels of passes through the page's own progress store, as finished attempts do.
   await page.evaluate(async () => {
-    const s = (document.querySelector('.levels-row') as unknown as { __vueParentComponent: { setupState: { progress: { addRhythmPass: (level: number) => Promise<void> } } } }).__vueParentComponent.setupState
+    const s = (document.querySelector('.levels-row') as unknown as { __vueParentComponent: { parent: { setupState: { progress: { addRhythmPass: (level: number) => Promise<void> } } } } }).__vueParentComponent.parent.setupState
     for (let i = 0; i < 9; i++) await s.progress.addRhythmPass(1)
     await s.progress.addRhythmPass(2)
   })

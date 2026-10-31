@@ -2,7 +2,7 @@
 import { onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { Accidental, Annotation, AnnotationVerticalJustify, Articulation, Beam, Dot, Formatter, ModifierPosition, Stave, StaveNote, StaveTie, Stem, Tuplet, Voice } from 'vexflow/bravura'
 
-import { paintNote, STAFF_COLOURS, staffContext } from '@/components/staffDrawing'
+import { paintNote, STAFF_COLOURS, staffContext, redrawWhenFontsLoad } from '@/components/staffDrawing'
 
 import { spellBar } from '@/lib/notation'
 import { barQuarters, countLabels, noteQuarters, splitBars, type Duration, type Rhythm, type NoteMark } from '@/lib/rhythm'
@@ -178,6 +178,7 @@ function tupletsOf(written: Rhythm['notes'], notes: StaveNote[]): Tuplet[] {
 let observer: ResizeObserver | null = null
 onMounted(() => {
   draw()
+  redrawWhenFontsLoad(draw)
   observer = new ResizeObserver(() => draw())
   if (host.value) observer.observe(host.value)
 })

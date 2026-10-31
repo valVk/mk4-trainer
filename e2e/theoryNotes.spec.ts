@@ -47,10 +47,10 @@ const NAME_OF: Record<number, string> = { 60: 'C', 62: 'D', 64: 'E', 65: 'F', 67
 async function openReading(page: Page) {
   await open(page, '/train/theory?section=notes')
   await page.evaluate(async () => {
-    const s = (document.querySelector('.levels-row') as unknown as { __vueParentComponent: { setupState: { progress: { addNoteCorrect: (level: number) => Promise<void> } } } }).__vueParentComponent.setupState
+    const s = (document.querySelector('.levels-row') as unknown as { __vueParentComponent: { parent: { setupState: { progress: { addNoteCorrect: (level: number) => Promise<void> } } } } }).__vueParentComponent.parent.setupState
     for (let level = 1; level <= 8; level++) for (let i = 0; i < 20; i++) await s.progress.addNoteCorrect(level)
   })
-  await page.getByRole('tab', { name: 'Н9' }).click()
+  await page.getByRole('tab', { name: '9' }).click()
   await page.getByRole('button', { name: 'Понятно' }).click()
   // The keys start at C3 like the MK4; the melodies lie on C4-G4: one Octave + (X on the computer keyboard).
   await page.keyboard.press('x')
@@ -109,7 +109,7 @@ test('a piece plays inside «Теория», and back returns to the level', asy
   await page.evaluate(() => (document.querySelector('#app') as unknown as { __vue_app__: { config: { globalProperties: { $router: { push: (to: string) => Promise<void> } } } } }).__vue_app__.config.globalProperties.$router.push('/train/theory?section=notes&piece=10-0'))
   // The level row stays; only the content below is the practice.
   await expect(page.getByRole('button', { name: 'Послушать' })).toBeVisible()
-  await expect(page.getByRole('tab', { name: 'Н1' })).toBeVisible()
+  await expect(page.getByRole('tab', { name: '1' })).toBeVisible()
   // Back is in the small header row.
   await page.getByRole('button', { name: 'К уровню' }).click()
   await expect(page).toHaveURL(/\/train\/theory\?section=notes$/)

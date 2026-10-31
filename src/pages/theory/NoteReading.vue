@@ -172,15 +172,15 @@ const countIn = useCountIn(() => ({
 
   <!-- Play and listen sit in the level row, next to the stars (owner's choice): the card keeps its height. -->
   <Teleport defer :to="actionsTo">
-    <UButton icon="i-lucide-ear" color="neutral" variant="soft" size="xl" :label="t('theory.listen')" :disabled="phase === 'playing'" @click="listen" />
+    <UButton icon="i-lucide-ear" color="neutral" variant="soft" size="lg" :label="t('theory.listen')" :disabled="phase === 'playing'" @click="listen" />
     <template v-if="phase === 'result' && passed">
-      <UButton icon="i-lucide-rotate-ccw" color="neutral" variant="soft" size="xl" :label="t('theory.again')" @click="start" />
-      <UButton icon="i-lucide-arrow-right" size="xl" :label="t('theory.next')" @click="next" />
+      <UButton icon="i-lucide-rotate-ccw" color="neutral" variant="soft" size="lg" :label="t('theory.again')" @click="start" />
+      <UButton icon="i-lucide-arrow-right" size="lg" :label="t('theory.next')" @click="next" />
     </template>
     <UButton
       v-else
       :icon="phase === 'playing' ? 'i-lucide-square' : 'i-lucide-play'"
-      size="xl"
+      size="lg"
       :label="phase === 'playing' ? t('theory.stop') : phase === 'result' ? t('theory.again') : t('theory.play')"
       @click="phase === 'playing' ? (player.stop(), phase = 'ready') : start()"
     />

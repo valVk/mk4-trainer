@@ -2,7 +2,7 @@
 import { onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { Accidental, Annotation, Articulation, ModifierPosition, AnnotationVerticalJustify, Formatter, GhostNote, Stave, StaveConnector, StaveNote, Voice, type Note } from 'vexflow/bravura'
 
-import { paintNote, STAFF_COLOURS, staffContext } from '@/components/staffDrawing'
+import { paintNote, STAFF_COLOURS, staffContext, redrawWhenFontsLoad } from '@/components/staffDrawing'
 import { useNoteSource } from '@/composables/useNoteSource'
 
 import { vexSpelling, type Spelled } from '@/lib/accidentals'
@@ -111,6 +111,7 @@ function draw() {
 let observer: ResizeObserver | null = null
 onMounted(() => {
   draw()
+  redrawWhenFontsLoad(draw)
   observer = new ResizeObserver(() => draw())
   if (host.value) observer.observe(host.value)
 })

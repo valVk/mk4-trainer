@@ -2,7 +2,7 @@
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { Accidental, Beam, Dot, Formatter, Stave, StaveConnector, StaveNote, StaveTie, Voice, type RenderContext } from 'vexflow/bravura'
 
-import { paintNote, STAFF_COLOURS, STAFF_SCALE, staffContext } from '@/components/staffDrawing'
+import { paintNote, STAFF_COLOURS, STAFF_SCALE, staffContext, redrawWhenFontsLoad } from '@/components/staffDrawing'
 import { barAt, keySignatureName, drumPlace, spellBar, type Clef, type PlayedMark, type WrittenBar, type WrittenNote } from '@/lib/notation'
 import type { TimeSignature } from '@/lib/song'
 
@@ -187,6 +187,7 @@ let observer: ResizeObserver | null = null
 onMounted(() => {
   follow()
   draw()
+  redrawWhenFontsLoad(draw)
   observer = new ResizeObserver(() => draw())
   if (host.value) observer.observe(host.value)
 })

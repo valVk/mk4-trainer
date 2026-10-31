@@ -3,7 +3,7 @@ import { computed, onBeforeUnmount, onMounted, ref, shallowRef, watch } from 'vu
 import { useI18n } from 'vue-i18n'
 import { Accidental, Formatter, GhostNote, Stave, StaveConnector, StaveNote, Voice, type Note } from 'vexflow/bravura'
 
-import { paintNote, STAFF_COLOURS, staffContext } from '@/components/staffDrawing'
+import { paintNote, STAFF_COLOURS, staffContext, redrawWhenFontsLoad } from '@/components/staffDrawing'
 
 import { spellBar } from '@/lib/notation'
 import { clefOf, mapBand, mapColumn, mapColumns, mapSign, type StaffClef } from '@/lib/staff'
@@ -85,6 +85,7 @@ const sign = computed(() => mapSign(props.windowStart))
 let observer: ResizeObserver | null = null
 onMounted(() => {
   draw()
+  redrawWhenFontsLoad(draw)
   observer = new ResizeObserver(() => draw())
   if (host.value) observer.observe(host.value)
 })

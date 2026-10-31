@@ -43,3 +43,12 @@ export function paintNote(note: StaveNote, colour?: string | null): StaveNote {
   note.setFlagStyle({ fillStyle: paint, strokeStyle: paint })
   return note
 }
+
+/**
+ * Draws again once the music font has loaded: a staff drawn before that measures the note heads wrong and leaves
+ * the stems standing apart from them (the first screen of a fresh visit).
+ */
+export function redrawWhenFontsLoad(draw: () => void): void {
+  if (typeof document === 'undefined' || !document.fonts || document.fonts.status === 'loaded') return
+  void document.fonts.ready.then(draw)
+}

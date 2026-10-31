@@ -5,6 +5,7 @@ import { useI18n } from 'vue-i18n'
 import ChordDiagram from '@/components/ChordDiagram.vue'
 import ExamBadge from '@/components/ExamBadge.vue'
 import HelpSwitch from '@/components/HelpSwitch.vue'
+import LevelRow from '@/components/LevelRow.vue'
 import CircleOfFifths from '@/components/CircleOfFifths.vue'
 import ChoiceTask from '@/pages/theory/ChoiceTask.vue'
 import FormOrder from '@/pages/theory/FormOrder.vue'
@@ -496,40 +497,14 @@ const INTRO_NOTES: Partial<Record<NoteIntroId, { show: 'treble' | 'bass' | 'gran
 </script>
 
 <template>
-  <div class="levels-row">
-    <div class="levels" role="tablist" :aria-label="t('theory.levelsLabel')">
-      <template v-for="tab in levelTabs" :key="tab.id">
-        <button
-          type="button"
-          role="tab"
-          class="level"
-          :class="{ 'level--on': !openPiece && tab.id === level, 'level--done': tab.stars === 3 }"
-          :aria-selected="!openPiece && tab.id === level"
-          :disabled="!tab.open"
-          @click="openLevel(tab.id)"
-        >
-          <span>{{ tabName(tab.id) }}</span>
-          <UIcon v-if="!tab.open" name="i-lucide-lock" class="size-3" />
-        </button>
-        <!-- The piece after this group of levels, open with the level's last star (as in «Ритм»). -->
-        <template v-for="piece in piecesAfter(tab.id)" :key="piece.id">
-          <RouterLink
-            v-if="piece.to && tab.stars === 3"
-            :to="piece.to"
-            class="level level--piece"
-            :class="{ 'level--on': openPiece?.key === piece.key }"
-            :aria-current="openPiece?.key === piece.key ? 'page' : undefined"
-            :aria-label="t('theory.playPiece', { name: piece.title })"
-          >
-            <UIcon name="i-lucide-music" class="size-4" />
-          </RouterLink>
-          <span v-else class="level level--piece level--closed" role="img" :aria-label="t('theory.notes.pieceLocked', { name: piece.title, tab: tabName(tab.id) })">
-            <UIcon name="i-lucide-music" class="size-3.5" />
-            <UIcon name="i-lucide-lock" class="size-3" />
-          </span>
-        </template>
-      </template>
-    </div>
+  <LevelRow
+    :tabs="levelTabs"
+    :current="openPiece ? null : level"
+    :pieces-after="piecesAfter"
+    :open-piece-key="openPiece?.key"
+    :label="t('theory.levelsLabel')"
+    @select="openLevel"
+  >
     <StarRating :value="stars" size="lg" />
     <ExamBadge v-if="exam && !reading" />
     <!-- The app's help switch, in the drawer; a level's exam turns it off. -->
@@ -540,7 +515,7 @@ const INTRO_NOTES: Partial<Record<NoteIntroId, { show: 'treble' | 'bass' | 'gran
     </span>
     <!-- «Читаем с ритмом» puts its play and listen buttons here, after the octave buttons: the main action last. -->
     <span id="notes-actions" class="row-actions" />
-  </div>
+  </LevelRow>
 
   <!-- A piece is played right here: the level row stays, only this content becomes its practice. -->
   <SongPractice v-if="openPiece" :key="openPiece.key" :song-id="openPiece.songId" :channel="openPiece.channel" embedded />
@@ -548,9 +523,9 @@ const INTRO_NOTES: Partial<Record<NoteIntroId, { show: 'treble' | 'bass' | 'gran
   <NoteReading v-else-if="reading" :level="info" :level-done="levelDone" actions-to="#notes-actions" @passed="onMelodyPassed">
     <template #done>
       <template v-for="piece in piecesAfter(level)" :key="piece.id">
-        <UButton v-if="piece.to" :to="piece.to" icon="i-lucide-music" size="xl" color="success" :label="t('theory.playPiece', { name: piece.title })" />
+        <UButton v-if="piece.to" :to="piece.to" icon="i-lucide-music" size="lg" color="success" :label="t('theory.playPiece', { name: piece.title })" />
       </template>
-      <UButton v-if="isOpenHere(level + 1)" icon="i-lucide-arrow-right" size="xl" :label="t('theory.nextLevel')" @click="openLevel(level + 1)" />
+      <UButton v-if="isOpenHere(level + 1)" icon="i-lucide-arrow-right" size="lg" :label="t('theory.nextLevel')" @click="openLevel(level + 1)" />
     </template>
   </NoteReading>
   <template v-else>
@@ -645,15 +620,15 @@ const INTRO_NOTES: Partial<Record<NoteIntroId, { show: 'treble' | 'bass' | 'gran
     </section>
 
     <div v-if="phase === 'intro' || levelDone" class="controls">
-      <UButton v-if="phase === 'intro'" icon="i-lucide-check" size="xl" :label="t('theory.intro.ok')" @click="closeIntro" />
+      <UButton v-if="phase === 'intro'" icon="i-lucide-check" size="lg" :label="t('theory.intro.ok')" @click="closeIntro" />
       <template v-else>
-        <UButton v-if="levelDone" icon="i-lucide-rotate-ccw" color="neutral" variant="soft" size="xl" :label="t('theory.notes.stay')" @click="levelDone = false" />
+        <UButton v-if="levelDone" icon="i-lucide-rotate-ccw" color="neutral" variant="soft" size="lg" :label="t('theory.notes.stay')" @click="levelDone = false" />
         <template v-if="levelDone">
           <template v-for="piece in piecesAfter(level)" :key="piece.id">
-            <UButton v-if="piece.to" :to="piece.to" icon="i-lucide-music" size="xl" color="success" :label="t('theory.playPiece', { name: piece.title })" />
+            <UButton v-if="piece.to" :to="piece.to" icon="i-lucide-music" size="lg" color="success" :label="t('theory.playPiece', { name: piece.title })" />
           </template>
         </template>
-        <UButton v-if="levelDone && isOpenHere(level + 1)" icon="i-lucide-arrow-right" size="xl" :label="t('theory.nextLevel')" @click="openLevel(level + 1)" />
+        <UButton v-if="levelDone && isOpenHere(level + 1)" icon="i-lucide-arrow-right" size="lg" :label="t('theory.nextLevel')" @click="openLevel(level + 1)" />
       </template>
     </div>
 
