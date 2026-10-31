@@ -3,7 +3,7 @@
 // and number, the values seen, the last one and how often. MIDI Clock is counted too, with the tempo it beats, so
 // the MK4's Tap Tempo can be found. Pure code, no UI text.
 
-import { mk4OctaveBase } from './noteSource'
+import type { ControllerProfile } from './controller'
 
 export type ElementKind = 'key' | 'pad' | 'knob' | 'modWheel' | 'pitchBend' | 'sustain' | 'program' | 'aftertouch' | 'octave' | 'transport' | 'sysex' | 'other'
 
@@ -38,11 +38,11 @@ const SUSTAIN_CC = 64
 const MOD_WHEEL_CC = 1
 
 /** The control a raw message comes from, with its value; null for messages that are not a control (clock, sensing). */
-export function controlOf(data: ArrayLike<number>, pads: PadNotes): Omit<InventoryItem, 'min' | 'max' | 'count' | 'at' | 'last' | 'bytes'> & { value: number } | null {
+export function controlOf(data: ArrayLike<number>, pads: PadNotes, controller: Pick<ControllerProfile, 'octaveBase'>): Omit<InventoryItem, 'min' | 'max' | 'count' | 'at' | 'last' | 'bytes'> & { value: number } | null {
   const status = data[0]
   if (status === undefined) return null
   if (status === 0xf0) {
-    if (mk4OctaveBase(data) !== null) return { id: 'sysex:mk4-octave', kind: 'octave', channel: 0, number: null, value: data[7] ?? 0 }
+    if (controller.octaveBase(data) !== null) return { id: 'sysex:mk4-octave', kind: 'octave', channel: 0, number: null, value: data[7] ?? 0 }
     const head = Array.from(data).slice(0, 5).map((byte) => byte.toString(16).padStart(2, '0')).join(' ')
     return { id: `sysex:${head}`, kind: 'sysex', channel: 0, number: null, value: data.length }
   }
@@ -67,8 +67,8 @@ export function controlOf(data: ArrayLike<number>, pads: PadNotes): Omit<Invento
 }
 
 /** The inventory with one more message counted (a new map; the old one is left as it was). */
-export function addMessage(inventory: Inventory, data: ArrayLike<number>, pads: PadNotes, at: number): Inventory {
-  const control = controlOf(data, pads)
+export function addMessage(inventory: Inventory, data: ArrayLike<number>, pads: PadNotes, at: number, controller: Pick<ControllerProfile, 'octaveBase'>): Inventory {
+  const control = controlOf(data, pads, controller)
   if (!control) return inventory
   const { value, ...rest } = control
   const bytes = Array.from(data, (byte) => byte.toString(16).padStart(2, '0')).join(' ')

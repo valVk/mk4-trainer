@@ -1,7 +1,8 @@
 // The MK4 drives the app (plan step 26): what each control does out of the box, the tempo from Tap Tempo, the
 // metronome on Shift+Tap Tempo (as in Ableton), and turning a CC into an action. Pure code, no UI text.
 
-import { MK4_DISPLAY_TURN, type PanelAction } from './mk4Layout'
+import type { ControllerProfile } from './controller'
+import type { PanelAction } from './mk4Layout'
 
 /** Shift+Tap Tempo toggles the metronome; it has no control of its own. */
 export type Mk4Action = PanelAction | 'metronome'
@@ -56,10 +57,17 @@ export interface ResolvedAction {
  * What a control message means now. Buttons act when pressed (127), not when let go; Shift held turns Tap Tempo
  * into the metronome. The display knob turns as a relative encoder (1 right, 127 left): next and previous.
  */
-export function resolveAction(control: string | null, messageId: string, value: number, shiftHeld: boolean, chosen: Readonly<Record<string, PanelAction>>): ResolvedAction | null {
-  if (messageId === MK4_DISPLAY_TURN) return value >= 64 ? { action: 'previous', value: -1 } : { action: 'next', value: 1 }
+export function resolveAction(
+  control: string | null,
+  messageId: string,
+  value: number,
+  shiftHeld: boolean,
+  chosen: Readonly<Record<string, PanelAction>>,
+  controller: Pick<ControllerProfile, 'actions' | 'displayTurn'>,
+): ResolvedAction | null {
+  if (messageId === controller.displayTurn) return value >= 64 ? { action: 'previous', value: -1 } : { action: 'next', value: 1 }
   if (!control || control === 'shift') return null
-  const action = chosen[control] ?? DEFAULT_ACTIONS[control] ?? 'none'
+  const action = chosen[control] ?? controller.actions[control] ?? 'none'
   if (action === 'none') return null
   if (action === 'tempo' || action === 'volume') return { action, value }
   if (value === 0) return null

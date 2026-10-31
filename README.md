@@ -41,6 +41,16 @@ The on-screen keyboard works by touch. On a computer, the keyboard acts as a vir
 | `Z` / `X` | Octave down / up |
 | `1`–`8` | Pads: next, listen, hint, skip, Тренировка, Лаборатория, level down, level up |
 
+The MK4 itself needs Chrome (Web MIDI); the screen keys and the computer keyboard work in any browser.
+
+### Other MIDI keyboards
+
+Everything the app knows about the keyboard sits behind one interface, `ControllerProfile` in
+`src/lib/controller.ts`: its number of keys, home octave, pad notes, panel drawing, the messages its controls send
+out of the box, what they do in the app, and how to read its own octave message. The MK4 (`src/lib/controllers/mk4.ts`)
+is the only profile. Supporting another keyboard means writing its profile, adding it to `CONTROLLERS`, and choosing
+it in `activeController()` (for example by its MIDI input name); the screens do not change.
+
 ## Tech
 
 Vue 3 (`<script setup>`, TypeScript), Nuxt UI 4, Vue Router, vue-i18n, Dexie (IndexedDB), Web MIDI,

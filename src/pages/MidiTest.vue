@@ -11,6 +11,7 @@ import { useKeyboardWindow } from '@/composables/useKeyboardWindow'
 import { useNoteSource } from '@/composables/useNoteSource'
 import { padsPlayMusic } from '@/composables/usePadActions'
 import { useProgress } from '@/composables/useProgress'
+import { activeController } from '@/lib/controller'
 import { addMessage, clockTempo, inventoryJson, type Inventory } from '@/lib/midiInventory'
 import { midiName } from '@/lib/theory'
 
@@ -99,7 +100,7 @@ function onMessage(event: MIDIMessageEvent) {
     return
   }
   if (status === 0xfe) return
-  inventory.value = addMessage(inventory.value, data, pads.value, performance.now())
+  inventory.value = addMessage(inventory.value, data, pads.value, performance.now(), activeController())
   const data2 = data[2] ?? 0
   const input = event.target as MIDIInput | null
   const row = inputs.value.find((item) => item.id === input?.id)

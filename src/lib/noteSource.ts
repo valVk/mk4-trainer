@@ -54,10 +54,12 @@ export function parseMidiMessage(
   data: ArrayLike<number>,
   padMap: PadMap = DEFAULT_PAD_MAP,
   source: NoteSourceKind = 'midi',
+  /** The keyboard's own octave message (its controller profile); the MK4's by default. */
+  octaveBase: (data: ArrayLike<number>) => number | null = mk4OctaveBase,
 ): NoteEvent | null {
   const status = data[0]
   if (status === 0xf0) {
-    const base = mk4OctaveBase(data)
+    const base = octaveBase(data)
     return base === null ? null : { type: 'octave', base, source }
   }
   if (status === undefined || status >= 0xf0) return null

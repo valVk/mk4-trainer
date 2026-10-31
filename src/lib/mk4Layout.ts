@@ -3,6 +3,8 @@
 // Keys and pads are found by note (keys from the window, pads by the pad map); every other control is learnt:
 // tap it on the screen, press it on the MK4. Pure code, no UI text (labels are printed names on the panel).
 
+import type { ControllerProfile } from './controller'
+
 export type ControlShape = 'button' | 'pad' | 'knob' | 'wheel' | 'display' | 'key' | 'blackKey'
 
 export interface PanelControl {
@@ -84,12 +86,18 @@ export type PanelAction = typeof PANEL_ACTIONS[number]
 export const TURN_ACTIONS: readonly PanelAction[] = ['none', 'tempo', 'volume']
 
 /** The control learnt for a message, or matched by note: keys from the window start, pads by the pad map. */
-export function controlFor(messageId: string, learnt: Readonly<Record<string, string>>, keysStart: number, pads: { channel: number, notes: readonly number[] }): string | null {
+export function controlFor(
+  messageId: string,
+  learnt: Readonly<Record<string, string>>,
+  keysStart: number,
+  pads: { channel: number, notes: readonly number[] },
+  controller: Pick<ControllerProfile, 'factory' | 'displayTurn' | 'keys'>,
+): string | null {
   const byLearning = Object.entries(learnt).find(([, message]) => message === messageId)?.[0]
   if (byLearning) return byLearning
-  // What the MK4 sends out of the box; the display knob turns on a message of its own.
-  if (messageId === MK4_DISPLAY_TURN) return 'displayKnob'
-  const byFactory = Object.entries(MK4_FACTORY).find(([, message]) => message === messageId)?.[0]
+  // What the keyboard sends out of the box; the display knob turns on a message of its own.
+  if (messageId === controller.displayTurn) return 'displayKnob'
+  const byFactory = Object.entries(controller.factory).find(([, message]) => message === messageId)?.[0]
   if (byFactory) return byFactory
   const note = /^note:(\d+):(\d+)$/.exec(messageId)
   if (!note) return null
@@ -97,7 +105,7 @@ export function controlFor(messageId: string, learnt: Readonly<Record<string, st
   const number = Number(note[2])
   if (channel === pads.channel && pads.notes.includes(number)) return `pad${pads.notes.indexOf(number) + 1}`
   const key = number - keysStart
-  return key >= 0 && key < 25 ? `key${key}` : null
+  return key >= 0 && key < controller.keys ? `key${key}` : null
 }
 
 /** What the owner taught the app about the panel: the message of each control, and what it does. */

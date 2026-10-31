@@ -1,8 +1,7 @@
 import { computed, getCurrentScope, onScopeDispose, readonly, ref, shallowRef } from 'vue'
 
+import { activeController } from '@/lib/controller'
 import {
-  DEFAULT_BASE_NOTE,
-  DEFAULT_PAD_MAP,
   HeldNotes,
   PAD_COUNT,
   VIRTUAL_CHANNEL,
@@ -18,6 +17,9 @@ import {
   type NoteSource,
   type PadMap,
 } from '@/lib/noteSource'
+
+/** The keyboard the app works with (plan step 31): its pad notes, home octave and octave message. */
+const controller = activeController()
 
 export interface MidiInputInfo {
   id: string
@@ -53,7 +55,7 @@ export class WebMidiSource implements NoteSource {
   capture: ((press: { note: number, channel: number }) => void) | null = null
 
   constructor(
-    private readonly getPadMap: () => PadMap = () => DEFAULT_PAD_MAP,
+    private readonly getPadMap: () => PadMap = () => controller.pads,
     private readonly onInputs?: (inputs: MidiInputInfo[]) => void,
   ) {}
 
@@ -99,11 +101,11 @@ export class WebMidiSource implements NoteSource {
     if (!message.data) return
     if (this.capture) {
       // No pad map while calibrating: every press is reported as a plain note.
-      const raw = parseMidiMessage(message.data, NO_PADS, 'midi')
+      const raw = parseMidiMessage(message.data, NO_PADS, 'midi', controller.octaveBase)
       if (raw?.type === 'noteOn') this.capture({ note: raw.note, channel: raw.channel })
       return
     }
-    const event = parseMidiMessage(message.data, this.getPadMap(), 'midi')
+    const event = parseMidiMessage(message.data, this.getPadMap(), 'midi', controller.octaveBase)
     if (event) this.emitter.emit(event)
   }
 }
@@ -118,7 +120,7 @@ export class VirtualSource implements NoteSource {
   private running = false
 
   constructor(
-    private baseNote = DEFAULT_BASE_NOTE,
+    private baseNote = controller.homeBase,
     private readonly onBaseNote?: (base: number) => void,
   ) {}
 
@@ -233,7 +235,7 @@ const heldNotes = ref<number[]>([])
 const midiStatus = ref<MidiStatus>('requestMIDIAccess' in navigator ? 'idle' : 'unsupported')
 const midiError = ref('')
 const midiInputs = shallowRef<MidiInputInfo[]>([])
-const baseNote = ref(DEFAULT_BASE_NOTE)
+const baseNote = ref(controller.homeBase)
 
 function dispatch(event: NoteEvent): void {
   // The MK4's Octave buttons: the keys under the hands, the computer keys and the octave map follow at once.
@@ -242,16 +244,16 @@ function dispatch(event: NoteEvent): void {
   hub.emit(event)
 }
 
-const virtual = new VirtualSource(DEFAULT_BASE_NOTE, (base) => {
+const virtual = new VirtualSource(controller.homeBase, (base) => {
   baseNote.value = base
 })
 virtual.subscribe(dispatch)
 
 // Saved and restored by useProgress (setting table); here it only lives in memory.
-const padMap = shallowRef<PadMap>(DEFAULT_PAD_MAP)
+const padMap = shallowRef<PadMap>(controller.pads)
 
 function setPadMap(map: PadMap | null): void {
-  padMap.value = map ?? DEFAULT_PAD_MAP
+  padMap.value = map ?? controller.pads
 }
 
 const midi = new WebMidiSource(() => padMap.value, (inputs) => {

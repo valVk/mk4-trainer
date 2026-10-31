@@ -4,7 +4,8 @@ import { useI18n } from 'vue-i18n'
 import { useToast } from '@nuxt/ui/composables'
 
 import { useNoteSource } from '@/composables/useNoteSource'
-import { DEFAULT_PAD_MAP, PAD_COUNT, calibrationPress, padAction } from '@/lib/noteSource'
+import { activeController } from '@/lib/controller'
+import { PAD_COUNT, calibrationPress, padAction } from '@/lib/noteSource'
 
 const { t } = useI18n()
 const toast = useToast()
@@ -26,8 +27,8 @@ const problem = ref<string | null>(null)
 let stopCapture: (() => void) | null = null
 
 const currentPad = computed(() => (calibrating.value ? collected.value.length + 1 : null))
-const isDefault = computed(() => padMap.value.channel === DEFAULT_PAD_MAP.channel
-  && padMap.value.notes.every((note, i) => note === DEFAULT_PAD_MAP.notes[i]))
+const isDefault = computed(() => padMap.value.channel === activeController().pads.channel
+  && padMap.value.notes.every((note, i) => note === activeController().pads.notes[i]))
 
 function noteFor(pad: number): number | undefined {
   return calibrating.value ? collected.value[pad - 1] : padMap.value.notes[pad - 1]

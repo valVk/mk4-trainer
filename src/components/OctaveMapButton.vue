@@ -3,7 +3,7 @@ import { onBeforeUnmount, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 
 import PianoMap from '@/components/PianoMap.vue'
-import { DEFAULT_BASE_NOTE } from '@/lib/noteSource'
+import { activeController } from '@/lib/controller'
 
 // Where the keys are (plan step 19): one button opens the whole piano with the MK4 window on it, so it never
 // takes room on the screen.
@@ -17,6 +17,8 @@ const props = defineProps<{
 // It lives in the app's footer, small and quiet, next to the version: the map opens upwards from there.
 
 const { t } = useI18n()
+/** Where the keys usually are: the keyboard's own octave out of the box. */
+const homeBase = activeController().homeBase
 
 /** Quick presses in a row open the map once, at the final place. */
 const SHOW_AFTER_MS = 350
@@ -69,7 +71,7 @@ onBeforeUnmount(() => {
     <template #content>
       <div class="octave-map-pop">
         <!-- The whole piano: where the 25 keys are now, and where they usually are. -->
-        <PianoMap :window-start="windowStart" :home-start="DEFAULT_BASE_NOTE" />
+        <PianoMap :window-start="windowStart" :home-start="homeBase" />
       </div>
     </template>
   </UPopover>

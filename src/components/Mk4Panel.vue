@@ -4,7 +4,8 @@ import { useI18n } from 'vue-i18n'
 
 import { useProgress } from '@/composables/useProgress'
 import type { Inventory, PadNotes } from '@/lib/midiInventory'
-import { MK4_FACTORY, MK4_PANEL, MK4_SILENT, PANEL_ACTIONS, TURN_ACTIONS, controlFor, type PanelAction, type PanelControl } from '@/lib/mk4Layout'
+import { activeController } from '@/lib/controller'
+import { PANEL_ACTIONS, TURN_ACTIONS, controlFor, type PanelAction, type PanelControl } from '@/lib/mk4Layout'
 
 // «Проверка MK4» → «Панель MK4» (plan step 25): the MK4 drawn as on its box. A control lights up when its message
 // comes. Keys and pads are known by their notes; every other control is taught: tap it here, press it on the MK4.
@@ -19,6 +20,8 @@ const props = defineProps<{
 
 const { t } = useI18n()
 const progress = useProgress()
+/** The keyboard drawn and taught here: the MK4, the app's only one so far (plan step 31). */
+const controller = activeController()
 
 const selected = ref<PanelControl | null>(null)
 /** Waiting for the selected control to be pressed on the MK4, since this moment. */
@@ -31,17 +34,17 @@ const actions = computed(() => progress.mk4Panel.value.actions)
 const lastAt = computed(() => {
   const at = new Map<string, number>()
   for (const item of props.inventory.values()) {
-    const control = controlFor(item.id, learnt.value, props.keysStart, props.pads)
+    const control = controlFor(item.id, learnt.value, props.keysStart, props.pads, controller)
     if (control) at.set(control, Math.max(at.get(control) ?? 0, item.at))
   }
   return at
 })
 
 /** Taught by the owner, else what the MK4 sends out of the box. */
-const messageOf = (control: PanelControl) => learnt.value[control.id] ?? MK4_FACTORY[control.id]
-const learnable = (control: PanelControl) => control.key === undefined && control.pad === undefined && control.shape !== 'display' && !MK4_SILENT.includes(control.id)
+const messageOf = (control: PanelControl) => learnt.value[control.id] ?? controller.factory[control.id]
+const learnable = (control: PanelControl) => control.key === undefined && control.pad === undefined && control.shape !== 'display' && !controller.silent.includes(control.id)
 const lit = (control: PanelControl) => props.now - (lastAt.value.get(control.id) ?? -Infinity) < 350
-const silent = (control: PanelControl) => MK4_SILENT.includes(control.id) || (learnable(control) && !messageOf(control))
+const silent = (control: PanelControl) => controller.silent.includes(control.id) || (learnable(control) && !messageOf(control))
 
 function choose(control: PanelControl) {
   selected.value = control
@@ -82,7 +85,7 @@ function forget() {
     <svg viewBox="0 0 1000 420" class="panel__drawing" role="group" :aria-label="t('mk4.panelLabel')">
       <rect x="0" y="0" width="1000" height="260" rx="14" class="body" />
       <g
-        v-for="control in MK4_PANEL"
+        v-for="control in controller.panel"
         :key="control.id"
         class="control"
         :class="[`control--${control.shape}`, { 'control--lit': lit(control), 'control--silent': silent(control), 'control--chosen': selected?.id === control.id }]"
@@ -115,7 +118,7 @@ function forget() {
             <UButton color="neutral" variant="soft" icon="i-lucide-radio" :label="t('mk4.learnAgain')" @click="choose(selected)" />
           </div>
         </template>
-        <p v-else-if="MK4_SILENT.includes(selected.id)" class="text-muted">{{ t('mk4.noMidi') }}</p>
+        <p v-else-if="controller.silent.includes(selected.id)" class="text-muted">{{ t('mk4.noMidi') }}</p>
         <p v-else class="text-muted">{{ t('mk4.known') }}</p>
       </template>
       <p v-else class="text-muted">{{ t('mk4.tapControl') }}</p>

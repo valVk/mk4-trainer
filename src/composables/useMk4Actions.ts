@@ -3,6 +3,7 @@ import { onBeforeUnmount } from 'vue'
 import { useKeyboardWindow } from '@/composables/useKeyboardWindow'
 import { useNoteSource } from '@/composables/useNoteSource'
 import { useProgress } from '@/composables/useProgress'
+import { activeController } from '@/lib/controller'
 import { resolveAction, type Mk4Action } from '@/lib/mk4Control'
 import { controlFor } from '@/lib/mk4Layout'
 
@@ -39,12 +40,13 @@ function listen() {
   const { onEvent, padMap } = useNoteSource()
   const progress = useProgress()
   const keysStart = useKeyboardWindow()
+  const controller = activeController()
   onEvent((event) => {
     if (event.type !== 'knob' || event.source !== 'midi') return
     const messageId = `cc:${event.channel}:${event.control}`
-    const control = controlFor(messageId, progress.mk4Panel.value.learnt, keysStart.value, padMap.value)
+    const control = controlFor(messageId, progress.mk4Panel.value.learnt, keysStart.value, padMap.value, controller)
     if (control === 'shift') shiftHeld = event.value > 0
-    const resolved = resolveAction(control, messageId, event.value, shiftHeld, progress.mk4Panel.value.actions)
+    const resolved = resolveAction(control, messageId, event.value, shiftHeld, progress.mk4Panel.value.actions, controller)
     if (resolved) dispatch(resolved.action, resolved.value)
   })
 }
