@@ -922,6 +922,26 @@ const nextLabel = computed(() => {
   background: var(--color-active);
 }
 
+/* Under the MK4 knob the bar shows it by its own colours, not a ring: the track light peach, the played part peach.
+   Grabbed (Push), the track deepens: turning moves it now. */
+.progress:focus-visible,
+.progress.knob-grabbed {
+  box-shadow: none !important;
+}
+
+.progress:focus-visible .progress__track {
+  background: color-mix(in oklab, var(--color-focus) 28%, var(--ui-bg-accented));
+}
+
+.progress.knob-grabbed .progress__track {
+  background: color-mix(in oklab, var(--color-focus) 50%, var(--ui-bg-accented));
+}
+
+.progress:focus-visible .progress__fill,
+.progress.knob-grabbed .progress__fill {
+  background: var(--color-focus);
+}
+
 .status {
   padding-block: 0.75rem;
 }

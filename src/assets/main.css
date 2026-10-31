@@ -133,9 +133,10 @@ body {
 
 /*
  * Where the MK4 display knob (or a keyboard) is, the owner's pick (F5 · I1 on /dev/focus): on an ordinary element a
- * peach ring inside the edge and a peach label; on a selected or main one (a checked segment, the current rung or
- * phrase, a solid primary button) a full peach fill with dark text, so the two states still read apart and neither
- * looks like the blue «selected». Inset shadows replace Nuxt UI's own rings.
+ * peach ring inside the edge and a peach label; on a filled selected or main one (a checked segment, a solid
+ * primary button) a full peach fill with dark text; on a current step drawn as a blue ring and tint (a rung, a
+ * phrase) the same ring and tint in peach, not filled. Neither looks like the blue «selected». Inset shadows replace
+ * Nuxt UI's own rings. A control may draw its own focus instead (the practice bar).
  */
 :focus-visible {
   outline: none !important;
@@ -144,8 +145,8 @@ body {
 }
 
 :focus-visible:is(
-  [aria-checked="true"], [aria-pressed="true"], [aria-selected="true"], [aria-current]:not([aria-current="false"]),
-  [data-state="checked"], [data-state="active"], .bg-primary
+  [aria-checked="true"], [aria-pressed="true"], [aria-selected="true"], [data-state="checked"], [data-state="active"],
+  .bg-primary
 ),
 /* Grabbed by Push: the knob turns it now. */
 .knob-grabbed {
@@ -157,6 +158,14 @@ body {
   --ui-text-toned: color-mix(in oklab, var(--color-on-focus) 85%, transparent);
   --ui-text-muted: color-mix(in oklab, var(--color-on-focus) 75%, transparent);
   --ui-text-dimmed: color-mix(in oklab, var(--color-on-focus) 65%, transparent);
+}
+
+/* The current step (blue ring and tint) under the knob: the same in peach; its label keeps its colour. */
+:focus-visible[aria-current]:not([aria-current="false"]) {
+  box-shadow:
+    inset 0 0 0 2px var(--color-focus),
+    inset 0 0 0 100vmax color-mix(in oklab, var(--color-focus) 14%, var(--ui-bg-elevated)) !important;
+  color: inherit !important;
 }
 
 /* Page frame shared by every screen. Low specificity, so a page's own rules win. */
