@@ -197,7 +197,31 @@ body {
   width: 100%;
   max-width: var(--page-max);
   margin: 0 auto;
-  padding: clamp(0.75rem, 3.5vh, 2.5rem) clamp(1rem, 3vw, 2.5rem);
+  /* The header is one small row: little room above it. */
+  padding: clamp(0.5rem, 1.5vh, 1rem) clamp(1rem, 3vw, 2.5rem) clamp(0.75rem, 3.5vh, 2.5rem);
+}
+
+/* The drawer (PageHeader) pushes the whole page aside as it slides in, as in Material UI. */
+:root {
+  --drawer-width: min(22rem, 85vw);
+}
+
+.shell {
+  transition: transform 260ms var(--ease-out);
+}
+
+html.drawer-open {
+  overflow: hidden;
+}
+
+html.drawer-open .shell {
+  transform: translateX(var(--drawer-width));
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .shell {
+    transition: none;
+  }
 }
 
 /* Screens that fill the height: header on top, the rest grows. */

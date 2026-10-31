@@ -3,11 +3,11 @@ import { onBeforeUnmount, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useRoute } from 'vue-router'
 
-// The header of every screen is a drawer (the owner's choice, 31.10.2026): the content gets the whole height. A
-// small handle in the top-left corner (in the page's side margin) opens it from the left; inside are back and
-// Home, the screen's name, the screen's own settings (the default slot, or a part inside the screen through
-// #page-actions), and the quiet states the screens teleport into #drawer-status (map, sound, MK4). The drawer
-// stays mounted, so those teleports always find their place; closed, it is inert.
+// The header of every screen: one small row (menu, back, the screen's name) so the content keeps the height, and a
+// drawer behind the menu icon that slides in from the left and pushes the whole page aside, as in Material UI. In the
+// drawer: Home, the theme, the screen's places (theory sections), its settings (the default slot, or a part inside
+// the screen through #page-actions) and the quiet states the screens teleport into #drawer-status (MK4). The drawer
+// lives on <body> and stays mounted, so those teleports always find their place; closed, it is inert.
 const { t } = useI18n()
 const route = useRoute()
 
@@ -35,6 +35,9 @@ function goBack() {
   props.onBack?.()
 }
 
+// The page slides aside with the drawer (App.vue's shell, styled in main.css).
+watch(open, (value) => document.documentElement.classList.toggle('drawer-open', value))
+
 function onKey(event: KeyboardEvent) {
   if (event.key === 'Escape') close()
 }
@@ -45,21 +48,27 @@ watch(open, (value) => {
 })
 // A new screen or a new place on it: the drawer has done its job.
 watch(() => route.fullPath, close)
-onBeforeUnmount(() => window.removeEventListener('keydown', onKey))
+onBeforeUnmount(() => {
+  window.removeEventListener('keydown', onKey)
+  document.documentElement.classList.remove('drawer-open')
+})
 </script>
 
 <template>
   <header class="page-header">
-    <button type="button" class="handle" :aria-label="t('nav.menu', { name: title })" :aria-expanded="open" @click="open = true">
-      <UIcon name="i-lucide-panel-left-open" class="size-5" />
-    </button>
+    <UButton icon="i-lucide-menu" color="neutral" variant="ghost" size="md" :aria-label="t('nav.menu', { name: title })" :aria-expanded="open" @click="open = true" />
+    <UButton v-if="props.onBack" icon="i-lucide-arrow-left" color="neutral" variant="ghost" size="md" :aria-label="backLabel ?? t('nav.home')" @click="goBack" />
+    <UButton v-else :to="back" icon="i-lucide-arrow-left" color="neutral" variant="ghost" size="md" :aria-label="backLabel ?? t('nav.home')" />
+    <p class="bar-title text-highlighted">
+      <span v-if="eyebrow" class="text-muted">{{ eyebrow }} · </span>{{ title }}
+    </p>
+  </header>
 
+  <Teleport to="body">
     <div v-if="open" class="scrim" aria-hidden="true" @click="close" />
     <aside class="drawer" :class="{ 'drawer--open': open }" :role="open ? 'dialog' : undefined" :aria-label="title" :inert="!open">
       <nav class="drawer__nav">
-        <UButton v-if="props.onBack" icon="i-lucide-arrow-left" color="neutral" variant="soft" size="lg" :label="backLabel ?? t('nav.home')" @click="goBack" />
-        <UButton v-else :to="back" icon="i-lucide-arrow-left" color="neutral" variant="soft" size="lg" :label="backLabel ?? t('nav.home')" />
-        <UButton v-if="back !== '/' || props.onBack" to="/" icon="i-lucide-house" color="neutral" variant="ghost" size="lg" :aria-label="t('nav.home')" />
+        <UButton to="/" icon="i-lucide-house" color="neutral" variant="soft" size="lg" :label="t('nav.home')" />
         <span class="ml-auto" />
         <UColorModeButton color="neutral" variant="ghost" size="lg" />
         <UButton icon="i-lucide-x" color="neutral" variant="ghost" size="lg" :aria-label="t('nav.close')" @click="close" />
@@ -91,36 +100,34 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey))
         <div id="drawer-status" class="group__rows" />
       </section>
     </aside>
-  </header>
+  </Teleport>
 </template>
 
 <style scoped>
 .page-header {
-  /* Takes no room: the handle sits in the page's side margin. */
-  height: 0;
+  display: flex;
+  align-items: center;
+  gap: 0.125rem;
+  min-height: 2.25rem;
+  margin: -0.25rem 0 0.5rem -0.5rem;
 }
 
-.handle {
-  position: fixed;
-  z-index: 40;
-  top: calc(env(safe-area-inset-top) + 0.5rem);
-  left: 0;
-  display: grid;
-  place-items: center;
-  width: 1.75rem;
-  height: 2.75rem;
-  border-radius: 0 0.75rem 0.75rem 0;
-  color: var(--ui-text-muted);
-  background: var(--ui-bg-elevated);
-  box-shadow: 0 0 0 1px var(--ui-border) inset;
+.bar-title {
+  min-width: 0;
+  margin-left: 0.375rem;
+  overflow: hidden;
+  font-weight: 600;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
+/* Over the pushed page: a tap there closes the drawer. */
 .scrim {
   position: fixed;
   inset: 0;
   z-index: 50;
-  background: color-mix(in oklab, var(--color-shade) 45%, transparent);
-  animation: scrim-in 200ms var(--ease-out);
+  background: color-mix(in oklab, var(--color-shade) 25%, transparent);
+  animation: scrim-in 260ms var(--ease-out);
 }
 
 @keyframes scrim-in {
@@ -136,7 +143,7 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey))
   display: flex;
   flex-direction: column;
   gap: 1.75rem;
-  width: min(24rem, 85vw);
+  width: var(--drawer-width);
   padding: calc(env(safe-area-inset-top) + 1rem) 1.25rem 1.25rem;
   overflow-y: auto;
   background: var(--ui-bg-elevated);

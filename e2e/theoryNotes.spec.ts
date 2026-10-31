@@ -110,8 +110,7 @@ test('a piece plays inside «Теория», and back returns to the level', asy
   // The level row stays; only the content below is the practice.
   await expect(page.getByRole('button', { name: 'Послушать' })).toBeVisible()
   await expect(page.getByRole('tab', { name: 'Н1' })).toBeVisible()
-  // Back is in the drawer.
-  await page.getByRole('button', { name: /^Меню/ }).click()
+  // Back is in the small header row.
   await page.getByRole('button', { name: 'К уровню' }).click()
   await expect(page).toHaveURL(/\/train\/theory\?section=notes$/)
   await expect(page.getByRole('button', { name: 'Послушать' })).toBeHidden()
