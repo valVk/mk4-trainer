@@ -22,7 +22,7 @@ import { useTimedPresses, type TimedPress } from '@/composables/useTimedPresses'
 import { useWakeLock } from '@/composables/useWakeLock'
 import { EXAM_STARS } from '@/lib/levels'
 import { scaleGroups } from '@/lib/metronome'
-import { scoreRhythm, sounds, type Rhythm, type RhythmScore, type TimingVerdict } from '@/lib/rhythm'
+import { noteMark, scoreRhythm, sounds, type NoteMark, type Rhythm, type RhythmScore } from '@/lib/rhythm'
 import {
   RHYTHM_LEVELS,
   RHYTHM_TEMPOS,
@@ -342,8 +342,8 @@ onBeforeUnmount(() => {
 })
 
 /** Colour of each note after an attempt. */
-const marks = computed<Record<number, TimingVerdict>>(() => Object.fromEntries((score.value?.results ?? []).map((result) => [result.index, result.verdict])))
-const lowerMarks = computed<Record<number, TimingVerdict>>(() => Object.fromEntries((scoreLower.value?.results ?? []).map((result) => [result.index, result.verdict])))
+const marks = computed<Record<number, NoteMark>>(() => Object.fromEntries((score.value?.results ?? []).map((result) => [result.index, noteMark(result)])))
+const lowerMarks = computed<Record<number, NoteMark>>(() => Object.fromEntries((scoreLower.value?.results ?? []).map((result) => [result.index, noteMark(result)])))
 const showNotes = computed(() => kind.value !== 'repeat' || phase.value === 'result')
 /** The countdown before the first note, shown big. */
 const countIn = useCountIn(() => ({

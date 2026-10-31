@@ -5,7 +5,7 @@ import { Accidental, Annotation, AnnotationVerticalJustify, Articulation, Beam, 
 import { paintNote, STAFF_COLOURS, staffContext } from '@/components/staffDrawing'
 
 import { spellBar } from '@/lib/notation'
-import { barQuarters, countLabels, noteQuarters, splitBars, type Duration, type Rhythm, type TimingVerdict } from '@/lib/rhythm'
+import { barQuarters, countLabels, noteQuarters, splitBars, type Duration, type Rhythm, type NoteMark } from '@/lib/rhythm'
 
 // A rhythm on a one-line staff (plan step 16): time signature, bars, beams, rests, dots, ties, triplets.
 // VexFlow draws it with the Bravura music font built into the bundle, so it works offline.
@@ -15,13 +15,13 @@ const props = defineProps<{
   /** Index of the note playing now: drawn in the accent colour. */
   current?: number | null
   /** Result per note index after an attempt. */
-  marks?: Readonly<Record<number, TimingVerdict>>
+  marks?: Readonly<Record<number, NoteMark>>
   /** Drawing scale; bigger where the rhythm is the whole task. */
   scale?: number
   /** A second hand on its own line under the first (Р10, «2 против 3»), same meter and bars. */
   lower?: Rhythm | null
   /** Result per note index of the lower line. */
-  lowerMarks?: Readonly<Record<number, TimingVerdict>>
+  lowerMarks?: Readonly<Record<number, NoteMark>>
   /** The count to press on under every note («1», «и», «4»…), for reading a rhythm. */
   counts?: boolean
 }>()
@@ -41,12 +41,13 @@ const NOTE_ROOM = 0.35
 const LINE_KEY = 'b/4'
 const ONLY_MIDDLE_LINE = [false, false, true, false, false].map((visible) => ({ visible }))
 
-function colourOf(index: number, marks: Readonly<Record<number, TimingVerdict>> | undefined, current: number | null | undefined): string | null {
+function colourOf(index: number, marks: Readonly<Record<number, NoteMark>> | undefined, current: number | null | undefined): string | null {
   if (current === index) return STAFF_COLOURS.current
   const mark = marks?.[index]
   if (mark === 'onTime') return STAFF_COLOURS.onTime
   if (mark === 'early' || mark === 'late') return STAFF_COLOURS.off
   if (mark === 'missed') return STAFF_COLOURS.missed
+  if (mark === 'short') return STAFF_COLOURS.short
   return null
 }
 
@@ -55,7 +56,7 @@ const LINE_GAP = 70
 
 interface Line {
   rhythm: Rhythm
-  marks?: Readonly<Record<number, TimingVerdict>>
+  marks?: Readonly<Record<number, NoteMark>>
   current?: number | null
 }
 

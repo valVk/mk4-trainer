@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
-import { barQuarters, fillsBars, scoreRhythm, sounds, splitBars, totalQuarters, type RhythmPress } from '@/lib/rhythm'
+import { barQuarters, fillsBars, noteMark, scoreRhythm, sounds, splitBars, totalQuarters, type RhythmPress } from '@/lib/rhythm'
 import {
   PASSES_PER_TEMPO,
   RHYTHM_LEVELS,
@@ -116,6 +116,12 @@ describe('passing and hints', () => {
     expect(hintsFor(score)).toContain('holdLonger')
     // Pads have no length: the same taps pass.
     expect(passes(scoreRhythm(quarters, [press(0, 0.05), press(1, 0.05), press(2, 0.05), press(3, 0.05)], false))).toBe(true)
+  })
+
+  it('shows notes let go too soon on the staff, and says so first', () => {
+    const score = scoreRhythm(quarters, [press(0, 0.05), press(1), press(2), press(3)])
+    expect(score.results.map(noteMark)).toEqual(['short', 'onTime', 'onTime', 'onTime'])
+    expect(hintsFor(score)[0]).toBe('holdLonger')
   })
 
   it('tells a hurrying child to wait for the click', () => {

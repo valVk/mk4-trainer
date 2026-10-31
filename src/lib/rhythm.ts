@@ -173,6 +173,18 @@ export interface RhythmPress {
 }
 
 export type TimingVerdict = 'onTime' | 'early' | 'late' | 'missed'
+
+/** How a note is shown after an attempt: its timing, or `short` when it was played but let go too soon. */
+export type NoteMark = TimingVerdict | 'short'
+
+/**
+ * A note's mark on the staff: missed first, then let go too soon (it is shown, so «all green» never hides why an
+ * attempt did not pass), then its timing.
+ */
+export function noteMark(result: { verdict: TimingVerdict, hold: HoldVerdict | null }): NoteMark {
+  if (result.verdict !== 'missed' && result.hold === 'short') return 'short'
+  return result.verdict
+}
 export type HoldVerdict = 'ok' | 'short' | 'long'
 
 export interface SoundResult {

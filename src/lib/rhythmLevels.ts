@@ -226,12 +226,13 @@ export function hintsFor(score: RhythmScore, rhythm?: Rhythm): RhythmHint[] {
   const results = score.results
   if (results.some((result) => result.verdict === 'missed')) hints.push('missed')
   if (score.extra > 0) hints.push('extra')
+  // Let go too soon before timing: the red notes say why, even when the time was right.
+  if (results.some((result) => result.verdict !== 'missed' && result.hold === 'short')) hints.push('holdLonger')
   const early = results.filter((result) => result.verdict === 'early').length
   const late = results.filter((result) => result.verdict === 'late').length
   if (early > late) hints.push('rushing')
   else if (late > early) hints.push('dragging')
-  if (results.some((result) => result.hold === 'short')) hints.push('holdLonger')
-  else if (results.some((result) => result.hold === 'long')) hints.push('letGo')
+  if (!hints.includes('holdLonger') && results.some((result) => result.hold === 'long')) hints.push('letGo')
   if (rhythm && accentsPlayed(score, rhythm) === false) hints.push('accent')
   return hints.length ? hints.slice(0, 2) : ['great']
 }

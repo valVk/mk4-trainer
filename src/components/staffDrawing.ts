@@ -28,6 +28,8 @@ export const STAFF_COLOURS = {
   onTime: 'var(--color-correct)',
   off: 'var(--color-attention)',
   missed: 'var(--color-wrong)',
+  /** Played but let go too soon: red, as in the waterfall. */
+  short: 'var(--color-wrong)',
 } as const
 
 /**

@@ -13,7 +13,7 @@ import { useRhythmPlayer } from '@/composables/useRhythmPlayer'
 import { useShortScreen } from '@/composables/useShortScreen'
 import { useTimedPresses } from '@/composables/useTimedPresses'
 import { makeMelody, readMarks, readingPasses, type NoteLevel, type ReadMark } from '@/lib/noteLevels'
-import { scoreRhythm, sounds, type Rhythm, type RhythmScore, type TimingVerdict } from '@/lib/rhythm'
+import { scoreRhythm, sounds, type NoteMark, type Rhythm, type RhythmScore, type TimingVerdict } from '@/lib/rhythm'
 import { octaveShift } from '@/lib/staff'
 
 // «Теория» → «Ноты», «Читаем с ритмом» (plan step 19): a short melody on the staff, read in rhythm with the
@@ -112,7 +112,7 @@ onBeforeUnmount(() => {
 
 const marks = computed(() => (score.value ? readMarks(melody.value, score.value) : {}))
 /** The staff colours: green, yellow, red. */
-const COLOUR_OF: Record<ReadMark, TimingVerdict> = { right: 'onTime', off: 'late', wrongKey: 'missed', missed: 'missed' }
+const COLOUR_OF: Record<ReadMark, NoteMark> = { right: 'onTime', off: 'late', short: 'short', wrongKey: 'missed', missed: 'missed' }
 const staffMarks = computed(() => Object.fromEntries(Object.entries(marks.value).map(([index, mark]) => [index, COLOUR_OF[mark]])))
 
 /** While playing, a note turns green as soon as its key is pressed near its time (owner's rule); the full result comes after. */
@@ -128,13 +128,14 @@ watch(heldNotes, (held, before) => {
     if (nearest && Math.abs(nearest.start - now) <= LIVE_WINDOW_S && nearest.key === key) liveRight.value = { ...liveRight.value, [nearest.index]: 'onTime' }
   }
 })
-/** What to fix first: a wrong key, then a note not played, then the time. */
+/** What to fix first: a wrong key, then a note not played, then a note let go too soon, then the time. */
 const advice = computed(() => {
   const all = Object.values(marks.value)
   if (passed.value) return t('theory.notes.reading.passed')
   if (timed.presses().length === 0) return t('theory.hints.noTaps')
   if (all.includes('wrongKey')) return t('theory.notes.reading.wrongKey')
   if (all.includes('missed')) return t('theory.notes.reading.missed')
+  if (all.includes('short')) return t('theory.notes.reading.short')
   return t('theory.notes.reading.time')
 })
 const shiftNeeded = computed(() => Math.max(...melody.value.notes.map((note) => (note.key === undefined ? 0 : Math.abs(octaveShift(note.key, windowStart.value))))))

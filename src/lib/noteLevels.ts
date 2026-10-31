@@ -399,13 +399,13 @@ export function makeMelody(level: NoteLevel, random: () => number = Math.random)
   return { ...rhythm, notes: rhythm.notes.map((note, i) => (keyAt.has(i) ? { ...note, key: keyAt.get(i)! } : note)) }
 }
 
-export type ReadMark = 'right' | 'wrongKey' | 'off' | 'missed'
+export type ReadMark = 'right' | 'wrongKey' | 'off' | 'short' | 'missed'
 
 /** Each note after an attempt: the right key on time, the right key off time, a wrong key, or not played. */
 export function readMarks(melody: Rhythm, score: RhythmScore): Record<number, ReadMark> {
   return Object.fromEntries(score.results.map((result) => {
     const want = melody.notes[result.index]?.key
-    const mark: ReadMark = result.verdict === 'missed' ? 'missed' : result.key !== want ? 'wrongKey' : result.verdict === 'onTime' ? 'right' : 'off'
+    const mark: ReadMark = result.verdict === 'missed' ? 'missed' : result.key !== want ? 'wrongKey' : result.hold === 'short' ? 'short' : result.verdict === 'onTime' ? 'right' : 'off'
     return [result.index, mark]
   }))
 }
