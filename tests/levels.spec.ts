@@ -4,11 +4,13 @@ import {
   LEVELS,
   PROGRESSIONS,
   STAR_THRESHOLDS,
-  STREAK_TO_FADE,
   checkTask,
+  formulaSteps,
   generateTask,
   getLevel,
-  hintStage,
+  isCleanChord,
+  isExam,
+  isLevelOpen,
   progressionTask,
   startLevel,
   starsFor,
@@ -152,13 +154,26 @@ describe('checkTask', () => {
 })
 
 describe('hints and stars', () => {
-  it('fades hints after a streak of correct answers', () => {
-    expect(hintStage(2, 0)).toBe('namesHighlight')
-    expect(hintStage(2, STREAK_TO_FADE - 1)).toBe('namesHighlight')
-    expect(hintStage(2, STREAK_TO_FADE)).toBe('highlight')
-    expect(hintStage(2, 100)).toBe('highlight')
-    expect(hintStage(3, STREAK_TO_FADE)).toBe('none')
-    expect(hintStage(4, 100)).toBe('formula')
+  it('starts the exam at two stars and opens levels in order', () => {
+    expect(isExam(STAR_THRESHOLDS[1] - 1)).toBe(false)
+    expect(isExam(STAR_THRESHOLDS[1])).toBe(true)
+    expect(isLevelOpen(1, () => 0)).toBe(true)
+    expect(isLevelOpen(2, () => STAR_THRESHOLDS[1])).toBe(false)
+    expect(isLevelOpen(2, () => STAR_THRESHOLDS[2])).toBe(true)
+  })
+
+  it('gives the formula as steps between the notes', () => {
+    expect(formulaSteps('maj')).toEqual([4, 3])
+    expect(formulaSteps('min')).toEqual([3, 4])
+    expect(formulaSteps('dim')).toEqual([3, 3])
+    expect(formulaSteps('7')).toEqual([4, 3, 3])
+  })
+
+  it('takes fingers landing together as a chord, one by one as not', () => {
+    expect(isCleanChord([1000, 1040, 1090])).toBe(true)
+    expect(isCleanChord([1000, 1150])).toBe(true)
+    expect(isCleanChord([1000, 1300, 1600])).toBe(false)
+    expect(isCleanChord([1000])).toBe(true)
   })
 
   it('gives stars at the thresholds', () => {

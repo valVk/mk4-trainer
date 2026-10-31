@@ -48,3 +48,19 @@ export async function storedSetting(page: Page, key: string): Promise<unknown> {
     }
   }), key)
 }
+
+/** Saves a setting for the first player the way the app does (its database row), to start a test from a known place. */
+export async function storeSetting(page: Page, key: string, value: unknown): Promise<void> {
+  await page.evaluate(({ key: wanted, value: next }) => new Promise<void>((resolve) => {
+    const request = indexedDB.open('chord-trainer')
+    request.onsuccess = () => {
+      const transaction = request.result.transaction(['profile', 'setting'], 'readwrite')
+      const profiles = transaction.objectStore('profile').getAll()
+      profiles.onsuccess = () => {
+        const profileId = (profiles.result as { id: number }[])[0]!.id
+        transaction.objectStore('setting').put({ profileId, key: wanted, value: next })
+      }
+      transaction.oncomplete = () => resolve()
+    }
+  }), { key, value })
+}

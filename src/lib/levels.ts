@@ -35,9 +35,6 @@ export type Task =
   /** `root` is the key (major). */
   | { kind: 'progression', root: PitchClass, progression: ProgressionId, steps: ProgressionStep[] }
 
-/** What the keyboard shows to help. Each level fades from its first stage to its last. */
-export type HintStage = 'names' | 'namesHighlight' | 'highlight' | 'formula' | 'none'
-
 export interface Level {
   id: number
   kind: Task['kind']
@@ -45,27 +42,24 @@ export interface Level {
   types: readonly ChordType[]
   /** Ask for a specific inversion. */
   inversions: boolean
-  stages: readonly HintStage[]
 }
 
 const WHITE_ROOTS: readonly PitchClass[] = [0, 2, 4, 5, 7, 9, 11]
 const ALL_ROOTS: readonly PitchClass[] = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11]
 const MAJOR_MINOR: readonly ChordType[] = ['maj', 'min']
 
-// Plan 5.1: from single notes up to progressions; hints fade within each level.
+// Plan 5.1: from single notes up to progressions. Help is a switch (plan step 28), not a fade: on until the exam.
 export const LEVELS: readonly Level[] = [
-  { id: 1, kind: 'note', roots: WHITE_ROOTS, types: [], inversions: false, stages: ['names', 'none'] },
-  { id: 2, kind: 'chord', roots: WHITE_ROOTS, types: MAJOR_MINOR, inversions: false, stages: ['namesHighlight', 'highlight'] },
-  { id: 3, kind: 'chord', roots: ALL_ROOTS, types: MAJOR_MINOR, inversions: false, stages: ['highlight', 'none'] },
-  { id: 4, kind: 'chord', roots: ALL_ROOTS, types: MAJOR_MINOR, inversions: false, stages: ['formula'] },
-  { id: 5, kind: 'chord', roots: ALL_ROOTS, types: MAJOR_MINOR, inversions: true, stages: ['highlight', 'none'] },
-  { id: 6, kind: 'chord', roots: ALL_ROOTS, types: ['dim', 'aug', 'sus2', 'sus4'], inversions: false, stages: ['none'] },
-  { id: 7, kind: 'chord', roots: ALL_ROOTS, types: ['7', 'maj7', 'm7'], inversions: false, stages: ['none'] },
-  { id: 8, kind: 'progression', roots: WHITE_ROOTS, types: [], inversions: false, stages: ['none'] },
+  { id: 1, kind: 'note', roots: WHITE_ROOTS, types: [], inversions: false },
+  { id: 2, kind: 'chord', roots: WHITE_ROOTS, types: MAJOR_MINOR, inversions: false },
+  { id: 3, kind: 'chord', roots: ALL_ROOTS, types: MAJOR_MINOR, inversions: false },
+  { id: 4, kind: 'chord', roots: ALL_ROOTS, types: MAJOR_MINOR, inversions: false },
+  { id: 5, kind: 'chord', roots: ALL_ROOTS, types: MAJOR_MINOR, inversions: true },
+  { id: 6, kind: 'chord', roots: ALL_ROOTS, types: ['dim', 'aug', 'sus2', 'sus4'], inversions: false },
+  { id: 7, kind: 'chord', roots: ALL_ROOTS, types: ['7', 'maj7', 'm7'], inversions: false },
+  { id: 8, kind: 'progression', roots: WHITE_ROOTS, types: [], inversions: false },
 ]
 
-/** Correct answers in a row before the next, weaker hint stage. */
-export const STREAK_TO_FADE = 3
 /** Correct answers in a level for 1, 2 and 3 stars. */
 export const STAR_THRESHOLDS = [5, 10, 20] as const
 
@@ -154,11 +148,34 @@ export function checkTask(task: Task, held: readonly number[], step = 0): TaskCh
   return { status: 'correct', missing, extra }
 }
 
-/** Current hint stage: one step weaker for every STREAK_TO_FADE correct answers in a row. */
-export function hintStage(levelId: number, streak: number): HintStage {
-  const { stages } = getLevel(levelId)
-  const index = Math.min(stages.length - 1, Math.floor(streak / STREAK_TO_FADE))
-  return stages[index] as HintStage
+/** Stars at which a level's exam starts: the last phase, no help, and only clean chords count (plan step 28). */
+export const EXAM_STARS = 2
+
+export function isExam(correct: number): boolean {
+  return starsFor(correct) >= EXAM_STARS
+}
+
+/** Levels open in order: the next one only after the exam of the one before (all its stars). */
+export function isLevelOpen(id: number, correctIn: (level: number) => number): boolean {
+  return id <= 1 || starsFor(correctIn(id - 1)) >= STAR_THRESHOLDS.length
+}
+
+/** The semitones between a chord's notes, bottom up: major 4 + 3, minor 3 + 4, a seventh chord three steps. */
+export function formulaSteps(type: ChordType): number[] {
+  const formula = CHORD_FORMULAS[type]
+  return formula.slice(1).map((value, i) => value - formula[i]!)
+}
+
+/**
+ * Fingers land one by one over a moment, but a chord still sounds as one: all its keys down within this spread.
+ * Slower than that is keys played one after another (a broken chord), not a chord.
+ */
+export const CLEAN_SPREAD_MS = 150
+
+/** Whether the keys of a chord went down together: `downAt` the times (ms) its keys were pressed. */
+export function isCleanChord(downAt: readonly number[]): boolean {
+  if (downAt.length < 2) return true
+  return Math.max(...downAt) - Math.min(...downAt) <= CLEAN_SPREAD_MS
 }
 
 export function starsFor(correct: number): number {

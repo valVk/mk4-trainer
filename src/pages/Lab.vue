@@ -123,6 +123,8 @@ const rangeLabel = computed(() => `${midiName(start.value)} – ${midiName(start
       <PianoKeyboard
         :start="start"
         :held="heldNotes"
+        show-names
+        context-names
         show-intervals
         @press="pressNote"
         @release="releaseNote"

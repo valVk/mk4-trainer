@@ -16,14 +16,14 @@ import { useProgress } from '@/composables/useProgress'
 import { SETTLE_MS, useSettled } from '@/composables/useSettled'
 import { useSynth } from '@/composables/useSynth'
 import { useWakeLock } from '@/composables/useWakeLock'
-import { LEVELS, STAR_THRESHOLDS, checkTask, generateTask, hintStage, starsFor, taskId, taskNotes, type Task } from '@/lib/levels'
+import { LEVELS, STAR_THRESHOLDS, checkTask, formulaSteps, generateTask, isCleanChord, isExam, isLevelOpen, starsFor, taskId, taskNotes, type Task } from '@/lib/levels'
 import { midiName, noteName, pitchClass } from '@/lib/theory'
 
 const NEXT_DELAY_MS = 700
 
 const { t } = useI18n()
 useWakeLock()
-const { heldNotes, pressNote, releaseNote } = useNoteSource()
+const { heldNotes, pressNote, releaseNote, onEvent } = useNoteSource()
 const { status: soundStatus, playChord, playCue } = useSynth()
 const { localName, withLocal } = useNoteNames()
 const progress = useProgress()
@@ -55,12 +55,28 @@ const check = computed(() => checkTask(task.value, heldNotes.value, step.value))
 // placed key by key does not flash warnings on the way.
 const settledHeld = useSettled(heldNotes, (next) => (next.length === 0 ? 0 : SETTLE_MS))
 const settledCheck = computed(() => checkTask(task.value, settledHeld.value, step.value))
-const stage = computed(() => hintStage(level.value, streak.value))
+/**
+ * Help (plan step 28) is a switch, not a fade: «С подсказкой» lights the chord's keys and shows its formula and
+ * the semitones between the pressed keys. The last phase of a level is its exam: no help at all, and a chord counts
+ * only when it sounds as a chord (its keys down together, none extra).
+ */
+const exam = computed(() => isExam(correctIn(level.value)))
+const guideOn = computed(() => progress.chordsGuide.value && !exam.value)
+/** When each held key went down: the exam asks the chord's keys to land together. */
+const downAt = new Map<number, number>()
+onEvent((event) => {
+  if (event.type === 'noteOn') downAt.set(event.note, performance.now())
+  else if (event.type === 'noteOff') downAt.delete(event.note)
+})
+/** An exam chord played key by key: said once, then the keys go up and it is tried again. */
+const notTogether = ref(false)
+watch(() => heldNotes.value.length, (count) => {
+  if (count === 0) notTogether.value = false
+})
 const target = computed(() => taskNotes(task.value, start.value, step.value))
 const progression = computed(() => (task.value.kind === 'progression' ? task.value : null))
 
-const showHighlight = computed(() => hintRequested.value || stage.value === 'highlight' || stage.value === 'namesHighlight')
-const showNames = computed(() => hintRequested.value || stage.value === 'names' || stage.value === 'namesHighlight')
+const showHighlight = computed(() => guideOn.value || hintRequested.value)
 const stars = computed(() => starsFor(correctIn(level.value)))
 
 let nextTimer: ReturnType<typeof setTimeout> | undefined
@@ -77,7 +93,11 @@ function nextTask() {
 
 // Checked on every press and release: letting go of an extra note can solve the task.
 watch(() => check.value.status, (status) => {
-  if (status !== 'correct' || solved.value) return
+  if (status !== 'correct' || solved.value || notTogether.value) return
+  if (exam.value && task.value.kind !== 'note' && !isCleanChord(heldNotes.value.map((note) => downAt.get(note) ?? 0))) {
+    notTogether.value = true
+    return
+  }
   const steps = progression.value?.steps.length ?? 1
   if (step.value < steps - 1) {
     stepDoneWith.value = heldKey.value
@@ -87,13 +107,12 @@ watch(() => check.value.status, (status) => {
   }
   solved.value = true
   const before = correctIn(level.value)
-  // A task solved with the hint button still counts, but does not fade the hints.
   if (!hintRequested.value) streak.value++
   void progress.record({
     level: level.value,
     task: taskId(task.value, noteName),
     correct: true,
-    usedHint: hintRequested.value,
+    usedHint: hintRequested.value || guideOn.value,
     ms: performance.now() - shownAt,
     played: heldNotes.value,
     streak: streak.value,
@@ -172,7 +191,7 @@ function listen() {
 
 function changeLevel(step: number) {
   const next = level.value + step
-  if (LEVELS.some((item) => item.id === next)) level.value = next
+  if (LEVELS.some((item) => item.id === next) && isLevelOpen(next, correctIn)) level.value = next
 }
 
 // MK4 pads (or keys 1-8): play without touching the screen.
@@ -185,7 +204,7 @@ usePadActions({
     if (soundStatus.value === 'ready') listen()
   },
   hint: () => {
-    if (!solved.value) hintRequested.value = true
+    if (!solved.value && !guideOn.value && !exam.value) hintRequested.value = true
   },
   skip: () => {
     if (levelDone.value === null && !solved.value) skip()
@@ -207,16 +226,18 @@ const prompt = computed(() => {
   return t('train.playInversion', { chord, inversion: t(`train.inversion.${current.inversion}`) })
 })
 
+/** «Мажор = 4 + 3»: the chord's steps in semitones, while the help is on. */
 const formula = computed(() => {
   const current = task.value
-  const isTriad = current.kind === 'chord' && (current.type === 'maj' || current.type === 'min')
-  return isTriad && stage.value === 'formula' ? t(`train.formula.${current.type}`) : null
+  if (current.kind !== 'chord' || !guideOn.value) return null
+  return t('train.formulaOf', { name: t(`train.formula.${current.type}`), steps: formulaSteps(current.type).join(' + ') })
 })
 
 const names = (pcs: readonly number[]) => pcs.map((pc) => noteName(pc)).join(', ')
 
 const feedback = computed(() => {
   if (solved.value) return { tone: 'success' as const, text: t('train.correct') }
+  if (notTogether.value) return { tone: 'warning' as const, text: t('train.notTogether') }
   if (stepDoneWith.value !== null && stepDoneWith.value === heldKey.value) {
     return { tone: 'success' as const, text: t('train.stepDone') }
   }
@@ -241,7 +262,8 @@ const feedback = computed(() => {
   return { tone: 'warning' as const, text: t('train.wrong', { notes: names(extra) }) }
 })
 
-const levelItems = computed(() => LEVELS.map((item) => ({ label: String(item.id), value: item.id })))
+// Levels open in order: the next one after the exam of this one.
+const levelItems = computed(() => LEVELS.map((item) => ({ label: String(item.id), value: item.id, disabled: !isLevelOpen(item.id, correctIn) })))
 </script>
 
 <template>
@@ -252,13 +274,21 @@ const levelItems = computed(() => LEVELS.map((item) => ({ label: String(item.id)
       <OctaveMapButton :window-start="start" show-on-shift />
     </Teleport>
     <Teleport defer to="#page-actions">
+      <!-- A grown-up turns the help off when the student is ready; the exam turns it off by itself. -->
+      <USwitch
+        :model-value="guideOn"
+        :disabled="exam"
+        size="lg"
+        :label="exam ? t('train.guideExam') : t('train.guide')"
+        @update:model-value="progress.setChordsGuide($event)"
+      />
       <SoundControl />
     </Teleport>
     <Teleport defer to="#drawer-status">
       <MidiStatus />
     </Teleport>
 
-    <div class="flex flex-wrap items-center justify-between gap-4 mt-6">
+    <div class="flex flex-wrap items-center justify-between gap-4 mt-2">
       <div class="levels">
         <span class="text-muted">{{ t('train.levelLabel') }}</span>
         <UTabs v-model="level" :items="levelItems" :content="false" size="lg" :ui="{ trigger: 'min-w-11 justify-center' }">
@@ -276,6 +306,10 @@ const levelItems = computed(() => LEVELS.map((item) => ({ label: String(item.id)
             class="size-7 star"
             :class="{ 'star--on': i <= stars }"
           />
+        </span>
+        <span v-if="exam" class="exam">
+          <UIcon name="i-lucide-graduation-cap" class="size-5" />
+          {{ t('train.exam') }}
         </span>
         <span class="text-muted tabular-nums">{{ t('train.streak', { n: streak }) }}</span>
       </div>
@@ -318,7 +352,7 @@ const levelItems = computed(() => LEVELS.map((item) => ({ label: String(item.id)
       </p>
       <div class="flex flex-wrap gap-3">
         <UButton
-          v-if="!solved"
+          v-if="!solved && !guideOn && !exam"
           icon="i-lucide-lightbulb"
           color="neutral"
           variant="soft"
@@ -375,8 +409,9 @@ const levelItems = computed(() => LEVELS.map((item) => ({ label: String(item.id)
       :start="start"
       :held="heldNotes"
       :hint="showHighlight && !solved ? target : []"
-      :show-names="showNames"
-      :show-intervals="stage === 'formula'"
+      show-names
+      context-names
+      :show-intervals="guideOn"
       @press="pressNote"
       @release="releaseNote"
     />
@@ -384,6 +419,18 @@ const levelItems = computed(() => LEVELS.map((item) => ({ label: String(item.id)
 </template>
 
 <style scoped>
+/* The exam: calm, but clearly another phase. */
+.exam {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.375rem;
+  padding: 0.25rem 0.75rem;
+  border-radius: 999px;
+  font-weight: 600;
+  color: var(--color-attention);
+  box-shadow: 0 0 0 var(--ring-width) var(--color-attention) inset;
+}
+
 /* Takes the task's place while open, so the keyboard stays on screen */
 .level-done {
   align-items: center;

@@ -46,6 +46,7 @@ const TRAIN_LEVEL_KEY = 'trainLevel'
 /** Song practice view the child chose last: falling notes, staff or both. */
 const SONG_VIEW_KEY = 'songView'
 const LAST_PLACE_KEY = 'lastPlace'
+const CHORDS_GUIDE_KEY = 'chordsGuide'
 /** «Теория» → «Ритм»: passed rhythms per level. */
 const RHYTHM_KEY = 'theoryRhythm'
 /** «Теория» → «Ритм»: tries and misses by kind of note, for the weak spots. */
@@ -75,6 +76,8 @@ const trainLevel = ref<number | null>(null)
 const songView = ref<SongView>('fall')
 /** Where «Продолжить» on Home leads (plan step 27). */
 const lastPlace = ref<LastPlace | null>(null)
+/** «С подсказкой» in chord training (plan step 28): on until a grown-up turns it off; the exam turns it off anyway. */
+const chordsGuide = ref(true)
 const rhythmProgress = ref<Record<number, RhythmLevelProgress>>({})
 const rhythmWeak = ref<Partial<Record<RhythmKind, KindStats>>>({})
 const mk4Panel = ref<PanelSettings>({ learnt: {}, actions: {} })
@@ -145,6 +148,7 @@ async function loadProfileData(database: TrainerDb, current: Profile): Promise<v
   trainLevel.value = startLevel(level, (id) => levels.value[id]?.correct ?? 0)
   songView.value = parseSongView(await getSetting<unknown>(database, current.id, SONG_VIEW_KEY))
   lastPlace.value = parseLastPlace(await getSetting<unknown>(database, current.id, LAST_PLACE_KEY))
+  chordsGuide.value = (await getSetting<unknown>(database, current.id, CHORDS_GUIDE_KEY)) !== false
   rhythmProgress.value = parseRhythmProgress(await getSetting<unknown>(database, current.id, RHYTHM_KEY))
   rhythmWeak.value = parseKindStats(await getSetting<unknown>(database, current.id, RHYTHM_WEAK_KEY))
   mk4Panel.value = parsePanelSettings(await getSetting<unknown>(database, current.id, MK4_PANEL_KEY))
@@ -300,6 +304,13 @@ async function setSongView(view: SongView): Promise<void> {
   await safely((database) => setSetting(database, profileId, SONG_VIEW_KEY, view))
 }
 
+async function setChordsGuide(on: boolean): Promise<void> {
+  chordsGuide.value = on
+  const profileId = profile.value?.id
+  if (profileId === undefined) return
+  await safely((database) => setSetting(database, profileId, CHORDS_GUIDE_KEY, on))
+}
+
 async function setLastPlace(place: LastPlace): Promise<void> {
   if (lastPlace.value?.path === place.path && lastPlace.value.label === place.label) return
   lastPlace.value = place
@@ -446,6 +457,7 @@ export function useProgress() {
     trainLevel: readonly(trainLevel),
     songView: readonly(songView),
     lastPlace: readonly(lastPlace),
+    chordsGuide: readonly(chordsGuide),
     rhythmProgress: readonly(rhythmProgress),
     rhythmWeak: readonly(rhythmWeak),
     noteProgress: readonly(noteProgress),
@@ -457,6 +469,7 @@ export function useProgress() {
     setTrainLevel,
     setSongView,
     setLastPlace,
+    setChordsGuide,
     addRhythmPass,
     addRhythmStats,
     addNoteCorrect,

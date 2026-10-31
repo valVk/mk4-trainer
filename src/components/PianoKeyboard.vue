@@ -3,6 +3,7 @@ import { computed, onBeforeUnmount } from 'vue'
 
 import { useNoteNames } from '@/composables/useNoteNames'
 import { KEYBOARD_KEYS, keyboardKeys } from '@/lib/keyboard'
+import { blackKeyNames } from '@/lib/keyNames'
 import { intervalsBetween, midiName, noteName } from '@/lib/theory'
 
 // The MK4 on screen: 25 keys, held notes lit, playable with fingers (multi-touch and slides).
@@ -14,12 +15,15 @@ const props = withDefaults(defineProps<{
   /** A key to start from (a step task): a dot on it, not a hint. */
   mark?: number | null
   showNames?: boolean
+  /** Black keys named only from the pressed keys around them (G pressed: G♯ above, G♭ below), as in chords. */
+  contextNames?: boolean
   showIntervals?: boolean
 }>(), {
   held: () => [],
   hint: () => [],
   mark: null,
   showNames: false,
+  contextNames: false,
   showIntervals: false,
 })
 
@@ -50,6 +54,7 @@ const gaps = computed(() => {
 })
 
 const heldSet = computed(() => new Set(props.held))
+const contextBlack = computed(() => blackKeyNames(props.held))
 const hintSet = computed(() => new Set(props.hint))
 
 // Each finger plays one note; sliding to another key moves that finger's note.
@@ -141,7 +146,10 @@ onBeforeUnmount(() => {
           :data-note="key.note"
         >
           <span v-if="key.note === mark" class="key__mark" aria-hidden="true" />
-          <span v-if="showNames" class="key__name key__name--black">
+          <span v-if="showNames && contextNames && contextBlack.has(key.note)" class="key__name key__name--black key__name--context">
+            <span v-for="name in contextBlack.get(key.note)" :key="name">{{ name }}</span>
+          </span>
+          <span v-else-if="showNames && !contextNames" class="key__name key__name--black">
             {{ noteName(key.note) }}
             <span v-if="localName(key.note, true)" class="key__local">{{ localName(key.note, true) }}</span>
           </span>
@@ -290,6 +298,17 @@ onBeforeUnmount(() => {
   margin-bottom: 0.5rem;
   font-size: 0.6875rem;
   color: var(--key-label-outside);
+}
+
+/* Named from a pressed neighbour: both names stacked when it has two, bright enough to read on black. */
+.key__name--context {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.125rem;
+  font-size: 0.8125rem;
+  font-weight: 700;
+  color: var(--key-white);
 }
 
 @media (prefers-reduced-motion: reduce) {
