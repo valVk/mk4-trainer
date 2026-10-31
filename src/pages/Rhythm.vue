@@ -7,6 +7,7 @@ import RhythmStaff from '@/components/RhythmStaff.vue'
 import { useLastPlace } from '@/composables/useLastPlace'
 import { useMetronome } from '@/composables/useMetronome'
 import { useMk4Actions } from '@/composables/useMk4Actions'
+import { useProgress } from '@/composables/useProgress'
 import { usePadActions } from '@/composables/usePadActions'
 import { useRhythmPlayer } from '@/composables/useRhythmPlayer'
 import { useWakeLock } from '@/composables/useWakeLock'
@@ -20,6 +21,9 @@ const { t, tm, rt } = useI18n()
 useLastPlace(() => t('rhythm.title'))
 useWakeLock()
 const metronome = useMetronome()
+// The app's «С подсказкой» (plan step 29): the example rhythm shows its counts and the note being played. Nothing
+// here is scored, so there is no exam.
+const progress = useProgress()
 const { settings, running, beat, beatCount, countingIn, calibrating, calibrationTaps, calibrationCountdown, calibrationResult, latency, latencyHistories } = metronome
 
 usePadActions({
@@ -120,6 +124,9 @@ function listenExample() {
 <template>
   <main class="page page--fill rhythm">
     <PageHeader :title="t('rhythm.title')" />
+    <Teleport defer to="#page-actions">
+      <USwitch :model-value="progress.guide.value" size="lg" :label="t('train.guide')" @update:model-value="progress.setGuide($event)" />
+    </Teleport>
 
     <div class="layout">
       <div class="main-col">
@@ -204,7 +211,7 @@ function listenExample() {
           <UTabs v-model="sideTab" :items="sideTabs" :content="false" size="lg" />
         </template>
         <div v-if="sideTab === 'rhythms'" class="flex flex-col gap-4">
-          <RhythmStaff :rhythm="example" :current="rhythmPlayer.current.value" />
+          <RhythmStaff :rhythm="example" :counts="progress.guide.value" :current="progress.guide.value ? rhythmPlayer.current.value : null" />
           <div class="flex flex-wrap gap-2" role="group" :aria-label="t('rhythm.valuesLabel')">
             <UButton
               v-for="value in DURATIONS"
