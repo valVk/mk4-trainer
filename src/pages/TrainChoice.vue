@@ -25,7 +25,7 @@ const sample: Rhythm = { meter: { numerator: 4, denominator: 4 }, notes: [{ dura
 const chordLevel = computed(() => progress.trainLevel.value ?? 1)
 const chordStars = computed(() => starsFor(progress.levels.value[chordLevel.value]?.correct ?? 0))
 const rhythmLevel = computed(() => currentLevel(progress.rhythmProgress.value))
-const rhythmStars = computed(() => starsOf(progress.rhythmProgress.value[rhythmLevel.value]?.passes ?? 0))
+const rhythmStars = computed(() => starsOf(progress.rhythmProgress.value, rhythmLevel.value))
 </script>
 
 <template>

@@ -15,6 +15,7 @@ import NoteReading from '@/pages/theory/NoteReading.vue'
 import SongPractice from '@/pages/SongPractice.vue'
 import PianoKeyboard from '@/components/PianoKeyboard.vue'
 import PianoMap from '@/components/PianoMap.vue'
+import SkillPicker from '@/components/SkillPicker.vue'
 import StarRating from '@/components/StarRating.vue'
 import { STAFF_COLOURS } from '@/components/staffDrawing'
 import { useCleanChord } from '@/composables/useCleanChord'
@@ -509,6 +510,8 @@ const INTRO_NOTES: Partial<Record<NoteIntroId, { show: 'treble' | 'bass' | 'gran
     <ExamBadge v-if="exam && !reading" />
     <!-- The app's help switch, in the drawer; a level's exam turns it off. -->
     <HelpSwitch :on="guideOn" :exam="exam" />
+    <!-- Reading in rhythm is judged in time: how strictly. -->
+    <SkillPicker v-if="reading" />
     <!-- Where the keys are, in the row. The octave moves with the MK4's Octave buttons or Z and X (owner's choice). -->
     <span v-if="keysShown && !reading" class="hands">
       <span class="hands__label text-toned">{{ t('theory.notes.underHands', { octaves: underHands }) }}</span>

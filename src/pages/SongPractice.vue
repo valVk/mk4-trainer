@@ -13,6 +13,7 @@ import PageHeader from '@/components/PageHeader.vue'
 import PianoKeyboard from '@/components/PianoKeyboard.vue'
 import ResultCard from '@/components/ResultCard.vue'
 import RungLadder from '@/components/RungLadder.vue'
+import SkillPicker from '@/components/SkillPicker.vue'
 import SongStaff from '@/components/SongStaff.vue'
 import SoundControl from '@/components/SoundControl.vue'
 import UnitList from '@/components/UnitList.vue'
@@ -446,6 +447,7 @@ async function finishAttempt() {
     anyOctave: anyOctave.value,
     // A drum hit or a pad has no length: only keys are held.
     checkHold: !part.value?.isDrum && !onPads.value,
+    tolerance: progress.tolerance.value,
   })
   result.value = attempt
   const current = unit.value
@@ -759,6 +761,8 @@ const nextLabel = computed(() => {
     <Teleport defer to="#page-actions">
       <USwitch v-model="guided" size="lg" :label="t('songs.guided')" />
       <HelpSwitch :on="guideOn" :exam="exam" in-place />
+      <!-- Inside «Теория» that screen has its own. -->
+      <SkillPicker v-if="!embedded" in-place />
       <USwitch v-if="!onPads" v-model="anyOctave" size="lg" :label="t('songs.anyOctave')" />
       <!-- Tips open on tap: tooltips never show on a touch screen. -->
       <UPopover :content="{ side: 'bottom', align: 'end' }">
@@ -889,7 +893,7 @@ const nextLabel = computed(() => {
             <div v-if="showStaff" class="stage__staff" :class="{ 'stage__staff--alone': !showFall }">
               <SongStaff :bars="written" :clef="clef" :meter="song!.timeSignature" :key-signature="song!.keySignature" :get-time="player.currentTime" :lower="writtenLow" :played="playedBars" :marks="playedMarks" :scale="showFall ? (grand || onPads ? 0.85 : 1.1) : undefined" />
             </div>
-            <NoteFall v-if="showFall" class="stage__fall" :class="{ 'stage__fall--short': showStaff, 'stage__fall--shortest': showStaff && (grand || onPads) }" :notes="fallNotes" :start="windowStart" :get-time="fallTime" :pending="pendingKeys" :held="fallHeld" :judge="mode !== 'listen'" :pad-keys="onPads ? layout!.padKeys : undefined" />
+            <NoteFall v-if="showFall" class="stage__fall" :class="{ 'stage__fall--short': showStaff, 'stage__fall--shortest': showStaff && (grand || onPads) }" :notes="fallNotes" :start="windowStart" :get-time="fallTime" :pending="pendingKeys" :held="fallHeld" :judge="mode !== 'listen'" :hold-share="progress.tolerance.value.holdShare" :pad-keys="onPads ? layout!.padKeys : undefined" />
               <CountIn :value="countIn" />
             </div>
             <template v-if="onPads">

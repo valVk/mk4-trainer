@@ -1,4 +1,4 @@
-import { readonly, ref, shallowRef, watch } from 'vue'
+import { computed, readonly, ref, shallowRef, watch } from 'vue'
 
 import { useMetronome } from '@/composables/useMetronome'
 import { useNoteSource } from '@/composables/useNoteSource'
@@ -32,6 +32,7 @@ import type { Rhythm, RhythmScore } from '@/lib/rhythm'
 import { parsePanelSettings, type PanelAction, type PanelSettings } from '@/lib/mk4Layout'
 import { NOTE_SECTIONS, parseNoteProgress, type NoteLevelProgress, type NoteSectionId } from '@/lib/noteLevels'
 import { addKindStats, parseKindStats, parseRhythmProgress, type KindStats, type RhythmKind, type RhythmLevelProgress } from '@/lib/rhythmLevels'
+import { DEFAULT_SKILL, TOLERANCES, parseSkill, type Skill } from '@/lib/skill'
 import { parseSong, songNameFromFile } from '@/lib/song'
 
 // The only door to the database: pages never touch Dexie, so the storage can change later (plan 7).
@@ -47,6 +48,8 @@ const TRAIN_LEVEL_KEY = 'trainLevel'
 const SONG_VIEW_KEY = 'songView'
 const LAST_PLACE_KEY = 'lastPlace'
 const GUIDE_KEY = 'guide'
+/** How strictly playing is judged: «Новичок», «Продвинутый» or «Эксперт» (lib/skill). */
+const SKILL_KEY = 'skill'
 /** «Теория» → «Ритм»: passed rhythms per level. */
 const RHYTHM_KEY = 'theoryRhythm'
 /** «Теория» → «Ритм»: tries and misses by kind of note, for the weak spots. */
@@ -78,6 +81,7 @@ const songView = ref<SongView>('fall')
 const lastPlace = ref<LastPlace | null>(null)
 /** «С подсказкой», one switch for the whole app (plan steps 28-29): on until a grown-up turns it off; a level's exam turns it off anyway. */
 const guide = ref(true)
+const skill = ref<Skill>(DEFAULT_SKILL)
 const rhythmProgress = ref<Record<number, RhythmLevelProgress>>({})
 const rhythmWeak = ref<Partial<Record<RhythmKind, KindStats>>>({})
 const mk4Panel = ref<PanelSettings>({ learnt: {}, actions: {} })
@@ -149,6 +153,7 @@ async function loadProfileData(database: TrainerDb, current: Profile): Promise<v
   songView.value = parseSongView(await getSetting<unknown>(database, current.id, SONG_VIEW_KEY))
   lastPlace.value = parseLastPlace(await getSetting<unknown>(database, current.id, LAST_PLACE_KEY))
   guide.value = (await getSetting<unknown>(database, current.id, GUIDE_KEY)) !== false
+  skill.value = parseSkill(await getSetting<unknown>(database, current.id, SKILL_KEY))
   rhythmProgress.value = parseRhythmProgress(await getSetting<unknown>(database, current.id, RHYTHM_KEY))
   rhythmWeak.value = parseKindStats(await getSetting<unknown>(database, current.id, RHYTHM_WEAK_KEY))
   mk4Panel.value = parsePanelSettings(await getSetting<unknown>(database, current.id, MK4_PANEL_KEY))
@@ -257,9 +262,13 @@ async function addRhythmStats(rhythm: Rhythm, score: RhythmScore): Promise<void>
   await safely((database) => setSetting(database, profileId, RHYTHM_WEAK_KEY, plain(next)))
 }
 
-/** One more rhythm passed on a level of «Теория» → «Ритм». */
-async function addRhythmPass(level: number): Promise<void> {
-  const next = { ...rhythmProgress.value, [level]: { passes: (rhythmProgress.value[level]?.passes ?? 0) + 1 } }
+/**
+ * A passed attempt on a level of «Теория» → «Ритм»: the level keeps its best stars; a new rhythm also counts as one
+ * more passed (the same rhythm again does not).
+ */
+async function addRhythmPass(level: number, stars: number, newRhythm = true): Promise<void> {
+  const before = rhythmProgress.value[level] ?? { passes: 0, stars: 0 }
+  const next = { ...rhythmProgress.value, [level]: { passes: before.passes + (newRhythm ? 1 : 0), stars: Math.max(before.stars, stars) } }
   rhythmProgress.value = next
   const profileId = profile.value?.id
   if (profileId === undefined) return
@@ -309,6 +318,13 @@ async function setGuide(on: boolean): Promise<void> {
   const profileId = profile.value?.id
   if (profileId === undefined) return
   await safely((database) => setSetting(database, profileId, GUIDE_KEY, on))
+}
+
+async function setSkill(value: Skill): Promise<void> {
+  skill.value = value
+  const profileId = profile.value?.id
+  if (profileId === undefined) return
+  await safely((database) => setSetting(database, profileId, SKILL_KEY, value))
 }
 
 async function setLastPlace(place: LastPlace): Promise<void> {
@@ -458,6 +474,9 @@ export function useProgress() {
     songView: readonly(songView),
     lastPlace: readonly(lastPlace),
     guide: readonly(guide),
+    skill: readonly(skill),
+    /** The timing tolerance of the chosen skill. */
+    tolerance: computed(() => TOLERANCES[skill.value]),
     rhythmProgress: readonly(rhythmProgress),
     rhythmWeak: readonly(rhythmWeak),
     noteProgress: readonly(noteProgress),
@@ -470,6 +489,7 @@ export function useProgress() {
     setSongView,
     setLastPlace,
     setGuide,
+    setSkill,
     addRhythmPass,
     addRhythmStats,
     addNoteCorrect,

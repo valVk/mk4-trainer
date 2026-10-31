@@ -97,16 +97,19 @@ export function rhythmLevel(id: number): RhythmLevel {
   return RHYTHM_LEVELS.find((level) => level.id === id) ?? RHYTHM_LEVELS[0]!
 }
 
-/** Tempo steps inside a level, slow to fast (plan: 60 → 80 → 100, and only then something new). */
+/** Tempos offered for a level, slow to fast; the first is the level's own, faster ones are the student's choice. */
 export const RHYTHM_TEMPOS = [60, 80, 100] as const
-/** Passed rhythms needed on one tempo step before the next; each step passed gives a star. */
-export const PASSES_PER_TEMPO = 3
+/** Before stars came from how well an attempt went, three passed rhythms per tempo step gave one star. */
+const LEGACY_PASSES_PER_STAR = 3
+/** Most stars of a level. */
+export const MAX_STARS = 3
 /** Bars in one task: two, so a rhythm is a short phrase. */
 export const TASK_BARS = 2
 
-/** Saved progress of one level: passed rhythms in total (stars and tempo follow from it). */
+/** Saved progress of one level: passed rhythms in total and the best attempt's stars. */
 export interface RhythmLevelProgress {
   passes: number
+  stars: number
 }
 
 /** Stored progress; anything broken is dropped. */
@@ -114,37 +117,36 @@ export function parseRhythmProgress(value: unknown): Record<number, RhythmLevelP
   if (typeof value !== 'object' || value === null || Array.isArray(value)) return {}
   const progress: Record<number, RhythmLevelProgress> = {}
   for (const [key, item] of Object.entries(value)) {
-    const passes = (item as Partial<RhythmLevelProgress> | null)?.passes
-    if (RHYTHM_LEVELS.some((level) => level.id === Number(key)) && typeof passes === 'number' && passes >= 0) progress[Number(key)] = { passes: Math.floor(passes) }
+    const saved = item as Partial<RhythmLevelProgress> | null
+    const passes = saved?.passes
+    if (!RHYTHM_LEVELS.some((level) => level.id === Number(key)) || typeof passes !== 'number' || passes < 0) continue
+    // Saved before the stars rule: the tempo steps it climbed become its stars.
+    const stars = typeof saved?.stars === 'number' ? saved.stars : Math.floor(passes / LEGACY_PASSES_PER_STAR)
+    progress[Number(key)] = { passes: Math.floor(passes), stars: Math.max(0, Math.min(MAX_STARS, Math.floor(stars))) }
   }
   return progress
 }
 
-export function starsOf(passes: number): number {
-  return Math.min(RHYTHM_TEMPOS.length, Math.floor(passes / PASSES_PER_TEMPO))
+export function starsOf(progress: Readonly<Record<number, RhythmLevelProgress>>, id: number): number {
+  return progress[id]?.stars ?? 0
 }
 
-/** The tempo the child plays at now: it only goes up as rhythms are passed. */
-export function tempoOf(passes: number): number {
-  return RHYTHM_TEMPOS[Math.min(RHYTHM_TEMPOS.length - 1, Math.floor(passes / PASSES_PER_TEMPO))]!
-}
-
-/** Levels open one by one: the next after all stars in the one before. */
+/** Levels open one by one: the next once the one before has a star (one passed attempt). */
 export function isOpen(id: number, progress: Readonly<Record<number, RhythmLevelProgress>>): boolean {
   if (!RHYTHM_LEVELS.some((level) => level.id === id)) return false
   if (id === 1) return true
-  return starsOf(progress[id - 1]?.passes ?? 0) >= RHYTHM_TEMPOS.length
+  return starsOf(progress, id - 1) >= 1
 }
 
-/** Where to open: the first open level that still lacks stars, or the last open one. */
+/** Where to open: the first open level without a star yet, or the last open one. */
 export function currentLevel(progress: Readonly<Record<number, RhythmLevelProgress>>): number {
   const open = RHYTHM_LEVELS.filter((level) => isOpen(level.id, progress))
-  return (open.find((level) => starsOf(progress[level.id]?.passes ?? 0) < RHYTHM_TEMPOS.length) ?? open[open.length - 1] ?? RHYTHM_LEVELS[0]!).id
+  return (open.find((level) => starsOf(progress, level.id) === 0) ?? open[open.length - 1] ?? RHYTHM_LEVELS[0]!).id
 }
 
-/** The tempo of a level at this many passed rhythms (6/8 counts eighths, so its steps are doubled). */
-export function levelTempo(level: RhythmLevel, passes: number): number {
-  return tempoOf(passes) * (level.tempoScale ?? 1)
+/** The level's own tempo (6/8 counts eighths, so it is doubled); faster is the student's choice. */
+export function levelTempo(level: RhythmLevel): number {
+  return RHYTHM_TEMPOS[0] * (level.tempoScale ?? 1)
 }
 
 /**
@@ -189,13 +191,24 @@ export function introRhythm(id: IntroId): Rhythm {
 }
 
 /**
- * An attempt passes with no note missed, at most one extra tap, and three quarters of the notes good: on time and,
- * on keys, held for their length (a 1/32 tap is not a half note; pads have no length and are judged on time only).
+ * Stars of one attempt (the owner's rule, 31.10.2026). Every note has to be played and held (a red one, missed or let
+ * go too soon, fails), at most one extra tap. Then green notes (on time) against yellow ones (early or late): as many
+ * green as yellow is one star, more green is two, all green is three; fewer green fails. Pads have no length and are
+ * judged on time only.
  */
+export function attemptStars(score: RhythmScore): number {
+  const red = score.results.some((result) => result.verdict === 'missed' || result.hold === 'short')
+  if (red || score.extra > 1 || score.total === 0) return 0
+  const green = score.results.filter((result) => result.verdict === 'onTime').length
+  const yellow = score.total - green
+  if (yellow === 0) return MAX_STARS
+  if (green > yellow) return 2
+  return green === yellow ? 1 : 0
+}
+
+/** An attempt passes with at least one star. */
 export function passes(score: RhythmScore): boolean {
-  const missed = score.results.filter((result) => result.verdict === 'missed').length
-  const good = score.results.filter((result) => result.verdict === 'onTime' && result.hold !== 'short').length
-  return missed === 0 && score.extra <= 1 && good >= Math.ceil(score.total * 0.75)
+  return attemptStars(score) >= 1
 }
 
 export type RhythmHint = 'rushing' | 'dragging' | 'missed' | 'extra' | 'holdLonger' | 'letGo' | 'accent' | 'slowDown' | 'noTaps' | 'great'

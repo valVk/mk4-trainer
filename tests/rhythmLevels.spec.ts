@@ -1,12 +1,14 @@
 import { describe, expect, it } from 'vitest'
 
-import { barQuarters, fillsBars, noteMark, scoreRhythm, sounds, splitBars, totalQuarters, type RhythmPress } from '@/lib/rhythm'
+import { barQuarters, fillsBars, noteMark, onTimeWindow, scoreRhythm, sounds, splitBars, totalQuarters, type RhythmPress } from '@/lib/rhythm'
+import { TOLERANCES } from '@/lib/skill'
 import {
-  PASSES_PER_TEMPO,
+  MAX_STARS,
   RHYTHM_LEVELS,
   RHYTHM_TEMPOS,
   TASK_BARS,
   addKindStats,
+  attemptStars,
   currentLevel,
   handSplit,
   hintsFor,
@@ -22,7 +24,6 @@ import {
   rhythmLevel,
   slowTempo,
   starsOf,
-  tempoOf,
   troubleSpot,
   weakKinds,
 } from '@/lib/rhythmLevels'
@@ -68,34 +69,34 @@ describe('rhythm levels', () => {
     }
   })
 
-  it('counts 6/8 in eighths: its tempo steps are doubled', () => {
-    expect(levelTempo(rhythmLevel(10), 0)).toBe(120)
-    expect(levelTempo(rhythmLevel(1), 0)).toBe(60)
+  it('counts 6/8 in eighths: its tempo is doubled', () => {
+    expect(levelTempo(rhythmLevel(10))).toBe(120)
+    expect(levelTempo(rhythmLevel(1))).toBe(RHYTHM_TEMPOS[0])
   })
 
-  it('climbs 60, 80, 100 with three passed rhythms per step and a star for each step', () => {
-    expect([0, 2, 3, 5, 6, 9, 20].map(tempoOf)).toEqual([60, 60, 80, 80, 100, 100, 100])
-    expect([0, 2, 3, 6, 9, 20].map(starsOf)).toEqual([0, 0, 1, 2, 3, 3])
-    expect(PASSES_PER_TEMPO * RHYTHM_TEMPOS.length).toBe(9)
+  it('keeps the best stars of a level', () => {
+    expect(starsOf({ 1: { passes: 4, stars: 2 } }, 1)).toBe(2)
+    expect(starsOf({}, 1)).toBe(0)
   })
 
-  it('opens a level after all stars in the one before, and keeps unbuilt levels closed', () => {
+  it('opens a level once the one before has a star, and keeps unbuilt levels closed', () => {
     expect(isOpen(1, {})).toBe(true)
-    expect(isOpen(2, { 1: { passes: 8 } })).toBe(false)
-    expect(isOpen(2, { 1: { passes: 9 } })).toBe(true)
-    expect(isOpen(6, { 5: { passes: 9 } })).toBe(true)
+    expect(isOpen(2, { 1: { passes: 3, stars: 0 } })).toBe(false)
+    expect(isOpen(2, { 1: { passes: 1, stars: 1 } })).toBe(true)
+    expect(isOpen(6, { 5: { passes: 1, stars: 3 } })).toBe(true)
     expect(isOpen(11, {})).toBe(false)
   })
 
-  it('reads saved progress and drops anything broken', () => {
-    expect(parseRhythmProgress({ 1: { passes: 4 }, 2: { passes: -1 }, 99: { passes: 3 }, 3: 'x' })).toEqual({ 1: { passes: 4 } })
+  it('reads saved progress, turns the old tempo steps into stars and drops anything broken', () => {
+    expect(parseRhythmProgress({ 1: { passes: 4, stars: 2 }, 2: { passes: -1 }, 99: { passes: 3 }, 3: 'x', 4: { passes: 7 } })).toEqual({ 1: { passes: 4, stars: 2 }, 4: { passes: 7, stars: 2 } })
+    expect(parseRhythmProgress({ 1: { passes: 30 } })).toEqual({ 1: { passes: 30, stars: MAX_STARS } })
     expect(parseRhythmProgress(null)).toEqual({})
   })
 
-  it('opens on the first open level that still lacks stars', () => {
+  it('opens on the first open level without a star', () => {
     expect(currentLevel({})).toBe(1)
-    expect(currentLevel({ 1: { passes: 9 }, 2: { passes: 4 } })).toBe(2)
-    expect(currentLevel({ 1: { passes: 9 }, 2: { passes: 9 } })).toBe(3)
+    expect(currentLevel({ 1: { passes: 1, stars: 1 } })).toBe(2)
+    expect(currentLevel({ 1: { passes: 1, stars: 3 }, 2: { passes: 1, stars: 2 } })).toBe(3)
   })
 })
 
@@ -103,6 +104,31 @@ describe('passing and hints', () => {
   // Four quarters at 60: notes at 0, 1, 2, 3 s.
   const quarters = sounds({ meter: { numerator: 4, denominator: 4 }, notes: Array.from({ length: 4 }, () => ({ duration: 'quarter' as const })) }, 60)
   const press = (time: number, held = 0.8): RhythmPress => ({ time, end: time + held })
+
+  it('gives stars by green notes against yellow ones; a red note fails', () => {
+    // Off by 0.2 s: yellow (early or late), still that note.
+    expect(attemptStars(scoreRhythm(quarters, [press(0), press(1), press(2), press(3)]))).toBe(3)
+    expect(attemptStars(scoreRhythm(quarters, [press(0), press(1), press(2), press(3.2)]))).toBe(2)
+    expect(attemptStars(scoreRhythm(quarters, [press(0), press(1), press(2.2), press(3.2)]))).toBe(1)
+    expect(attemptStars(scoreRhythm(quarters, [press(0), press(1.2), press(2.2), press(3.2)]))).toBe(0)
+    // Missed, or let go too soon: no star however green the rest.
+    expect(attemptStars(scoreRhythm(quarters, [press(0), press(1), press(2)]))).toBe(0)
+    expect(attemptStars(scoreRhythm(quarters, [press(0), press(1), press(2), press(3, 0.05)]))).toBe(0)
+  })
+
+  it('judges a beginner wider and an expert closer', () => {
+    const late = [press(0.1), press(1.1), press(2.1), press(3.1)]
+    expect(attemptStars(scoreRhythm(quarters, late, true, TOLERANCES.beginner))).toBe(3)
+    expect(attemptStars(scoreRhythm(quarters, late, true, TOLERANCES.expert))).toBe(0)
+    // Held half the note: enough for a beginner, short for an expert.
+    const half = [press(0, 0.5), press(1, 0.5), press(2, 0.5), press(3, 0.5)]
+    expect(attemptStars(scoreRhythm(quarters, half, true, TOLERANCES.beginner))).toBe(3)
+    expect(attemptStars(scoreRhythm(quarters, half, true, TOLERANCES.expert))).toBe(0)
+    // Sixteenths at 100 (0.15 s): a quarter of the note would be ±37 ms, the beginner's floor keeps ±70 ms.
+    const sixteenths = sounds({ meter: { numerator: 4, denominator: 4 }, notes: Array.from({ length: 16 }, () => ({ duration: 'sixteenth' as const })) }, 100)
+    expect(onTimeWindow(sixteenths, TOLERANCES.beginner)).toBeCloseTo(0.07)
+    expect(onTimeWindow(quarters, TOLERANCES.beginner)).toBeCloseTo(0.12)
+  })
 
   it('passes a steady attempt and praises it', () => {
     const score = scoreRhythm(quarters, [press(0.02), press(1.03), press(1.98), press(3.01)])

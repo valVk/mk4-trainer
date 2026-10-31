@@ -4,7 +4,8 @@ import { keyFor, open, reload, storeSetting, storedSetting } from './helpers'
 
 const state = (page: Page) => page.evaluate(() => {
   const s = (document.querySelector('.levels-row') as unknown as { __vueParentComponent: { parent: { setupState: Record<string, unknown> } } }).__vueParentComponent.parent.setupState
-  return { phase: s.phase as string, passes: s.levelPasses as number, passed: s.attemptPassed as boolean }
+  const passes = (s.passed as Record<number, { passes: number }>)[s.level as number]?.passes ?? 0
+  return { phase: s.phase as string, passes, stars: s.lastStars as number, passed: s.attemptPassed as boolean }
 })
 
 /** Seconds from the first note, as heard, of every note of the task; plays them on a computer key. */
@@ -54,8 +55,9 @@ test('a rhythm played on time passes and counts once', async ({ page }) => {
   await page.getByRole('button', { name: 'Играть' }).click()
   await playTask(page)
   await expect.poll(async () => (await state(page)).phase, { timeout: 15_000 }).toBe('result')
-  expect(await state(page)).toMatchObject({ passed: true, passes: 1 })
-  await expect(page.getByText('Получилось!')).toBeVisible()
+  // All green on the first try: three stars at once, the level is done.
+  expect(await state(page)).toMatchObject({ passed: true, passes: 1, stars: 3 })
+  await expect(page.getByText('Уровень 1 пройден: все три звезды!')).toBeVisible()
 
   // The same rhythm again: still fine, but it does not count a second time.
   await page.getByRole('button', { name: 'Ещё раз' }).click()
@@ -78,11 +80,11 @@ test('saves progress of every level, not only the first', async ({ page }) => {
   await open(page, '/train/theory')
   // Two levels of passes through the page's own progress store, as finished attempts do.
   await page.evaluate(async () => {
-    const s = (document.querySelector('.levels-row') as unknown as { __vueParentComponent: { parent: { setupState: { progress: { addRhythmPass: (level: number) => Promise<void> } } } } }).__vueParentComponent.parent.setupState
-    for (let i = 0; i < 9; i++) await s.progress.addRhythmPass(1)
-    await s.progress.addRhythmPass(2)
+    const s = (document.querySelector('.levels-row') as unknown as { __vueParentComponent: { parent: { setupState: { progress: { addRhythmPass: (level: number, stars: number) => Promise<void> } } } } }).__vueParentComponent.parent.setupState
+    for (let i = 0; i < 9; i++) await s.progress.addRhythmPass(1, i < 8 ? 2 : 3)
+    await s.progress.addRhythmPass(2, 1)
   })
-  await expect.poll(() => storedSetting(page, 'theoryRhythm')).toEqual({ 1: { passes: 9 }, 2: { passes: 1 } })
+  await expect.poll(() => storedSetting(page, 'theoryRhythm')).toEqual({ 1: { passes: 9, stars: 3 }, 2: { passes: 1, stars: 1 } })
 })
 
 test('«С подсказкой» puts the count under the notes; switched off, the student counts', async ({ page }) => {

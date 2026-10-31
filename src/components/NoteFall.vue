@@ -27,12 +27,15 @@ const props = withDefaults(defineProps<{
    * (left to right 1 5 2 6 3 7 4 8); notes carry their pad number, top-row lanes and notes are darker.
    */
   padKeys?: readonly (number | null)[]
+  /** Share of a note to hold before letting go (lib/skill); less is cut short. */
+  holdShare?: number
 }>(), {
   lookahead: 3,
   pending: () => [],
   held: () => [],
   judge: false,
   padKeys: undefined,
+  holdShare: HOLD_SHARE,
 })
 
 const canvas = ref<HTMLCanvasElement | null>(null)
@@ -46,7 +49,7 @@ const HOLD_EARLY_S = 0.15
 const MISS_AFTER_S = 0.25
 /** Notes the student held while they sounded: they stay green after they pass. */
 let played = new WeakSet<SongNote>()
-/** Played but let go too soon (before HOLD_SHARE of the note): red, like a missed one. */
+/** Played but let go too soon (before holdShare of the note): red, like a missed one. */
 let cutShort = new WeakSet<SongNote>()
 let lastNow = 0
 
@@ -173,7 +176,7 @@ function draw() {
     const end = note.start + Math.max(note.length, padIndex === -1 ? 0 : PAD_NOTE_MIN_S)
     if (until <= HOLD_EARLY_S && now < end && held.has(note.key)) played.add(note)
     // Keys only (a pad hit has no length): let go before most of the note has sounded.
-    if (props.judge && padIndex === -1 && played.has(note) && !held.has(note.key) && now - note.start < note.length * HOLD_SHARE) cutShort.add(note)
+    if (props.judge && padIndex === -1 && played.has(note) && !held.has(note.key) && now - note.start < note.length * props.holdShare) cutShort.add(note)
     const isPlayed = played.has(note) && !cutShort.has(note)
     // Not pressed a moment after it started: missed, red while it still crosses the line (the one the song waits on
     // is not missed: it waits). Faded once it is over.

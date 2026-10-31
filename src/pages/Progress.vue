@@ -4,6 +4,7 @@ import { useI18n } from 'vue-i18n'
 import { useToast } from '@nuxt/ui/composables'
 
 import PageHeader from '@/components/PageHeader.vue'
+import SkillPicker from '@/components/SkillPicker.vue'
 import StarRating from '@/components/StarRating.vue'
 import { useNoteNames } from '@/composables/useNoteNames'
 import { useProgress } from '@/composables/useProgress'
@@ -177,6 +178,8 @@ async function confirmImport() {
               <UInput v-model="newName" size="lg" :placeholder="t('progress.newPlayer')" :aria-label="t('progress.newPlayer')" />
               <UButton type="submit" icon="i-lucide-user-plus" color="neutral" variant="soft" size="lg" :disabled="!newName.trim()" :label="t('progress.add')" />
             </form>
+            <!-- How strictly this player's playing is judged; the same choice is in the drawer of every playing screen. -->
+            <SkillPicker in-place />
           </div>
         </UCard>
 

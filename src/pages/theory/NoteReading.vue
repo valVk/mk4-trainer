@@ -9,6 +9,7 @@ import { useCountIn } from '@/composables/useCountIn'
 import { useKeyboardWindow } from '@/composables/useKeyboardWindow'
 import { useMk4Actions } from '@/composables/useMk4Actions'
 import { useNoteSource } from '@/composables/useNoteSource'
+import { useProgress } from '@/composables/useProgress'
 import { useRhythmPlayer } from '@/composables/useRhythmPlayer'
 import { useShortScreen } from '@/composables/useShortScreen'
 import { useTimedPresses } from '@/composables/useTimedPresses'
@@ -50,6 +51,7 @@ const passed = ref(false)
 let counted = false
 let finishTimer: ReturnType<typeof setTimeout> | undefined
 
+const progress = useProgress()
 const timed = useTimedPresses({ active: () => phase.value === 'playing', heardPosition: () => player.heardPosition() })
 
 function start() {
@@ -95,7 +97,7 @@ watch(() => player.playing.value, (on) => {
 function finish() {
   const presses = timed.presses()
   const checkHold = presses.length > 0 && presses.every((press) => press.end !== null)
-  const result = scoreRhythm(sounds(melody.value, bpm.value), presses, checkHold)
+  const result = scoreRhythm(sounds(melody.value, bpm.value), presses, checkHold, progress.tolerance.value)
   score.value = result
   passed.value = readingPasses(melody.value, result)
   phase.value = 'result'

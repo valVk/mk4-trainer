@@ -1,6 +1,7 @@
 // Rhythm model (plan step 16): note values, rests, dots, ties, tuplets, bars, pickup, timing in seconds,
 // one-bar rhythm generator and the scoring of an attempt. Pure code, no Vue, no UI text.
 
+import { TOLERANCES, type Tolerance } from './skill'
 import type { TimeSignature } from './song'
 
 export const DURATIONS = ['whole', 'half', 'quarter', 'eighth', 'sixteenth'] as const
@@ -210,19 +211,24 @@ export interface RhythmScore {
   total: number
 }
 
-/** On-time window: the smaller of ±80 ms and a quarter of the shortest note, so fast values are judged fairly. */
-export const ON_TIME_S = 0.08
+/** On-time window of «Продвинутый» (lib/skill): ±80 ms, narrower for fast values. */
+export const ON_TIME_S = TOLERANCES.advanced.onTimeS
 /** A press further than this from a note (and outside its share of the gap) belongs to no note. */
 const CAPTURE_S = 0.25
-/** A note counts as held when the key stays down this share of its length (songs and the waterfall use it too). */
-export const HOLD_SHARE = 0.6
+/** A note counts as held when the key stays down this share of its length («Продвинутый»; see lib/skill). */
+export const HOLD_SHARE = TOLERANCES.advanced.holdShare
 /** Held into the next note's time by more than this share and this many seconds is too long. */
 const HOLD_LONG = 1.5
 const HOLD_LONG_S = 0.2
 
-export function onTimeWindow(notes: readonly Sound[]): number {
+/**
+ * On-time window: the tolerance's «on time», narrowed to a quarter of the shortest note so fast values are judged
+ * fairly, but never under its floor (a sixteenth at 100 would leave ±37 ms, more than a beginner can do).
+ */
+export function onTimeWindow(notes: readonly Sound[], tolerance: Tolerance = TOLERANCES.advanced): number {
   const shortestNote = Math.min(...notes.filter((note) => !note.rest).map((note) => note.length))
-  return Math.min(ON_TIME_S, Number.isFinite(shortestNote) ? shortestNote / 4 : ON_TIME_S)
+  if (!Number.isFinite(shortestNote)) return tolerance.onTimeS
+  return Math.min(tolerance.onTimeS, Math.max(tolerance.onTimeMinS, shortestNote / 4))
 }
 
 /**
@@ -230,9 +236,9 @@ export function onTimeWindow(notes: readonly Sound[]): number {
  * within the window it is on time, a bit further it is early or late, further still it is extra.
  * Hold length is checked on keys (`checkHold`), not on pads.
  */
-export function scoreRhythm(all: readonly Sound[], presses: readonly RhythmPress[], checkHold = true): RhythmScore {
+export function scoreRhythm(all: readonly Sound[], presses: readonly RhythmPress[], checkHold = true, tolerance: Tolerance = TOLERANCES.advanced): RhythmScore {
   const notes = all.filter((note) => !note.rest)
-  const window = onTimeWindow(notes)
+  const window = onTimeWindow(notes, tolerance)
   const used = new Set<number>()
   // A press may count for a note only within half the gap to its neighbours (and CAPTURE_S at most).
   const zone = (i: number) => {
@@ -255,7 +261,7 @@ export function scoreRhythm(all: readonly Sound[], presses: readonly RhythmPress
     const offset = press.time - note.start
     const verdict: TimingVerdict = Math.abs(offset) <= window ? 'onTime' : offset < 0 ? 'early' : 'late'
     const held = press.end === null ? null : press.end - press.time
-    return { index: note.index, verdict, offset, hold: checkHold && held !== null ? holdVerdict(held, note.length) : null, held, velocity: press.velocity ?? null, key: press.key ?? null }
+    return { index: note.index, verdict, offset, hold: checkHold && held !== null ? holdVerdict(held, note.length, tolerance.holdShare) : null, held, velocity: press.velocity ?? null, key: press.key ?? null }
   })
   const first = notes[0]?.start ?? 0
   // Warming up before the first note does not count as extra.
@@ -263,8 +269,8 @@ export function scoreRhythm(all: readonly Sound[], presses: readonly RhythmPress
   return { results, extra, onTime: results.filter((result) => result.verdict === 'onTime').length, total: notes.length }
 }
 
-export function holdVerdict(held: number, length: number): HoldVerdict {
-  if (held < length * HOLD_SHARE) return 'short'
+export function holdVerdict(held: number, length: number, holdShare = HOLD_SHARE): HoldVerdict {
+  if (held < length * holdShare) return 'short'
   if (held > length * HOLD_LONG && held > length + HOLD_LONG_S) return 'long'
   return 'ok'
 }

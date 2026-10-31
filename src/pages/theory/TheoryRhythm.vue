@@ -9,6 +9,7 @@ import HelpSwitch from '@/components/HelpSwitch.vue'
 import LevelRow from '@/components/LevelRow.vue'
 import PianoKeyboard from '@/components/PianoKeyboard.vue'
 import RhythmStaff from '@/components/RhythmStaff.vue'
+import SkillPicker from '@/components/SkillPicker.vue'
 import StarRating from '@/components/StarRating.vue'
 import { useCountIn } from '@/composables/useCountIn'
 import { useHelp } from '@/composables/useHelp'
@@ -30,19 +31,19 @@ import { scaleGroups } from '@/lib/metronome'
 import { noteMark, scoreRhythm, sounds, totalQuarters, type NoteMark, type Rhythm, type RhythmScore } from '@/lib/rhythm'
 import {
   RHYTHM_LEVELS,
+  MAX_STARS,
   RHYTHM_TEMPOS,
+  attemptStars,
   currentLevel,
   hintsFor,
   isOpen,
   makeTask,
-  passes,
   rhythmLevel,
   handSplit,
   makeTwoHands,
   padHand,
   slowTempo,
   starsOf,
-  tempoOf,
   troubleNotes,
   troubleSpot,
   introRhythm,
@@ -75,9 +76,8 @@ watch(() => progress.ready.value, () => {
   level.value = currentLevel(passed.value)
 })
 const info = computed(() => rhythmLevel(level.value))
-const levelPasses = computed(() => passed.value[level.value]?.passes ?? 0)
 // A two-hand task is in 2/4, counted in quarters: it keeps the plain tempo steps, not the doubled 6/8 ones.
-const levelBpm = computed(() => (kind.value === 'twoHands' ? tempoOf(levelPasses.value) : levelTempo(info.value, levelPasses.value)))
+const levelBpm = computed(() => (kind.value === 'twoHands' ? RHYTHM_TEMPOS[0] : levelTempo(info.value)))
 /** «Медленнее»: one practice attempt at three quarters of the tempo; it is not counted for stars. */
 const slow = ref(false)
 /** A tempo picked on the metronome scale; null follows the level's step. */
@@ -103,7 +103,9 @@ const wasSlowAttempt = ref(false)
 const wasPractice = ref(false)
 /** Its tempo, to say «получилось в темпе 72, для звезды нужно 80». */
 const practiceBpm = ref(0)
-const stars = computed(() => starsOf(levelPasses.value))
+const stars = computed(() => starsOf(passed.value, level.value))
+/** Stars of the last attempt: green notes against yellow ones (lib/rhythmLevels attemptStars). */
+const lastStars = ref(0)
 /**
  * Help is the app's «С подсказкой» switch (plan step 29): on, the count stands under every note and the note being
  * played is marked; off, just the notes. From two stars (the last tempo) the level is in its exam: no help. The
@@ -162,6 +164,7 @@ function newTask() {
     lowerTask.value = null
   }
   taskCounted = false
+  heardTask = false
   scoreLower.value = null
   troubleHistory = []
   offerSlow.value = false
@@ -183,6 +186,7 @@ function closeIntro() {
 
 function stopAttempt() {
   clearTimeout(attemptTimer)
+  listeningFirst.value = false
   player.stop()
   padsPlayMusic.value = false
   if (phase.value === 'playing') phase.value = 'ready'
@@ -192,8 +196,14 @@ function stopAttempt() {
 function listen() {
   if (phase.value === 'playing') return
   metronome.stop()
+  heardTask = true
   player.play(task.value, bpm.value, { lower: lowerTask.value })
 }
+
+/** «Послушай и повтори»: this task's rhythm has been heard, so «Играть» goes straight to the student's turn. */
+let heardTask = false
+/** «Играть» on a rhythm not heard yet: it sounds first, then the student repeats it, with no second tap. */
+const listeningFirst = ref(false)
 
 /**
  * The metronome button: steady clicks at the task's tempo and meter between attempts, to count along and
@@ -247,6 +257,13 @@ function startAttempt() {
   if (phase.value === 'intro') closeIntro()
   stopAttempt()
   metronome.stop()
+  if (kind.value === 'repeat' && !heardTask) {
+    heardTask = true
+    listeningFirst.value = true
+    phase.value = 'playing'
+    player.play(task.value, bpm.value)
+    return
+  }
   timed.reset()
   score.value = null
   hints.value = []
@@ -258,6 +275,11 @@ function startAttempt() {
 
 watch(() => player.playing.value, (on) => {
   if (on || phase.value !== 'playing') return
+  // Heard it: now the student's turn, with its own count-in.
+  if (listeningFirst.value) {
+    startAttempt()
+    return
+  }
   attemptTimer = setTimeout(finishAttempt, SCORE_TAIL_MS)
 })
 
@@ -270,8 +292,8 @@ async function finishAttempt() {
   const split = handSplit(presses.flatMap((press) => (press.key === null ? [] : [press.key])))
   const handOf = (press: TimedPress): Hand => press.hand ?? (press.key !== null && press.key < split ? 'left' : 'right')
   const lower = lowerTask.value
-  const result = scoreRhythm(sounds(task.value, bpm.value), lower ? presses.filter((press) => handOf(press) === 'right') : presses, checkHold)
-  const left = lower ? scoreRhythm(sounds(lower, bpm.value), presses.filter((press) => handOf(press) === 'left'), checkHold) : null
+  const result = scoreRhythm(sounds(task.value, bpm.value), lower ? presses.filter((press) => handOf(press) === 'right') : presses, checkHold, progress.tolerance.value)
+  const left = lower ? scoreRhythm(sounds(lower, bpm.value), presses.filter((press) => handOf(press) === 'left'), checkHold, progress.tolerance.value) : null
   score.value = result
   scoreLower.value = left
   const both = [...hintsFor(result, task.value), ...(left && lower ? hintsFor(left, lower) : [])]
@@ -279,7 +301,9 @@ async function finishAttempt() {
   hints.value = real.length ? real.slice(0, 2) : ['great']
   // Not one press: the child did not know what to press, or the MK4 is not connected.
   if (presses.length === 0) hints.value = ['noTaps']
-  attemptPassed.value = passes(result) && (!left || passes(left))
+  // Two hands: the weaker hand decides.
+  lastStars.value = Math.min(attemptStars(result), left ? attemptStars(left) : MAX_STARS)
+  attemptPassed.value = lastStars.value >= 1
   phase.value = 'result'
   const wasSlow = slow.value
   wasSlowAttempt.value = wasSlow
@@ -293,6 +317,8 @@ async function finishAttempt() {
     if (left && lower) void progress.addRhythmStats(lower, left)
   }
   if (!attemptPassed.value) {
+    // Not one press is not a hard place: no «slower» for it.
+    if (presses.length === 0) return
     if (!practice) troubleHistory.push(troubleNotes(result))
     offerSlow.value = troubleSpot(troubleHistory) !== null
     if (offerSlow.value) hints.value = ['slowDown', ...hints.value.slice(0, 1)]
@@ -300,11 +326,11 @@ async function finishAttempt() {
   }
   troubleHistory = []
   offerSlow.value = false
-  if (practice || taskCounted) return
+  if (practice) return
+  const before = stars.value
+  await progress.addRhythmPass(level.value, lastStars.value, !taskCounted)
   taskCounted = true
-  const before = starsOf(levelPasses.value)
-  await progress.addRhythmPass(level.value)
-  levelDone.value = before < RHYTHM_TEMPOS.length && starsOf(levelPasses.value) === RHYTHM_TEMPOS.length
+  levelDone.value = before < MAX_STARS && stars.value === MAX_STARS
 }
 
 const timed = useTimedPresses({
@@ -365,7 +391,7 @@ const countIn = useCountIn(() => ({
 /** The intro: one bar of each new value, to look at and listen to. */
 const introRhythms = computed(() => info.value.introduces.map((id) => ({ id, rhythm: introRhythm(id) })))
 const { piecesAfter } = useTheoryPieces('rhythm')
-const levelTabs = computed(() => RHYTHM_LEVELS.map((item) => ({ id: item.id, open: isOpen(item.id, passed.value), stars: starsOf(passed.value[item.id]?.passes ?? 0) })))
+const levelTabs = computed(() => RHYTHM_LEVELS.map((item) => ({ id: item.id, open: isOpen(item.id, passed.value), stars: starsOf(passed.value, item.id) })))
 </script>
 
 <template>
@@ -381,6 +407,7 @@ const levelTabs = computed(() => RHYTHM_LEVELS.map((item) => ({ id: item.id, ope
     <ExamBadge v-if="exam" />
     <!-- The app's help switch, in the drawer; a level's exam turns it off. -->
     <HelpSwitch :on="guideOn" :exam="exam" />
+    <SkillPicker />
     <!-- Tempo from the metronome scale, one tap, like a mechanical metronome. -->
     <UPopover v-model:open="tempoOpen" :content="{ side: 'bottom', align: 'start' }">
       <UButton
@@ -452,7 +479,7 @@ const levelTabs = computed(() => RHYTHM_LEVELS.map((item) => ({ id: item.id, ope
       <div>
         <p class="prompt text-highlighted">{{ t(`theory.kind.${kind}`) }}</p>
         <!-- What to press: the notes sit on one line and have no pitch, so any key will do. -->
-        <p class="how text-toned">{{ lowerTask ? t('theory.howTwoHands') : guideOn ? t('theory.how') : t('theory.howNoCounts') }}</p>
+        <p class="how text-toned">{{ listeningFirst ? t('theory.listenFirst') : lowerTask ? t('theory.howTwoHands') : guideOn ? t('theory.how') : t('theory.howNoCounts') }}</p>
       </div>
       <div class="staff-box">
         <template v-if="showNotes">
@@ -500,7 +527,10 @@ const levelTabs = computed(() => RHYTHM_LEVELS.map((item) => ({ id: item.id, ope
               : wasPractice ? t('theory.practicePassed', { bpm: practiceBpm, need: levelBpm })
                 : t('theory.passed') }}
       </p>
+      <!-- This attempt's stars: green notes against yellow ones. -->
+      <StarRating v-if="attemptPassed" :value="lastStars" size="md" />
       <p class="text-toned">{{ hints.map((hint) => t(`theory.hints.${hint}`)).join(' ') }}</p>
+      <p v-if="attemptPassed && lastStars < MAX_STARS && !wasPractice" class="text-muted">{{ t('theory.moreStars') }}</p>
     </div>
   </section>
 
@@ -538,7 +568,11 @@ const levelTabs = computed(() => RHYTHM_LEVELS.map((item) => ({ id: item.id, ope
           </template>
         </template>
         <UButton v-if="levelDone && isOpen(level + 1, passed)" icon="i-lucide-arrow-right" size="lg" :label="t('theory.nextLevel')" @click="openLevel(level + 1)" />
-        <UButton v-else icon="i-lucide-arrow-right" size="lg" :label="t('theory.next')" @click="nextTask" />
+        <template v-else>
+          <!-- One star opens the next level; more stars are for later, so going on is offered, not forced. -->
+          <UButton v-if="isOpen(level + 1, passed)" icon="i-lucide-skip-forward" color="neutral" variant="soft" size="lg" :label="t('theory.nextLevel')" @click="openLevel(level + 1)" />
+          <UButton icon="i-lucide-arrow-right" size="lg" :label="t('theory.next')" @click="nextTask" />
+        </template>
       </template>
       <UButton v-if="phase === 'result' && offerSlow" icon="i-lucide-turtle" size="lg" :label="t('theory.slower')" @click="startSlow" />
       <UButton
