@@ -2,6 +2,7 @@
 import { ru } from '@nuxt/ui/locale'
 import { useI18n } from 'vue-i18n'
 import { useRouter } from 'vue-router'
+import { useToast } from '@nuxt/ui/composables'
 
 import PwaUpdate from '@/components/PwaUpdate.vue'
 import SoundGate from '@/components/SoundGate.vue'
@@ -9,6 +10,7 @@ import { useNoteSource } from '@/composables/useNoteSource'
 import { setAppMk4Actions } from '@/composables/useMk4Actions'
 import { useMetronome } from '@/composables/useMetronome'
 import { usePadActions } from '@/composables/usePadActions'
+import { checkForUpdate, checking } from '@/composables/usePwaUpdate'
 import { useProgress } from '@/composables/useProgress'
 import { pressKnob, releaseKnob, turnKnob } from '@/lib/focusMove'
 import { addTap, knobBpm, tapBpm } from '@/lib/mk4Control'
@@ -28,6 +30,14 @@ window.addEventListener('keydown', (event) => {
   if (event.key === 'Tab') document.documentElement.classList.add('knob-nav')
 })
 window.addEventListener('pointerdown', () => document.documentElement.classList.remove('knob-nav'))
+
+const toast = useToast()
+
+/** «Проверить обновление»: found, the usual notice with «Обновить» appears by itself; otherwise say what happened. */
+async function checkUpdate() {
+  const result = await checkForUpdate()
+  if (result !== 'found') toast.add({ title: t(`pwa.${result}`), icon: result === 'latest' ? 'i-lucide-circle-check' : 'i-lucide-wifi-off' })
+}
 
 const footer = t('app.footer', { year: new Date().getFullYear(), version: __APP_VERSION__ })
 usePadActions({
@@ -61,7 +71,9 @@ setAppMk4Actions({
     <div class="shell">
       <RouterView />
       <footer class="footer text-dimmed text-xs tabular-nums">
-        {{ footer }}
+        {{ footer }} ·
+        <!-- The newest version without clearing anything; an open app also checks every hour (usePwaUpdate). -->
+        <button type="button" class="footer__check" :disabled="checking" @click="checkUpdate">{{ checking ? t('pwa.checking') : t('pwa.check') }}</button>
         <!-- Small tools of the screen (the octave map), quiet like the version. -->
         <div id="footer-tools" class="footer__tools" />
       </footer>
@@ -142,6 +154,15 @@ setAppMk4Actions({
   .footer {
     padding-block: 0.25rem;
   }
+}
+
+.footer__check {
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.footer__check:disabled {
+  text-decoration: none;
 }
 
 .footer__tools {
