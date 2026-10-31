@@ -7,13 +7,26 @@ import { useNoteSource } from '@/composables/useNoteSource'
 // MK4 state, as it really is: a lit LED when a keyboard is found, a calm «не найдена» when MIDI works but nothing
 // is plugged in, the connect button otherwise, how to unblock MIDI when Chrome blocked it, and that the MK4 needs
 // Chrome in a browser without Web MIDI.
-const { t } = useI18n()
+const { t, tm, rt } = useI18n()
 const { midiStatus, midiFound, connectMidi } = useNoteSource()
 </script>
 
 <template>
   <StatusLed v-if="midiStatus === 'connected' && midiFound" on :label="t('lab.mk4Connected')" />
-  <StatusLed v-else-if="midiStatus === 'connected'" :on="false" :label="t('midi.notFound')" />
+  <!-- Allowed, but no MK4 among the inputs: a tap says what to check (power, Chrome, plug again). -->
+  <UPopover v-else-if="midiStatus === 'connected'" :content="{ side: 'bottom', align: 'end' }">
+    <button type="button" class="not-found">
+      <StatusLed :on="false" :label="t('midi.notFound')" />
+    </button>
+    <template #content>
+      <div class="blocked">
+        <p class="font-semibold text-highlighted">{{ t('midi.notFoundTitle') }}</p>
+        <ol class="blocked__steps text-toned">
+          <li v-for="(step, i) in tm('midi.notFoundSteps')" :key="i">{{ rt(step) }}</li>
+        </ol>
+      </div>
+    </template>
+  </UPopover>
   <UPopover v-else-if="midiStatus === 'denied'" :content="{ side: 'bottom', align: 'end' }">
     <UButton icon="i-lucide-shield-alert" color="warning" variant="soft" size="lg" :label="t('midi.blocked')" />
     <template #content>
@@ -70,5 +83,10 @@ const { midiStatus, midiFound, connectMidi } = useNoteSource()
   padding-left: 1.25rem;
   list-style: decimal;
   line-height: 1.4;
+}
+
+.not-found {
+  display: inline-flex;
+  text-align: left;
 }
 </style>

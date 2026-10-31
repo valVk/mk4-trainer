@@ -3,6 +3,7 @@ import { computed, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useRoute } from 'vue-router'
 
+import { useNoteSource } from '@/composables/useNoteSource'
 import { useSynth } from '@/composables/useSynth'
 
 // Sound is the heart of the trainer: screens that play it (route meta `sound`) ask for it in a
@@ -10,7 +11,18 @@ import { useSynth } from '@/composables/useSynth'
 
 const { t } = useI18n()
 const route = useRoute()
-const { status, progress, error, downloaded, bankSizeMb, start } = useSynth()
+const { status, progress, error, downloaded, bankSizeMb, start: startSound } = useSynth()
+const { askMidiOnTap } = useNoteSource()
+
+/** Either answer is a tap: it also asks for the MK4 when MIDI is still undecided (a phone's first visit). */
+function start() {
+  askMidiOnTap()
+  return startSound()
+}
+function later() {
+  askMidiOnTap()
+  open.value = false
+}
 
 /** «Пока без звука»: no more asking until the app is opened again. */
 const declined = ref(false)
@@ -47,7 +59,7 @@ const percent = computed(() => Math.round(progress.value * 100))
             :label="status === 'error' ? t('sound.retry') : t('sound.enable')"
             @click="start"
           />
-          <UButton color="neutral" variant="ghost" size="lg" block :label="t('soundGate.later')" @click="open = false" />
+          <UButton color="neutral" variant="ghost" size="lg" block :label="t('soundGate.later')" @click="later" />
         </template>
       </div>
     </template>

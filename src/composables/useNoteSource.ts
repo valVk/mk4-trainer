@@ -65,7 +65,18 @@ export class WebMidiSource implements NoteSource {
 
   async start(): Promise<void> {
     if (this.access) return
-    this.access = await navigator.requestMIDIAccess({ sysex: true, software: true })
+    try {
+      // SysEx carries the MK4's octave buttons.
+      this.access = await navigator.requestMIDIAccess({ sysex: true, software: true })
+    } catch (error) {
+      // Some phones' browsers refuse SysEx but allow plain MIDI: keys, pads and knobs still work, the octave is
+      // then only known from the notes.
+      try {
+        this.access = await navigator.requestMIDIAccess()
+      } catch {
+        throw error
+      }
+    }
     // Plugging the MK4 in or out re-attaches handlers to whatever is connected now.
     this.access.onstatechange = () => this.attach()
     this.attach()
@@ -307,6 +318,15 @@ async function connectMidi(): Promise<void> {
   }
 }
 
+/**
+ * A tap that answers something else (the sound window): if MIDI is still undecided, ask now, while the browser
+ * counts the tap. Without it a phone used for the first time never sees the MK4 until «Подключить MK4» is found in
+ * the drawer; a tablet that allowed MIDI before connects at start anyway.
+ */
+function askMidiOnTap(): void {
+  if (midiStatus.value === 'idle') void connectMidi()
+}
+
 export function useNoteSource() {
   void virtual.start()
 
@@ -341,6 +361,7 @@ export function useNoteSource() {
     midiError: readonly(midiError),
     midiInputs: readonly(midiInputs),
     connectMidi,
+    askMidiOnTap,
     onEvent,
     pressNote: (note: number) => virtual.pressNote(note),
     releaseNote: (note: number) => virtual.releaseNote(note),
