@@ -102,3 +102,14 @@ test.describe('reading in rhythm', () => {
     await expect(page.getByText('Красные ноты — другая клавиша')).toBeVisible({ timeout: 5000 })
   })
 })
+
+test('a piece plays inside «Теория», and back returns to the level', async ({ page }) => {
+  await open(page, '/train/theory?section=notes')
+  // The way a piece chip opens it: inside «Теория», the address only gains the piece.
+  await page.evaluate(() => (document.querySelector('#app') as unknown as { __vue_app__: { config: { globalProperties: { $router: { push: (to: string) => Promise<void> } } } } }).__vue_app__.config.globalProperties.$router.push('/train/theory?section=notes&piece=10-0'))
+  await expect(page.getByRole('heading', { name: 'Теория' })).toBeVisible()
+  await expect(page.getByRole('button', { name: 'Послушать' })).toBeVisible()
+  await page.getByRole('button', { name: 'К уровню' }).click()
+  await expect(page).toHaveURL(/\/train\/theory\?section=notes$/)
+  await expect(page.getByRole('tab', { name: 'Ноты' })).toHaveAttribute('aria-selected', 'true')
+})

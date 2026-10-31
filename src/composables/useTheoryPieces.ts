@@ -5,7 +5,7 @@ export interface TheoryPiece {
   id: string
   /** Short name for the chip and the button. */
   title: string
-  /** Practice page of the stored piece; null until the built-in pieces are stored. */
+  /** «Теория» showing the piece's practice; null until the built-in pieces are stored. */
   to: string | null
 }
 
@@ -16,7 +16,9 @@ export function useTheoryPieces(section: TheorySection) {
   function piecesAfter(level: number): TheoryPiece[] {
     return PIECES.filter((piece) => piece.after?.section === section && piece.after.level === level).map((piece) => {
       const song = progress.songs.value.find((item) => builtinId(item.fileName) === piece.id)
-      return { id: piece.id, title: piece.short ?? piece.title, to: song ? `/songs/${song.id}/${piece.learner}` : null }
+      // Played inside «Теория», not on the song pages: back returns to the level (the owner's request, 31.10.2026).
+      const query = section === 'rhythm' ? '' : `section=${section}&`
+      return { id: piece.id, title: piece.short ?? piece.title, to: song ? `/train/theory?${query}piece=${song.id}-${piece.learner}` : null }
     })
   }
 

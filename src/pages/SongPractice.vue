@@ -59,14 +59,28 @@ const RATES = [0.5, 0.6, 0.7, 0.8, 1] as const
 
 const { t } = useI18n()
 useWakeLock()
+const props = defineProps<{
+  /** Shown inside another screen (a piece inside «Теория»): the song and part come from there, not the address. */
+  songId?: number
+  channel?: number
+  embedded?: boolean
+}>()
+const emit = defineEmits<{
+  /** Embedded: back to the screen it is shown in. */
+  close: []
+  /** Embedded: what the screen's header should call it. */
+  title: [title: string]
+}>()
+
 const route = useRoute()
+const backTo = computed(() => `/songs/${route.params.id}`)
 const progress = useProgress()
 const synth = useSynth()
 const player = useSongPlayer()
 const { heldNotes, onEvent, pressNote, releaseNote, pressPad } = useNoteSource()
 const { localName, withLocal } = useNoteNames()
 
-const songId = Number(route.params.id)
+const songId = props.songId ?? Number(route.params.id)
 const record = shallowRef<{ name: string, data: ArrayBuffer, fileName: string } | null>(null)
 const song = shallowRef<Song | null>(null)
 const part = shallowRef<Part | null>(null)
@@ -128,7 +142,7 @@ function selectUnit(index: number) {
 async function open() {
   await progress.init()
   const found = await progress.loadSong(songId)
-  const channel = Number(route.params.channel)
+  const channel = props.channel ?? Number(route.params.channel)
   const parsed = found ? parseSong(found.data, found.fileName) : null
   const chosen = parsed?.parts.find((item) => item.channel === channel)
   if (!found || !parsed || !chosen) {
@@ -593,6 +607,9 @@ const partName = computed(() => {
   return findName({ bank: 0, program: current.program }, synth.presets.value) ?? t(`sound.groups.${groupOf(current.program)}`)
 })
 useLastPlace(() => (record.value && partName.value ? `${record.value.name} · ${partName.value}` : null))
+watch(() => (record.value && partName.value ? `${record.value.name} · ${partName.value}` : ''), (title) => {
+  if (title) emit('title', title)
+}, { immediate: true })
 
 const pendingKeys = computed(() => (pending.value && !result.value ? pending.value.keys : []))
 
@@ -681,11 +698,18 @@ const nextLabel = computed(() => {
 </script>
 
 <template>
-  <main class="page page--fill practice">
-    <PageHeader :title="partName || t('songs.title')" :back="`/songs/${route.params.id}`" :back-label="t('songs.backToMap')">
+  <component :is="embedded ? 'div' : 'main'" class="practice" :class="embedded ? 'practice--embedded' : 'page page--fill'">
+    <!-- Inside «Теория» that screen's header is the only one: the title goes up there and the controls move into it. -->
+    <PageHeader
+      v-show="!embedded"
+      :title="partName || t('songs.title')"
+      :back="backTo"
+      :back-label="t('songs.backToMap')"
+    >
       <template #subtitle>
         <p v-if="record" class="text-muted text-sm">{{ record.name }}<template v-if="part">, {{ t('songs.channel', { n: part.channel + 1 }) }}</template></p>
       </template>
+      <Teleport defer to="#page-actions" :disabled="!embedded">
         <USwitch v-model="guided" size="lg" :label="t('songs.guided')" />
         <USwitch v-if="!onPads" v-model="anyOctave" size="lg" :label="t('songs.anyOctave')" />
         <!-- Tips open on tap: tooltips never show on a touch screen. -->
@@ -698,8 +722,10 @@ const nextLabel = computed(() => {
             </div>
           </template>
         </UPopover>
-        <OctaveMapButton v-if="!onPads" :window-start="windowStart" />
+        <!-- Inside «Теория» its own header already has the map. -->
+        <OctaveMapButton v-if="!onPads && !embedded" :window-start="windowStart" />
         <SoundControl :fixed-instrument="partName" :fixed-label="onPads ? t('sound.yourPads', { name: partName }) : undefined" />
+      </Teleport>
     </PageHeader>
 
     <UAlert v-if="notFound" class="mt-6" color="warning" variant="subtle" icon="i-lucide-circle-help" :title="t('songs.partNotFound')" />
@@ -825,12 +851,21 @@ const nextLabel = computed(() => {
         </div>
       </div>
     </template>
-  </main>
+  </component>
 </template>
 
 <style scoped>
 .practice {
   padding: clamp(0.75rem, 3vh, 2rem) clamp(1rem, 2.5vw, 2rem);
+}
+
+/* Inside «Теория»: that screen has the frame and the padding; this fills the rest of it. */
+.practice--embedded {
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 0;
+  min-height: 0;
+  padding: 0;
 }
 
 .controls {
