@@ -22,6 +22,7 @@ import { GLOBAL_PROFILE, createDb, type LevelProgress, type Profile, type SongPr
 import { addSong, deleteSong as deleteSongRow, getSong, getSongProgress, listSongs, resetUnits, saveUnitResult, setSongMix, upsertBuiltin, type SongSummary } from '@/db/songs'
 import { i18n } from '@/i18n'
 import { parseInstrument } from '@/lib/instruments'
+import { parseLastPlace, type LastPlace } from '@/lib/lastPlace'
 import { parseLatencyHistories, parseMetronomeSettings } from '@/lib/metronome'
 import { startLevel, starsFor } from '@/lib/levels'
 import { isValidPadMap, type PadMap } from '@/lib/noteSource'
@@ -44,6 +45,7 @@ const METRONOME_KEY = 'metronome'
 const TRAIN_LEVEL_KEY = 'trainLevel'
 /** Song practice view the child chose last: falling notes, staff or both. */
 const SONG_VIEW_KEY = 'songView'
+const LAST_PLACE_KEY = 'lastPlace'
 /** «Теория» → «Ритм»: passed rhythms per level. */
 const RHYTHM_KEY = 'theoryRhythm'
 /** «Теория» → «Ритм»: tries and misses by kind of note, for the weak spots. */
@@ -71,6 +73,8 @@ const declinedLevels = ref<number[]>([])
 /** Null until the profile's data is loaded. */
 const trainLevel = ref<number | null>(null)
 const songView = ref<SongView>('fall')
+/** Where «Продолжить» on Home leads (plan step 27). */
+const lastPlace = ref<LastPlace | null>(null)
 const rhythmProgress = ref<Record<number, RhythmLevelProgress>>({})
 const rhythmWeak = ref<Partial<Record<RhythmKind, KindStats>>>({})
 const mk4Panel = ref<PanelSettings>({ learnt: {}, actions: {} })
@@ -140,6 +144,7 @@ async function loadProfileData(database: TrainerDb, current: Profile): Promise<v
   const level = await getSetting<unknown>(database, current.id, TRAIN_LEVEL_KEY)
   trainLevel.value = startLevel(level, (id) => levels.value[id]?.correct ?? 0)
   songView.value = parseSongView(await getSetting<unknown>(database, current.id, SONG_VIEW_KEY))
+  lastPlace.value = parseLastPlace(await getSetting<unknown>(database, current.id, LAST_PLACE_KEY))
   rhythmProgress.value = parseRhythmProgress(await getSetting<unknown>(database, current.id, RHYTHM_KEY))
   rhythmWeak.value = parseKindStats(await getSetting<unknown>(database, current.id, RHYTHM_WEAK_KEY))
   mk4Panel.value = parsePanelSettings(await getSetting<unknown>(database, current.id, MK4_PANEL_KEY))
@@ -295,6 +300,14 @@ async function setSongView(view: SongView): Promise<void> {
   await safely((database) => setSetting(database, profileId, SONG_VIEW_KEY, view))
 }
 
+async function setLastPlace(place: LastPlace): Promise<void> {
+  if (lastPlace.value?.path === place.path && lastPlace.value.label === place.label) return
+  lastPlace.value = place
+  const profileId = profile.value?.id
+  if (profileId === undefined) return
+  await safely((database) => setSetting(database, profileId, LAST_PLACE_KEY, { ...place }))
+}
+
 async function setTrainLevel(level: number): Promise<void> {
   if (trainLevel.value === level) return
   trainLevel.value = level
@@ -432,6 +445,7 @@ export function useProgress() {
     declinedLevels: readonly(declinedLevels),
     trainLevel: readonly(trainLevel),
     songView: readonly(songView),
+    lastPlace: readonly(lastPlace),
     rhythmProgress: readonly(rhythmProgress),
     rhythmWeak: readonly(rhythmWeak),
     noteProgress: readonly(noteProgress),
@@ -442,6 +456,7 @@ export function useProgress() {
     declineLevel,
     setTrainLevel,
     setSongView,
+    setLastPlace,
     addRhythmPass,
     addRhythmStats,
     addNoteCorrect,

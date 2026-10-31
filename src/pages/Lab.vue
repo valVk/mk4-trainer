@@ -9,6 +9,7 @@ import PageHeader from '@/components/PageHeader.vue'
 import PianoKeyboard from '@/components/PianoKeyboard.vue'
 import SoundControl from '@/components/SoundControl.vue'
 import { useKeyboardWindow } from '@/composables/useKeyboardWindow'
+import { useLastPlace } from '@/composables/useLastPlace'
 import { useNoteNames } from '@/composables/useNoteNames'
 import { useNoteSource } from '@/composables/useNoteSource'
 import { SETTLE_MS, isRelease, useSettled } from '@/composables/useSettled'
@@ -19,6 +20,7 @@ import { KEYBOARD_KEYS } from '@/lib/keyboard'
 import { buildChord, chordSymbol, identifyChord, intervalsBetween, midiName, noteName } from '@/lib/theory'
 
 const { t } = useI18n()
+useLastPlace(() => t('lab.title'))
 useWakeLock()
 const { heldNotes, pressNote, releaseNote } = useNoteSource()
 const { status: soundStatus, playChord } = useSynth()

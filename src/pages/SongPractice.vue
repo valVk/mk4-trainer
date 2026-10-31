@@ -14,6 +14,7 @@ import SongStaff from '@/components/SongStaff.vue'
 import SoundControl from '@/components/SoundControl.vue'
 import UnitList from '@/components/UnitList.vue'
 import { useMetronome } from '@/composables/useMetronome'
+import { useLastPlace } from '@/composables/useLastPlace'
 import { useMk4Actions } from '@/composables/useMk4Actions'
 import { useNoteNames } from '@/composables/useNoteNames'
 import { useNoteSource } from '@/composables/useNoteSource'
@@ -591,6 +592,7 @@ const partName = computed(() => {
   if (current.isDrum) return t('songs.drums')
   return findName({ bank: 0, program: current.program }, synth.presets.value) ?? t(`sound.groups.${groupOf(current.program)}`)
 })
+useLastPlace(() => (record.value && partName.value ? `${record.value.name} · ${partName.value}` : null))
 
 const pendingKeys = computed(() => (pending.value && !result.value ? pending.value.keys : []))
 

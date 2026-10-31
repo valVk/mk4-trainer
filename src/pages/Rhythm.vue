@@ -4,6 +4,7 @@ import { useI18n } from 'vue-i18n'
 
 import PageHeader from '@/components/PageHeader.vue'
 import RhythmStaff from '@/components/RhythmStaff.vue'
+import { useLastPlace } from '@/composables/useLastPlace'
 import { useMetronome } from '@/composables/useMetronome'
 import { useMk4Actions } from '@/composables/useMk4Actions'
 import { usePadActions } from '@/composables/usePadActions'
@@ -16,6 +17,7 @@ import { DURATIONS, generateBar, type Duration, type Rhythm } from '@/lib/rhythm
 // Rhythm levels with tapping and scoring come in step 17.
 
 const { t, tm, rt } = useI18n()
+useLastPlace(() => t('rhythm.title'))
 useWakeLock()
 const metronome = useMetronome()
 const { settings, running, beat, beatCount, countingIn, calibrating, calibrationTaps, calibrationCountdown, calibrationResult, latency, latencyHistories } = metronome

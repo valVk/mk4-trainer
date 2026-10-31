@@ -8,6 +8,7 @@ import PageHeader from '@/components/PageHeader.vue'
 import PianoKeyboard from '@/components/PianoKeyboard.vue'
 import SoundControl from '@/components/SoundControl.vue'
 import { useKeyboardWindow } from '@/composables/useKeyboardWindow'
+import { useLastPlace } from '@/composables/useLastPlace'
 import { useNoteNames } from '@/composables/useNoteNames'
 import { useNoteSource } from '@/composables/useNoteSource'
 import { usePadActions } from '@/composables/usePadActions'
@@ -28,6 +29,7 @@ const { localName, withLocal } = useNoteNames()
 const progress = useProgress()
 
 const level = ref(1)
+useLastPlace(() => t('home.place.chords', { n: level.value }))
 const task = ref<Task>(generateTask(level.value))
 const streak = ref(0)
 const solved = ref(false)

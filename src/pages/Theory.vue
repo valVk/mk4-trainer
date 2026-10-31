@@ -10,6 +10,7 @@ import SoundControl from '@/components/SoundControl.vue'
 import TheoryNotes from '@/pages/theory/TheoryNotes.vue'
 import TheoryRhythm from '@/pages/theory/TheoryRhythm.vue'
 import { useKeyboardWindow } from '@/composables/useKeyboardWindow'
+import { useLastPlace } from '@/composables/useLastPlace'
 import { NOTE_SECTIONS, type NoteSectionId } from '@/lib/noteLevels'
 
 // «Теория» (plan steps 17-24): the course from the video, section by section, fitted to the 25 keys of the
@@ -29,6 +30,8 @@ const section = computed<Section>(() => {
   const asked = route.query.section
   return READY.find((item) => item === asked) ?? 'rhythm'
 })
+
+useLastPlace(() => t('home.place.theory', { section: t(`theory.sections.${section.value}`) }))
 
 /** Sections run by the note-finding screen; «Ритм» has its own. */
 const noteSection = computed<NoteSectionId | null>(() => (section.value in NOTE_SECTIONS ? section.value as NoteSectionId : null))

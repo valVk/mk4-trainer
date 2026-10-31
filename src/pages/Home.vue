@@ -11,7 +11,7 @@ const { t } = useI18n()
 
 const cMajor = buildChord(60, 'maj')
 const { downloaded, bankSizeMb } = useSynth()
-const { profile } = useProgress()
+const { profile, lastPlace } = useProgress()
 </script>
 
 <template>
@@ -32,6 +32,14 @@ const { profile } = useProgress()
     <section>
       <h1 class="title text-highlighted">{{ t('home.title') }}</h1>
       <p class="lead text-muted">{{ t('home.lead') }}</p>
+      <!-- Back to where the child stopped: the screen reopens on its level, phrase or section (plan step 27). -->
+      <RouterLink v-if="lastPlace" :to="lastPlace.path" class="continue">
+        <UIcon name="i-lucide-play" class="continue__icon" />
+        <span class="continue__text">
+          <span class="continue__title">{{ t('home.continue') }}</span>
+          <span class="continue__place">{{ lastPlace.label }}</span>
+        </span>
+      </RouterLink>
       <figure class="example">
         <ChordDiagram :lit="cMajor" animated />
         <figcaption class="mt-3 text-muted">{{ t('home.example') }}</figcaption>
@@ -86,14 +94,66 @@ const { profile } = useProgress()
 
 .lead {
   max-width: 34ch;
-  margin-top: 1.25rem;
+  margin-top: 1rem;
   font-size: 1.25rem;
   line-height: 1.45;
 }
 
 .example {
   max-width: 24rem;
-  margin-top: 2.5rem;
+  margin-top: 2rem;
+}
+
+/* Short screens (a small tablet, a laptop): the example gives up room so nothing scrolls. */
+@media (max-height: 700px) {
+  .example {
+    max-width: 18rem;
+    margin-top: 1.25rem;
+  }
+}
+
+.continue {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  max-width: 26rem;
+  margin-top: 1.5rem;
+  padding: 1rem 1.25rem;
+  border-radius: 1rem;
+  color: var(--color-on-fill);
+  background: var(--color-active);
+  box-shadow: 0 6px 0 color-mix(in oklab, var(--color-active) 55%, var(--color-shade));
+  transition: transform 150ms var(--ease-out), box-shadow 150ms var(--ease-out);
+}
+
+.continue:active {
+  transform: translateY(4px);
+  box-shadow: 0 2px 0 color-mix(in oklab, var(--color-active) 55%, var(--color-shade));
+}
+
+.continue__icon {
+  flex-shrink: 0;
+  width: 2rem;
+  height: 2rem;
+}
+
+.continue__text {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.continue__title {
+  font-family: var(--font-display);
+  font-size: 1.25rem;
+  font-weight: 800;
+}
+
+.continue__place {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  opacity: 0.9;
 }
 
 .sound-status {

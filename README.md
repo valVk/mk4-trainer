@@ -1,7 +1,7 @@
-# MK4 Trainer (chord-trainer)
+# Академия клавиш (Keys Academy, repo mk4-trainer)
 
-A music trainer for a child, played on an **Akai MPK Mini IV** (MK4: 25 keys and 8 pads) connected to a
-tablet. It teaches chords, songs and rhythm, works offline as a PWA,
+A personal piano academy for a child, played on an **Akai MPK Mini IV** (MK4: 25 keys and 8 pads) connected to a
+tablet. It teaches chords, a music theory course, songs and rhythm, works offline as a PWA,
 and saves progress on the device for each player. The interface is in Russian.
 
 Live: https://valvk.github.io/mk4-trainer/
