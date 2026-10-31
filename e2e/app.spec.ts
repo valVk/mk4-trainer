@@ -47,3 +47,27 @@ test.describe('portrait on a touch tablet', () => {
     await expect(page.getByText('Поверни планшет')).toBeVisible()
   })
 })
+
+test('without Web MIDI the MK4 state says calmly that it needs Chrome', async ({ page }) => {
+  // Safari and Firefox have no Web MIDI: the app still works with the screen keys.
+  await page.addInitScript(() => {
+    delete (Navigator.prototype as unknown as { requestMIDIAccess?: unknown }).requestMIDIAccess
+  })
+  await open(page, '/lab')
+  await page.getByRole('button', { name: /^Меню/ }).click()
+  await page.getByRole('button', { name: 'MK4: нужен Chrome' }).click()
+  await expect(page.getByText(/работают в любом браузере/)).toBeVisible()
+})
+
+// Phones in landscape (plan step 30): the main screens fit there too.
+test.describe('on a phone in landscape', () => {
+  test.use({ viewport: { width: 844, height: 390 }, hasTouch: true })
+  for (const path of ['/', '/train', '/train/chords', '/train/theory', '/train/theory?section=notes', '/lab', '/rhythm']) {
+    test(`${path} fits without scrolling`, async ({ page }) => {
+      await open(page, path)
+      const size = await scrollSize(page)
+      expect(size.width).toBeLessThanOrEqual(844)
+      expect(size.height).toBeLessThanOrEqual(390)
+    })
+  }
+})

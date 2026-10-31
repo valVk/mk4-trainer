@@ -4,8 +4,9 @@ import { useI18n } from 'vue-i18n'
 import StatusLed from '@/components/StatusLed.vue'
 import { useNoteSource } from '@/composables/useNoteSource'
 
-// MK4 state in a header, as it really is: a lit LED when a keyboard is found, a calm «не найдена» when
-// MIDI works but nothing is plugged in, the connect button otherwise, and how to unblock MIDI when Chrome blocked it.
+// MK4 state, as it really is: a lit LED when a keyboard is found, a calm «не найдена» when MIDI works but nothing
+// is plugged in, the connect button otherwise, how to unblock MIDI when Chrome blocked it, and that the MK4 needs
+// Chrome in a browser without Web MIDI.
 const { t } = useI18n()
 const { midiStatus, midiFound, connectMidi } = useNoteSource()
 </script>
@@ -27,8 +28,16 @@ const { midiStatus, midiFound, connectMidi } = useNoteSource()
       </div>
     </template>
   </UPopover>
+  <!-- No Web MIDI (Safari, Firefox): the app works with the screen keys and the computer keyboard; only the MK4
+       needs Chrome. Said calmly, on a tap, never as an alarm (plan step 30). -->
+  <UPopover v-else-if="midiStatus === 'unsupported'" :content="{ side: 'bottom', align: 'end' }">
+    <UButton icon="i-lucide-info" color="neutral" variant="ghost" size="lg" :label="t('midi.needsChrome')" />
+    <template #content>
+      <p class="needs-chrome text-toned">{{ t('midi.needsChromeHint') }}</p>
+    </template>
+  </UPopover>
   <UButton
-    v-else-if="midiStatus !== 'unsupported'"
+    v-else
     icon="i-lucide-plug"
     color="neutral"
     variant="soft"
@@ -40,6 +49,12 @@ const { midiStatus, midiFound, connectMidi } = useNoteSource()
 </template>
 
 <style scoped>
+.needs-chrome {
+  width: min(22rem, 90vw);
+  padding: 0.875rem 1rem;
+  line-height: 1.4;
+}
+
 .blocked {
   display: flex;
   flex-direction: column;
