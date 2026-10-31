@@ -9,7 +9,7 @@ import { useMk4Actions } from '@/composables/useMk4Actions'
 import { padsPlayMusic, usePadActions } from '@/composables/usePadActions'
 import { useProgress } from '@/composables/useProgress'
 import { useRhythmPlayer } from '@/composables/useRhythmPlayer'
-import { useShortScreen } from '@/composables/useShortScreen'
+import { usePhoneScreen, useShortScreen } from '@/composables/useShortScreen'
 import { useTheoryPiece } from '@/composables/useTheoryPiece'
 import { useTheoryPieces } from '@/composables/useTheoryPieces'
 import { useTimedPresses, type TimedPress } from '@/composables/useTimedPresses'
@@ -191,8 +191,9 @@ function listen() {
  */
 /** Short screens (the smaller tablets, 650 px high) get a smaller staff, so the page does not scroll. */
 const short = useShortScreen()
-const staffScale = computed(() => (lowerTask.value ? (short.value ? 1 : 1.35) : short.value ? 1.6 : 2))
-const introScale = computed(() => (short.value ? 1.25 : 1.5))
+const phone = usePhoneScreen()
+const staffScale = computed(() => (lowerTask.value ? (phone.value ? 0.7 : short.value ? 1 : 1.35) : phone.value ? 1.1 : short.value ? 1.6 : 2))
+const introScale = computed(() => (phone.value ? 0.85 : short.value ? 1.25 : 1.5))
 
 const metronomeOn = computed(() => metronome.running.value)
 /** Counts the beats heard, to restart the beat light on each one (also when the same beat number comes again). */

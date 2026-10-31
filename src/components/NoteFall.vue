@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { onBeforeUnmount, onMounted, ref } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 
 import { keyboardKeys } from '@/lib/keyboard'
 import { PAD_NOTE_MIN_S } from '@/lib/padLayout'
@@ -32,6 +32,21 @@ const canvas = ref<HTMLCanvasElement | null>(null)
 let frame = 0
 const PAD_ROW = 4
 const PAD_LANES = 8
+
+/** Pixels between a note and the next one on the same key, so repeats read as separate notes. */
+const NOTE_GAP_PX = 3
+
+/** For every note, when the next note on its key starts (none for the last one). */
+const nextOnKey = computed(() => {
+  const next = new Map<SongNote, number>()
+  const last = new Map<number, SongNote>()
+  for (const note of [...props.notes].sort((a, b) => b.start - a.start)) {
+    const later = last.get(note.key)
+    if (later) next.set(note, later.start)
+    last.set(note.key, note)
+  }
+  return next
+})
 
 /** Left-to-right lane (0-7) of a pad index (0-7): bottom pads on even lanes, top pads on odd ones. */
 function padLane(index: number): number {
@@ -112,6 +127,7 @@ function draw() {
 
   const now = props.getTime()
   const pxPerSecond = height / props.lookahead
+  const nextStart = nextOnKey.value
   const pending = new Set(props.pending)
   for (const note of props.notes) {
     const until = note.start - now
@@ -120,9 +136,12 @@ function draw() {
     const bottom = height - until * pxPerSecond
     const padIndex = props.padKeys ? props.padKeys.indexOf(note.key) : -1
     // Pad notes last at least PAD_NOTE_MIN_S (their pad stays lit as long) and are tall enough to carry their number.
-    const top = padIndex === -1
+    const tall = padIndex === -1
       ? bottom - Math.max(6, note.length * pxPerSecond)
       : bottom - Math.max(22, Math.max(note.length, PAD_NOTE_MIN_S) * pxPerSecond)
+    // A note ends a little before the next one on its key: repeated notes (a drum roll) stay apart.
+    const next = nextStart.get(note)
+    const top = next === undefined ? tall : Math.max(tall, height - (next - now) * pxPerSecond + NOTE_GAP_PX)
     // Darker: black keys, or pads of the top row.
     const isBlack = props.padKeys ? padIndex >= PAD_ROW : [1, 3, 6, 8, 10].includes(note.key % 12)
     context.globalAlpha = until < 0 ? 0.35 : 1

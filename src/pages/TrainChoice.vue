@@ -201,4 +201,16 @@ const rhythmStars = computed(() => starsOf(progress.rhythmProgress.value[rhythmL
     transform: none;
   }
 }
+
+/* Phones in landscape: the cards a little tighter. */
+@media (orientation: landscape) and (max-height: 500px) {
+  .card__top {
+    padding-block: 0.5rem;
+  }
+
+  .card__body {
+    gap: 0.5rem;
+    padding-block: 0.5rem;
+  }
+}
 </style>

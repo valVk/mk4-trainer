@@ -130,12 +130,20 @@ setAppMk4Actions({
   text-align: center;
 }
 
+/* Phones in landscape: the footer as thin as it can be. */
+@media (orientation: landscape) and (max-height: 500px) {
+  .footer {
+    padding-block: 0.25rem;
+  }
+}
+
 .footer__tools {
   position: absolute;
-  top: 50%;
+  top: 0;
+  bottom: 0;
   right: clamp(1rem, 2.5vw, 2rem);
   display: flex;
+  align-items: center;
   gap: 0.25rem;
-  transform: translateY(-50%);
 }
 </style>

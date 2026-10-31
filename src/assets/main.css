@@ -281,6 +281,11 @@ body {
   html {
     font-size: 12px;
   }
+
+  /* Little room around the screen's edges: every pixel of height goes to the content. */
+  .page {
+    padding-bottom: 0.25rem;
+  }
 }
 
 /* The drawer (PageHeader) pushes the whole page aside as it slides in, as in Material UI. */

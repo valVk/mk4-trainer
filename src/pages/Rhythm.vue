@@ -10,6 +10,7 @@ import { useMk4Actions } from '@/composables/useMk4Actions'
 import { useProgress } from '@/composables/useProgress'
 import { usePadActions } from '@/composables/usePadActions'
 import { useRhythmPlayer } from '@/composables/useRhythmPlayer'
+import { usePhoneScreen } from '@/composables/useShortScreen'
 import { useWakeLock } from '@/composables/useWakeLock'
 import { BPM_MAX, BPM_MIN, CALIBRATION_TAPS, METERS, METRONOME_SOUNDS, TAP_INPUTS, accentOf, tempoName } from '@/lib/metronome'
 import { DURATIONS, generateBar, type Duration, type Rhythm } from '@/lib/rhythm'
@@ -24,6 +25,8 @@ const metronome = useMetronome()
 // The app's «С подсказкой» (plan step 29): the example rhythm shows its counts and the note being played. Nothing
 // here is scored, so there is no exam.
 const progress = useProgress()
+/** On a phone in landscape the example staff is drawn smaller, so the page does not scroll. */
+const phone = usePhoneScreen()
 const { settings, running, beat, beatCount, countingIn, calibrating, calibrationTaps, calibrationCountdown, calibrationResult, latency, latencyHistories } = metronome
 
 usePadActions({
@@ -211,7 +214,7 @@ function listenExample() {
           <UTabs v-model="sideTab" :items="sideTabs" :content="false" size="lg" />
         </template>
         <div v-if="sideTab === 'rhythms'" class="flex flex-col gap-4">
-          <RhythmStaff :rhythm="example" :counts="progress.guide.value" :current="progress.guide.value ? rhythmPlayer.current.value : null" />
+          <RhythmStaff :rhythm="example" :scale="phone ? 1 : undefined" :counts="progress.guide.value" :current="progress.guide.value ? rhythmPlayer.current.value : null" />
           <div class="flex flex-wrap gap-2" role="group" :aria-label="t('rhythm.valuesLabel')">
             <UButton
               v-for="value in DURATIONS"
@@ -471,6 +474,26 @@ function listenExample() {
 
   .bpm {
     font-size: 2.5rem;
+  }
+}
+
+/* Phones in landscape: the beat and the controls closer together. */
+@media (orientation: landscape) and (max-height: 500px) {
+  .pulse {
+    gap: 0.5rem;
+    padding-block: 0.25rem;
+  }
+
+  .dots {
+    min-height: 3rem;
+  }
+
+  .layout {
+    margin-top: 0.25rem;
+  }
+
+  .tap {
+    min-height: 6rem;
   }
 }
 </style>

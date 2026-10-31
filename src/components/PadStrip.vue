@@ -114,4 +114,11 @@ const cells = computed(() =>
     transform: none;
   }
 }
+
+/* Phones in landscape: wider than tall, so the two rows leave room for the notes above. */
+@media (orientation: landscape) and (max-height: 500px) {
+  .pad {
+    aspect-ratio: 1.8;
+  }
+}
 </style>

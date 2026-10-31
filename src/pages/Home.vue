@@ -220,6 +220,42 @@ const { profile, lastPlace } = useProgress()
   }
 }
 
+/* Phones in landscape: less room above and below, the pads fill the rest. */
+@media (orientation: landscape) and (max-height: 500px) {
+  .home {
+    padding-block: 2.5rem 0.25rem;
+  }
+
+  .example {
+    max-width: 14rem;
+    margin-top: 1rem;
+  }
+
+  .continue {
+    margin-top: 1rem;
+    padding-block: 0.625rem;
+  }
+
+  /* With «Продолжить» there is no room for the chord example too: the way back to work comes first. */
+  .continue + .example {
+    display: none;
+  }
+
+  .pads {
+    grid-template-rows: 1fr 1fr auto auto;
+    gap: 0.75rem;
+  }
+
+  .pad-wide {
+    min-height: 3.5rem;
+  }
+
+  .sound-status {
+    margin-top: 0;
+    font-size: 0.8125rem;
+  }
+}
+
 /* Portrait and narrow windows: text above, pads full width below. Phones in landscape keep the two columns. */
 @media (max-width: 699px), (orientation: portrait) {
   .home {

@@ -119,4 +119,11 @@ defineProps<{
     transition: box-shadow 120ms ease;
   }
 }
+
+/* Phones in landscape: the pads share the screen's height, no minimum. */
+@media (orientation: landscape) and (max-height: 500px) {
+  .pad {
+    min-height: 0;
+  }
+}
 </style>

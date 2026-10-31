@@ -606,4 +606,17 @@ const levelItems = computed(() => LEVELS.map((item) => ({ label: String(item.id)
     from { opacity: 0; }
   }
 }
+
+/* Phones in landscape: the task in less room, the keys keep theirs. */
+@media (orientation: landscape) and (max-height: 500px) {
+  .task {
+    gap: 0.5rem;
+    min-height: 0;
+    padding-block: 0.5rem;
+  }
+
+  .prompt {
+    font-size: clamp(1.75rem, 4.5vw, 2.5rem);
+  }
+}
 </style>
