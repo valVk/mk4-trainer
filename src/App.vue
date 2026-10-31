@@ -10,7 +10,7 @@ import { setAppMk4Actions } from '@/composables/useMk4Actions'
 import { useMetronome } from '@/composables/useMetronome'
 import { usePadActions } from '@/composables/usePadActions'
 import { useProgress } from '@/composables/useProgress'
-import { moveFocus } from '@/lib/focusMove'
+import { pressKnob, releaseKnob, turnKnob } from '@/lib/focusMove'
 import { addTap, knobBpm, tapBpm } from '@/lib/mk4Control'
 
 // Connect the MK4 right away when MIDI is already allowed; otherwise the «Подключить MK4» button asks.
@@ -41,10 +41,11 @@ setAppMk4Actions({
   },
   metronome: () => metronome.toggle(),
   tempo: (value) => metronome.update({ bpm: knobBpm(value ?? 64) }),
-  next: () => moveFocus(1),
-  previous: () => moveFocus(-1),
-  select: () => (document.activeElement as HTMLElement | null)?.click(),
-  back: () => router.back(),
+  next: () => turnKnob(1),
+  previous: () => turnKnob(-1),
+  select: () => pressKnob(),
+  // Undo first lets go of a grabbed control, then goes back.
+  back: () => releaseKnob() || router.back(),
 })
 </script>
 

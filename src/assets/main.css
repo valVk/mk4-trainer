@@ -101,6 +101,12 @@ body {
   box-shadow: inset 0 0 0 100vmax color-mix(in oklab, var(--ui-text-highlighted) 14%, transparent) !important;
 }
 
+/* Grabbed by the MK4 display knob (Push): turning moves it now, so it looks taken, a stronger sky tint. */
+.knob-grabbed:focus-visible,
+.knob-grabbed {
+  box-shadow: inset 0 0 0 100vmax color-mix(in oklab, var(--color-pad-sky) 30%, transparent) !important;
+}
+
 /* Page frame shared by every screen. Low specificity, so a page's own rules win. */
 :where(.page) {
   width: 100%;

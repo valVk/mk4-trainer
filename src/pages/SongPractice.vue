@@ -562,14 +562,26 @@ usePadActions({
   levelUp: () => (guided.value ? changeRung(1) : changeFreeRate(1)),
 })
 
-function seekInRange(event: MouseEvent) {
-  const box = (event.currentTarget as HTMLElement).getBoundingClientRect()
-  const span = endTime.value - startTime.value
-  const time = startTime.value + ((event.clientX - box.left) / box.width) * span
+/** Moves within the attempt's range, playing on if it played. */
+function seekWithin(time: number) {
   const wasPlaying = player.playing.value
   player.pause()
-  resetTo(time)
+  resetTo(Math.min(endTime.value, Math.max(startTime.value, time)))
   if (wasPlaying) player.play()
+}
+
+function seekInRange(event: MouseEvent) {
+  const box = (event.currentTarget as HTMLElement).getBoundingClientRect()
+  seekWithin(startTime.value + ((event.clientX - box.left) / box.width) * (endTime.value - startTime.value))
+}
+
+/** The MK4 display knob turning the grabbed bar: one click, one bar line back or forward. */
+function seekByBar(step: 1 | -1) {
+  const bars = song.value?.bars ?? []
+  const now = player.time.value
+  // A little slack, so a click from a bar line goes to the next one, not to where it is.
+  const target = step > 0 ? bars.find((bar) => bar > now + 0.05) : [...bars].reverse().find((bar) => bar < now - 0.05)
+  if (target !== undefined) seekWithin(target)
 }
 
 const partName = computed(() => {
@@ -776,7 +788,7 @@ const nextLabel = computed(() => {
           <UAlert v-if="part.isDrum && !layout" class="drums-alert mt-3" color="warning" variant="subtle" icon="i-lucide-drum" :title="t('songs.tooManyForPads')" />
 
           <!-- The bar is thin, the tap area is finger-sized. -->
-          <button type="button" class="progress" tabindex="-1" :aria-label="t('songs.partPosition')" @click="seekInRange">
+          <button type="button" class="progress" data-knob-turn :aria-label="t('songs.partPosition')" @click="seekInRange" @knobturn="seekByBar(($event as CustomEvent<1 | -1>).detail)">
             <span class="progress__track">
               <span class="progress__fill" :style="{ width: `${rangeProgress}%` }" />
             </span>
