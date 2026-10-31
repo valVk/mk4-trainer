@@ -150,10 +150,9 @@ void open()
 
 const barLength = computed(() => (song.value ? (song.value.bars[1] ?? 2) - (song.value.bars[0] ?? 0) : 2))
 const steps = computed(() => (guided.value ? unit.value?.steps : part.value?.steps) ?? [])
-const startTime = computed(() => {
-  const first = guided.value ? (unit.value?.start ?? 0) : (freeFrom.value ?? steps.value[0]?.time ?? 0)
-  return Math.max(0, first - barLength.value * (guided.value ? UNIT_LEAD_IN_BARS : FREE_LEAD_IN_BARS))
-})
+const firstTime = computed(() => (guided.value ? (unit.value?.start ?? 0) : (freeFrom.value ?? steps.value[0]?.time ?? 0)))
+const leadIn = computed(() => barLength.value * (guided.value ? UNIT_LEAD_IN_BARS : FREE_LEAD_IN_BARS))
+const startTime = computed(() => Math.max(0, firstTime.value - leadIn.value))
 // Guided mode shows and plays only the unit's notes; a long last note may ring past the unit's bar line.
 const fallNotes = computed(() => {
   const notes = part.value?.notes ?? []
@@ -220,8 +219,51 @@ function resetTo(time: number) {
   waiting.value = false
 }
 
+/**
+ * Beat of the count-in shown big, while the song waits. A unit at the very start of the song has no bars before
+ * it to lead in with: those beats are counted in with the metronome's clicks, so the child has time to get ready.
+ */
+const countIn = ref<number | null>(null)
+let countTimers: ReturnType<typeof setTimeout>[] = []
+let countClicks: AudioScheduledSourceNode[] = []
+
+function stopCountIn() {
+  countTimers.forEach(clearTimeout)
+  countClicks.forEach((click) => click.stop())
+  countTimers = []
+  countClicks = []
+  countIn.value = null
+}
+
+/** Plays from the start of the attempt, counting in first the beats the song has no room for. */
+function playWithCountIn() {
+  stopCountIn()
+  const beatsPerBar = song.value?.timeSignature.numerator ?? 4
+  const beat = barLength.value / beatsPerBar
+  // One bar at most: 4-3-2-1 once is enough to get ready.
+  const missing = Math.min(beatsPerBar, Math.round((leadIn.value - (firstTime.value - startTime.value)) / beat))
+  if (missing <= 0) {
+    player.play()
+    return
+  }
+  const gap = beat / rate.value
+  const audio = metronome.audioContext()
+  for (let i = 0; i < missing; i++) {
+    const left = missing - i
+    countClicks.push(...metronome.clickAt(audio.currentTime + 0.05 + i * gap, left % beatsPerBar === 0 ? 'strong' : 'weak'))
+    countTimers.push(setTimeout(() => (countIn.value = (left - 1) % beatsPerBar + 1), 50 + i * gap * 1000))
+  }
+  countTimers.push(setTimeout(() => {
+    countTimers = []
+    countClicks = []
+    countIn.value = null
+    player.play()
+  }, 50 + missing * gap * 1000))
+}
+
 /** Puts the song at the start of the current unit (or part), paused, with a fresh attempt. */
 function prepare() {
+  stopCountIn()
   player.pause()
   result.value = null
   presses = []
@@ -238,7 +280,7 @@ function prepare() {
 function startAttempt() {
   listenOnce.value = false
   prepare()
-  player.play()
+  playWithCountIn()
 }
 
 // Load the song once sound is on; the child's keys sound with the part's instrument.
@@ -409,6 +451,7 @@ function toggleMetronome() {
 }
 
 onBeforeUnmount(() => {
+  stopCountIn()
   metronome.followSong(null)
   cancelAnimationFrame(frame)
   padsPlayMusic.value = false
@@ -424,11 +467,14 @@ async function withSound(action: () => void) {
 }
 
 function togglePlay() {
-  if (player.playing.value || waiting.value) {
+  if (player.playing.value || waiting.value || countIn.value !== null) {
+    stopCountIn()
     player.pause()
     waiting.value = false
   } else if (result.value || player.time.value >= endTime.value) {
     startAttempt()
+  } else if (player.time.value <= startTime.value) {
+    playWithCountIn()
   } else {
     player.play()
   }
@@ -697,10 +743,10 @@ const nextLabel = computed(() => {
             <UButton icon="i-lucide-ear" color="neutral" variant="soft" size="lg" :label="t('songs.listen')" @click="withSound(listen)" />
             <UButton icon="i-lucide-rotate-ccw" color="neutral" variant="soft" size="lg" :label="t('songs.again')" @click="withSound(startAttempt)" />
             <UButton
-              :icon="player.playing.value || waiting ? 'i-lucide-pause' : 'i-lucide-play'"
+              :icon="player.playing.value || waiting || countIn !== null ? 'i-lucide-pause' : 'i-lucide-play'"
               size="lg"
               :loading="synth.status.value === 'loading'"
-              :label="player.playing.value || waiting ? t('songs.pause') : t('songs.play')"
+              :label="player.playing.value || waiting || countIn !== null ? t('songs.pause') : t('songs.play')"
               @click="withSound(togglePlay)"
             />
 
@@ -742,6 +788,7 @@ const nextLabel = computed(() => {
               <UIcon :name="hint === 'up' ? 'i-lucide-arrow-up' : 'i-lucide-arrow-down'" class="size-4 shrink-0" />
               {{ t(`songs.octave.${hint}`) }}
             </p>
+            <span v-if="countIn !== null" class="count-in" aria-live="assertive">{{ countIn }}</span>
             <ResultCard v-if="result" :result="result" :guided="guided" :unit-done="unitFinished && !hasNextRung" :next-label="nextLabel" @next="nextRung" @again="startAttempt" />
             <div class="view-switch segmented" role="radiogroup" :aria-label="t('songs.viewLabel')">
               <button v-for="item in SONG_VIEWS" :key="item" type="button" role="radio" class="segment" :class="{ 'segment--on': view === item }" :aria-checked="view === item" @click="view = item">
@@ -984,6 +1031,19 @@ const nextLabel = computed(() => {
     order: 1;
     padding-block: 0 0.75rem;
   }
+}
+
+.count-in {
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  display: grid;
+  place-items: center;
+  font-family: var(--font-display);
+  font-size: 6rem;
+  font-weight: 800;
+  color: var(--color-pad-sky);
+  pointer-events: none;
 }
 
 .stage {
