@@ -105,7 +105,7 @@ defineEmits<{ choose: [index: number] }>()
 }
 
 .rung--current {
-  box-shadow: 0 0 0 2px var(--color-active) inset;
+  box-shadow: 0 0 0 var(--ring-width) var(--color-active) inset;
   background: color-mix(in oklab, var(--color-active) 14%, var(--ui-bg-elevated));
 }
 

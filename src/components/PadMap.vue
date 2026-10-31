@@ -190,12 +190,12 @@ function reset() {
 }
 
 .pad--done {
-  box-shadow: 0 0 0 2px var(--color-correct) inset, 0 5px 0 var(--rubber-edge);
+  box-shadow: 0 0 0 var(--ring-width) var(--color-correct) inset, 0 5px 0 var(--rubber-edge);
 }
 
 /* The pad to press now: a slow ring pulse draws the eye without moving anything */
 .pad--target {
-  box-shadow: 0 0 0 3px var(--color-active) inset, 0 5px 0 var(--rubber-edge);
+  box-shadow: 0 0 0 var(--ring-width-strong) var(--color-active) inset, 0 5px 0 var(--rubber-edge);
   animation: target 1.4s ease-in-out infinite;
 }
 
@@ -212,7 +212,7 @@ function reset() {
 
 @keyframes target {
   50% {
-    box-shadow: 0 0 0 3px var(--color-active) inset, 0 5px 0 var(--rubber-edge), 0 0 0 6px color-mix(in oklab, var(--color-active) 30%, transparent);
+    box-shadow: 0 0 0 var(--ring-width-strong) var(--color-active) inset, 0 5px 0 var(--rubber-edge), 0 0 0 6px color-mix(in oklab, var(--color-active) 30%, transparent);
   }
 }
 

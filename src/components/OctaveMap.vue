@@ -122,7 +122,7 @@ watch(() => [props.held, props.scale], draw, { deep: true })
   bottom: 1.5rem;
   border-radius: 0.5rem;
   background: color-mix(in oklab, var(--color-active) 16%, transparent);
-  box-shadow: 0 0 0 2px var(--color-active) inset;
+  box-shadow: 0 0 0 var(--ring-width) var(--color-active) inset;
   transition: left 200ms var(--ease-out), width 200ms var(--ease-out);
   pointer-events: none;
 }

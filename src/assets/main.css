@@ -60,6 +60,11 @@
   --color-focus: #c4753a;
   --color-on-focus: #fff;
 
+  /* Rings that mark a state (selected, current, done, the knob's place): thin, and one width everywhere. */
+  --ring-width: 1.5px;
+  /* Pads and keys on the calibration map, seen from further away. */
+  --ring-width-strong: 2px;
+
   /* Shadows under cards, results and pressed pads. */
   --shadow-soft: rgb(0 0 0 / 0.35);
   --shadow-strong: rgb(0 0 0 / 0.5);
@@ -140,7 +145,7 @@ body {
  */
 :focus-visible {
   outline: none !important;
-  box-shadow: inset 0 0 0 1.5px var(--color-focus) !important;
+  box-shadow: inset 0 0 0 var(--ring-width) var(--color-focus) !important;
   color: var(--color-focus) !important;
 }
 
@@ -182,7 +187,7 @@ body {
 /* The current step (blue ring and tint) under the knob: the same in peach; its label keeps its colour. */
 :focus-visible[aria-current]:not([aria-current="false"]) {
   box-shadow:
-    inset 0 0 0 1.5px var(--color-focus),
+    inset 0 0 0 var(--ring-width) var(--color-focus),
     inset 0 0 0 100vmax color-mix(in oklab, var(--color-focus) 14%, var(--ui-bg-elevated)) !important;
   color: inherit !important;
 }

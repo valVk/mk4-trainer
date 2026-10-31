@@ -832,7 +832,7 @@ const INTRO_NOTES: Partial<Record<NoteIntroId, { show: 'treble' | 'bass' | 'gran
 
 .pill--octave {
   color: var(--ui-text-highlighted);
-  box-shadow: 0 0 0 2px var(--color-active) inset;
+  box-shadow: 0 0 0 var(--ring-width) var(--color-active) inset;
 }
 
 .hands {

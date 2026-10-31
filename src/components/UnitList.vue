@@ -75,11 +75,11 @@ defineEmits<{ select: [index: number] }>()
 }
 
 .unit--current {
-  box-shadow: 0 0 0 2px var(--color-active) inset;
+  box-shadow: 0 0 0 var(--ring-width) var(--color-active) inset;
 }
 
 .unit--next {
-  box-shadow: 0 0 0 2px var(--color-correct) inset;
+  box-shadow: 0 0 0 var(--ring-width) var(--color-correct) inset;
 }
 
 .unit--done .unit__name {

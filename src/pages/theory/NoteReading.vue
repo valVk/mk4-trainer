@@ -228,7 +228,7 @@ onBeforeUnmount(() => cancelAnimationFrame(countFrame))
   font-weight: 600;
   color: var(--ui-text-highlighted);
   background: var(--ui-bg-elevated);
-  box-shadow: 0 0 0 2px var(--color-active) inset;
+  box-shadow: 0 0 0 var(--ring-width) var(--color-active) inset;
 }
 
 .note-keys {

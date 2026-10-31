@@ -55,7 +55,7 @@
 }
 
 .level--done:not(.level--on) {
-  box-shadow: 0 0 0 2px var(--color-correct) inset;
+  box-shadow: 0 0 0 var(--ring-width) var(--color-correct) inset;
 }
 
 .levels-row {
@@ -125,11 +125,11 @@
 }
 
 .result--passed {
-  box-shadow: 0 0 0 2px var(--color-correct) inset, 0 12px 32px -12px var(--shadow-soft);
+  box-shadow: 0 0 0 var(--ring-width) var(--color-correct) inset, 0 12px 32px -12px var(--shadow-soft);
 }
 
 .result--again {
-  box-shadow: 0 0 0 2px var(--color-attention) inset, 0 12px 32px -12px var(--shadow-soft);
+  box-shadow: 0 0 0 var(--ring-width) var(--color-attention) inset, 0 12px 32px -12px var(--shadow-soft);
 }
 
 .result__title {
