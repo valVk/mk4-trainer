@@ -2,16 +2,20 @@
 import { computed, onBeforeUnmount, ref, shallowRef, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 
+import BeatRuler from '@/components/BeatRuler.vue'
 import CountIn from '@/components/CountIn.vue'
 import ExamBadge from '@/components/ExamBadge.vue'
 import HelpSwitch from '@/components/HelpSwitch.vue'
+import PianoKeyboard from '@/components/PianoKeyboard.vue'
 import RhythmStaff from '@/components/RhythmStaff.vue'
 import StarRating from '@/components/StarRating.vue'
 import { useCountIn } from '@/composables/useCountIn'
 import { useHelp } from '@/composables/useHelp'
+import { useKeyboardWindow } from '@/composables/useKeyboardWindow'
 import SongPractice from '@/pages/SongPractice.vue'
 import { useMetronome } from '@/composables/useMetronome'
 import { useMk4Actions } from '@/composables/useMk4Actions'
+import { useNoteSource } from '@/composables/useNoteSource'
 import { padsPlayMusic, usePadActions } from '@/composables/usePadActions'
 import { useProgress } from '@/composables/useProgress'
 import { useRhythmPlayer } from '@/composables/useRhythmPlayer'
@@ -22,7 +26,7 @@ import { useTimedPresses, type TimedPress } from '@/composables/useTimedPresses'
 import { useWakeLock } from '@/composables/useWakeLock'
 import { EXAM_STARS } from '@/lib/levels'
 import { scaleGroups } from '@/lib/metronome'
-import { noteMark, scoreRhythm, sounds, type NoteMark, type Rhythm, type RhythmScore } from '@/lib/rhythm'
+import { noteMark, scoreRhythm, sounds, totalQuarters, type NoteMark, type Rhythm, type RhythmScore } from '@/lib/rhythm'
 import {
   RHYTHM_LEVELS,
   RHYTHM_TEMPOS,
@@ -308,7 +312,9 @@ const timed = useTimedPresses({
   // Pad 1 is the drum; with two hands pads 1-4 are the left hand and 5-8 the right.
   pad: (pad) => (lowerTask.value ? { hand: padHand(pad) } : pad === 1 ? {} : null),
 })
-const { press, release } = timed
+/** The keyboard on the screen plays like the MK4's keys: any key is a tap, and it sounds. */
+const windowStart = useKeyboardWindow()
+const { heldNotes, pressNote, releaseNote } = useNoteSource()
 
 usePadActions({
   next: () => {
@@ -469,7 +475,17 @@ const levelTabs = computed(() => RHYTHM_LEVELS.map((item) => ({ id: item.id, ope
           :marks="phase === 'result' ? marks : undefined"
           :lower-marks="phase === 'result' ? lowerMarks : undefined"
         />
-        <p v-else class="hidden-notes text-muted">{{ t('theory.hiddenNotes') }}</p>
+        <!-- Notes hidden (listen and repeat): the bars, where the music is and the student's taps, to follow along. -->
+        <div v-else class="hidden-notes">
+          <BeatRuler
+            :meter="task.meter"
+            :bpm="bpm"
+            :quarters="totalQuarters(task)"
+            :get-position="() => (player.playing.value ? player.heardPosition() : null)"
+            :get-taps="() => timed.presses()"
+          />
+          <p class="text-muted">{{ t('theory.hiddenNotes') }}</p>
+        </div>
         <CountIn :value="countIn" />
       </div>
     </template>
@@ -531,38 +547,12 @@ const levelTabs = computed(() => RHYTHM_LEVELS.map((item) => ({ id: item.id, ope
         @click="phase === 'playing' ? stopAttempt() : startAttempt()"
       />
 
-      <!-- For playing without the MK4: a big pad on the screen, two for two hands. -->
-      <div class="taps">
-        <template v-if="lowerTask">
-          <button
-            v-for="hand in (['left', 'right'] as const)"
-            :key="hand"
-            type="button"
-            class="tap"
-            :class="{ 'tap--live': phase === 'playing' }"
-            :aria-label="t(`theory.hand.${hand}`)"
-            @pointerdown.prevent="press('screen', null, { hand })"
-            @pointerup.prevent="release('screen', { hand })"
-            @pointercancel="release('screen', { hand })"
-          >
-            {{ t(`theory.hand.${hand}`) }}
-          </button>
-        </template>
-        <button
-          v-else
-          type="button"
-          class="tap"
-          :class="{ 'tap--live': phase === 'playing' }"
-          :aria-label="t('theory.tap')"
-          @pointerdown.prevent="press('screen')"
-          @pointerup.prevent="release('screen')"
-          @pointercancel="release('screen')"
-        >
-          {{ t('theory.tap') }}
-        </button>
-      </div>
     </template>
   </div>
+
+  <!-- Played on a real keyboard: any key, on the MK4 or here on the screen, sounds like the piano. In two hands the
+       lower octave is the left hand. Pad 1 still taps too. -->
+  <PianoKeyboard class="rhythm-keys" :start="windowStart" :held="heldNotes" @press="pressNote" @release="releaseNote" />
   </template>
 </template>
 
@@ -671,34 +661,32 @@ const levelTabs = computed(() => RHYTHM_LEVELS.map((item) => ({ id: item.id, ope
   box-shadow: none;
 }
 
-.taps {
-  display: flex;
-  gap: 0.75rem;
-  margin-left: auto;
+
+
+
+
+/* The keyboard to play on: low, the staff and the card get the height. Any key is a tap. */
+.rhythm-keys {
+  --keys-height: clamp(5.5rem, 18vh, 9rem);
+  width: 100%;
+  margin-top: 0.75rem;
 }
 
-.tap {
-  min-width: 10rem;
-  min-height: 4rem;
-  padding: 0 1.5rem;
-  border-radius: 1rem;
-  font-family: var(--font-display);
-  font-size: 1.25rem;
-  font-weight: 700;
-  color: var(--ui-text-toned);
-  background: var(--ui-bg-elevated);
-  box-shadow: 0 0 0 1px var(--ui-border) inset, 0 5px 0 var(--ui-border);
-  transition: transform 60ms ease-out, box-shadow 60ms ease-out;
+@media (max-height: 720px) {
+  .rhythm-keys {
+    --keys-height: clamp(5rem, 15vh, 7rem);
+    margin-top: 0.375rem;
+  }
 }
 
-.tap--live {
-  color: var(--color-on-fill);
-  background: var(--color-active);
-  box-shadow: 0 5px 0 color-mix(in oklab, var(--color-active) 55%, var(--color-shade));
-}
+@media (orientation: landscape) and (max-height: 500px) {
+  .rhythm-keys {
+    --keys-height: 4rem;
+    margin-top: 0.25rem;
+  }
 
-.tap:active {
-  transform: translateY(4px);
-  box-shadow: 0 1px 0 var(--ui-border);
+  .staff-box {
+    min-height: 0;
+  }
 }
 </style>

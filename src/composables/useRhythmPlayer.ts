@@ -1,6 +1,7 @@
 import { onScopeDispose, readonly, ref } from 'vue'
 
 import { useMetronome } from '@/composables/useMetronome'
+import { useSynth } from '@/composables/useSynth'
 import { accentOf, beatsPerBar, type MeterId } from '@/lib/metronome'
 import { countInBars, quarterSeconds, sounds, type Rhythm, type Sound } from '@/lib/rhythm'
 
@@ -10,17 +11,31 @@ import { countInBars, quarterSeconds, sounds, type Rhythm, type Sound } from '@/
 
 /** Rhythms start a moment after the tap, so the first click is never cut. */
 const START_DELAY_S = 0.15
-/** The left hand of a two-hand rhythm: an octave under the right hand's C5. */
+/** A rhythm sounds on the piano's C4 (the left hand of a two-hand rhythm an octave lower), not a beep. */
+const RHYTHM_KEY = 60
+const LOWER_KEY = 48
+/** Without sound on yet, a plain tone stands in: C5 and, for the left hand, C4. */
+const TONE_HZ = 523.25
 const LOWER_HZ = 261.63
 
 export function useRhythmPlayer() {
   const metronome = useMetronome()
+  const synth = useSynth()
   const playing = ref(false)
   /** Index of the written note being heard now (rests included), null between notes. */
   const current = ref<number | null>(null)
   /** Audio clock time of the first note: presses are scored against it. */
   const firstNoteAt = ref(0)
   let scheduled: AudioScheduledSourceNode[] = []
+  /** Piano notes waiting or sounding, to stop them when the rhythm stops. */
+  let pianoStops: (() => void)[] = []
+
+  /** One note: on the piano when the sound is on, else a plain tone. */
+  function note(at: number, length: number, key: number, hz: number) {
+    const stop = synth.playNoteAt(key, at, length)
+    if (stop) pianoStops.push(stop)
+    else scheduled.push(...metronome.noteAt(at, length, hz))
+  }
   let heard: Sound[] = []
   let frame = 0
 
@@ -60,11 +75,12 @@ export function useRhythmPlayer() {
     for (let i = 0; i < clicks; i++) scheduled.push(...metronome.clickAt(start + i * beat, accentOf(i % beats, beats)))
     if (notes) {
       for (const item of heard) {
-        // A melody sounds at its own pitches; a rhythm on the metronome's note.
-        if (!item.rest) scheduled.push(...metronome.noteAt(firstNoteAt.value + item.start, item.length, item.key === undefined ? undefined : 440 * 2 ** ((item.key - 69) / 12)))
+        // A melody sounds at its own pitches; a rhythm on the piano's C.
+        const key = item.key ?? RHYTHM_KEY
+        if (!item.rest) note(firstNoteAt.value + item.start, item.length, key, item.key === undefined ? TONE_HZ : 440 * 2 ** ((key - 69) / 12))
       }
       for (const item of lower ? sounds(lower, bpm) : []) {
-        if (!item.rest) scheduled.push(...metronome.noteAt(firstNoteAt.value + item.start, item.length, LOWER_HZ))
+        if (!item.rest) note(firstNoteAt.value + item.start, item.length, LOWER_KEY, LOWER_HZ)
       }
     }
     playing.value = true
@@ -82,6 +98,8 @@ export function useRhythmPlayer() {
       }
     }
     scheduled = []
+    pianoStops.forEach((stopNote) => stopNote())
+    pianoStops = []
     playing.value = false
     current.value = null
   }

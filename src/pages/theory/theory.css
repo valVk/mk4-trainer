@@ -164,3 +164,23 @@
     font-size: 0.9375rem;
   }
 }
+
+/* Phones in landscape: the level row stays one line (it scrolls sideways), the card and the keys get the height. */
+@media (orientation: landscape) and (max-height: 500px) {
+  .levels-row {
+    flex-wrap: nowrap;
+    margin-top: 0.25rem;
+  }
+
+  .levels {
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    min-width: 0;
+    scrollbar-width: none;
+  }
+
+  .task {
+    margin-top: 0.25rem;
+    padding: 0.5rem 0.75rem;
+  }
+}

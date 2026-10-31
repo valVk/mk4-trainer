@@ -244,6 +244,33 @@ function playChord(notes: readonly number[], durationMs = 1400): void {
   setTimeout(() => notes.forEach((note) => instance.noteOff(REFERENCE_CHANNEL, note)), durationMs)
 }
 
+/**
+ * One note of the reference instrument (the Grand Piano unless chosen otherwise) at a moment of the audio clock,
+ * for `length` seconds: a rhythm's notes sound like the piano, in time with the metronome's clicks on the same clock.
+ * Returns a stop (a rhythm stopped early); null while the sound is off.
+ */
+function playNoteAt(key: number, at: number, length: number): (() => void) | null {
+  const instance = synth.value
+  if (!instance) return null
+  const audio = audioContext()
+  const startMs = Math.max(0, (at - audio.currentTime) * 1000)
+  let sounding = false
+  const on = setTimeout(() => {
+    instance.noteOn(REFERENCE_CHANNEL, key, REFERENCE_VELOCITY)
+    sounding = true
+  }, startMs)
+  // A little before the end, so repeated notes stay apart.
+  const off = setTimeout(() => {
+    instance.noteOff(REFERENCE_CHANNEL, key)
+    sounding = false
+  }, startMs + Math.max(60, length * 1000 * 0.9))
+  return () => {
+    clearTimeout(on)
+    clearTimeout(off)
+    if (sounding) instance.noteOff(REFERENCE_CHANNEL, key)
+  }
+}
+
 /** A short chime for right answers. Silent until sound is on; never used for mistakes. */
 function playCue(kind: CueKind): void {
   const instance = synth.value
@@ -330,6 +357,7 @@ export function useSynth() {
     /** The shared synthesizer once sound is on (for the song sequencer). */
     getSynth: (): WorkletSynthesizer | null => synth.value,
     playChord,
+    playNoteAt,
     playCue,
   }
 }
