@@ -3,7 +3,7 @@ import { onBeforeUnmount, ref, type Ref } from 'vue'
 import { countdown } from '@/lib/rhythm'
 
 /**
- * The countdown shown big (2, 1) in the last seconds before the first note, on every screen that plays along
+ * The countdown shown big (3, 2, 1) in the last seconds before the first note, on every screen that plays along
  * (theory rhythm, reading, songs): follows the heard position every frame; null while nothing is counted.
  * `position` is real seconds from the first note (negative before it).
  */

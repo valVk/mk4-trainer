@@ -50,11 +50,11 @@ export function quarterSeconds(bpm: number, meter: TimeSignature): number {
   return (60 / bpm) * (meter.denominator / 4)
 }
 
-/** Seconds counted down before the first note (owner's rule: «2, 1», plain seconds, whatever the tempo). */
-export const COUNTDOWN_S = 2
+/** Seconds counted down before the first note (owner's rule: «3, 2, 1», plain seconds, whatever the tempo). */
+export const COUNTDOWN_S = 3
 
 /**
- * The countdown before the first note: the whole seconds still to wait (2, 1), shown in the last COUNTDOWN_S
+ * The countdown before the first note: the whole seconds still to wait (3, 2, 1), shown in the last COUNTDOWN_S
  * seconds before it (`position` is real seconds from the first note, negative before it); null otherwise. Every
  * practice starts this way, never straight into the notes (owner's rule).
  */

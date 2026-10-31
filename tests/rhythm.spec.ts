@@ -43,17 +43,18 @@ describe('note values', () => {
     expect(quarterSeconds(120, SIX_EIGHT)).toBe(1)
   })
 
-  it('counts down 2, 1 in plain seconds before the first note, then nothing', () => {
-    expect([-2, -1.6, -1, -0.4].map((position) => countdown(position))).toEqual([2, 2, 1, 1])
-    expect(countdown(-2.5)).toBeNull()
+  it('counts down 3, 2, 1 in plain seconds before the first note, then nothing', () => {
+    expect([-3, -2.6, -2, -1.4, -0.4].map((position) => countdown(position))).toEqual([3, 3, 2, 2, 1])
+    expect(countdown(-3.5)).toBeNull()
     expect(countdown(0)).toBeNull()
   })
 
   it('counts in long enough for the countdown: one bar, or more when bars are short', () => {
     expect(countInBars(4)).toBe(1)
-    expect(countInBars(2)).toBe(1)
+    expect(countInBars(3)).toBe(1)
+    expect(countInBars(2)).toBe(2)
     expect(countInBars(1.5)).toBe(2)
-    expect(countInBars(0.75)).toBe(3)
+    expect(countInBars(0.75)).toBe(4)
   })
 })
 

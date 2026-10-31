@@ -38,7 +38,7 @@ export function useRhythmPlayer() {
 
   /**
    * Plays the rhythm at `bpm` (beats of its meter, like the metronome) after `countInBars` bars of clicks: by
-   * default enough bars for the countdown (two seconds), one at least.
+   * default enough bars for the countdown (three seconds), one at least.
    * With `notes: false` only the clicks sound: the child plays the notes. `lower` is a second hand,
    * heard an octave lower.
    */
