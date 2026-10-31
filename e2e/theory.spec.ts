@@ -41,6 +41,8 @@ test('«Тренировка» leads to chords and theory', async ({ page }) => 
   await open(page, '/train')
   await expect(page.getByRole('link', { name: 'Аккорды' })).toBeVisible()
   await page.getByRole('link', { name: 'Теория' }).click()
+  // Theory plays sound: the sound window asks first.
+  await page.getByRole('button', { name: 'Пока без звука' }).click()
   // The sections are in the drawer; «Ритм» opens first.
   await page.getByRole('button', { name: /^Меню/ }).click()
   await expect(page.getByRole('button', { name: 'Ритм' })).toHaveAttribute('aria-current', 'page')

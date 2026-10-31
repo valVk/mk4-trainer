@@ -24,6 +24,8 @@ const router = createRouter({
     {
       path: '/train/theory',
       name: 'train-theory',
+      // Rhythms and melodies sound on the piano: ask for the sound once, like the other playing screens.
+      meta: { sound: true },
       component: () => import('@/pages/Theory.vue'),
     },
     {

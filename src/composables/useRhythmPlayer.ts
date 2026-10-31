@@ -57,7 +57,21 @@ export function useRhythmPlayer() {
    * With `notes: false` only the clicks sound: the child plays the notes. `lower` is a second hand,
    * heard an octave lower.
    */
-  function play(rhythm: Rhythm, bpm: number, { countInBars: bars, notes = true, lower = null }: { countInBars?: number, notes?: boolean, lower?: Rhythm | null } = {}) {
+  /**
+   * Plays the rhythm; first turns the sound on when it is off (the tap that asked is the browser's permission), so
+   * its notes are the piano, not the plain tone that stands in only when the sound cannot start.
+   */
+  async function play(rhythm: Rhythm, bpm: number, options: { countInBars?: number, notes?: boolean, lower?: Rhythm | null } = {}) {
+    if (synth.status.value !== 'ready') {
+      stop()
+      // Nothing is heard yet: the first note is still ahead, so no press counts as played.
+      firstNoteAt.value = Number.POSITIVE_INFINITY
+      await synth.start().catch(() => undefined)
+    }
+    schedule(rhythm, bpm, options)
+  }
+
+  function schedule(rhythm: Rhythm, bpm: number, { countInBars: bars, notes = true, lower = null }: { countInBars?: number, notes?: boolean, lower?: Rhythm | null } = {}) {
     stop()
     const audio = metronome.audioContext()
     void audio.resume()
