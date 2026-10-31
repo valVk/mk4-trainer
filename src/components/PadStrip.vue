@@ -32,6 +32,7 @@ const cells = computed(() =>
       v-for="cell in cells"
       :key="cell.pad"
       type="button"
+      tabindex="-1"
       class="pad"
       :class="{ 'pad--lit': lit.includes(cell.pad), 'pad--hit': hit.includes(cell.pad), 'pad--empty': !cell.label}"
       :style="cell.style"

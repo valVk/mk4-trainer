@@ -776,7 +776,7 @@ const nextLabel = computed(() => {
           <UAlert v-if="part.isDrum && !layout" class="drums-alert mt-3" color="warning" variant="subtle" icon="i-lucide-drum" :title="t('songs.tooManyForPads')" />
 
           <!-- The bar is thin, the tap area is finger-sized. -->
-          <button type="button" class="progress" :aria-label="t('songs.partPosition')" @click="seekInRange">
+          <button type="button" class="progress" tabindex="-1" :aria-label="t('songs.partPosition')" @click="seekInRange">
             <span class="progress__track">
               <span class="progress__fill" :style="{ width: `${rangeProgress}%` }" />
             </span>

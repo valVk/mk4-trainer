@@ -1,11 +1,44 @@
 // Moving around the screen without touching it (plan step 26): the MK4's display knob steps through the screen's
-// buttons, tabs and links in reading order, and the focus ring shows where it is; Push presses that one.
+// buttons, tabs and links in the order they are read (the header, then the main area row by row, left to right,
+// then the side column), and the focus ring shows where it is; Push presses that one. Seek strips and music pads
+// have tabindex -1: they are played or dragged, not pressed, so the knob passes them by. An open dialog keeps the
+// knob inside it.
 
 const FOCUSABLE = 'a[href], button:not([disabled]), [role="tab"]:not([disabled]), [role="button"], input:not([disabled]), select:not([disabled])'
 
-/** Everything that can be pressed and is visible, in document order. */
+/** Header first, side column last. */
+function regionOf(element: HTMLElement): number {
+  if (element.closest('header')) return 0
+  if (element.closest('aside')) return 2
+  return 1
+}
+
+function pressable(element: HTMLElement): boolean {
+  if (element.tabIndex < 0 || element.getAttribute('aria-disabled') === 'true') return false
+  if (element.closest('[inert], [aria-hidden="true"]')) return false
+  if (element.getClientRects().length === 0) return false
+  const style = getComputedStyle(element)
+  return style.visibility !== 'hidden' && style.pointerEvents !== 'none'
+}
+
+/** Rows as the eye reads them: an element starting above the middle of the row's first one is on that row. */
+function readingOrder(elements: HTMLElement[]): HTMLElement[] {
+  const boxes = elements.map((element) => ({ element, box: element.getBoundingClientRect() })).sort((a, b) => a.box.top - b.box.top)
+  const rows: { middle: number, items: typeof boxes }[] = []
+  for (const item of boxes) {
+    const row = rows[rows.length - 1]
+    if (row && item.box.top < row.middle) row.items.push(item)
+    else rows.push({ middle: item.box.top + item.box.height / 2, items: [item] })
+  }
+  return rows.flatMap((row) => row.items.sort((a, b) => a.box.left - b.box.left).map((item) => item.element))
+}
+
+/** Everything that can be pressed and is visible, in reading order; only inside the open dialog when there is one. */
 function focusable(): HTMLElement[] {
-  return [...document.querySelectorAll<HTMLElement>(FOCUSABLE)].filter((element) => element.offsetParent !== null || element.getClientRects().length > 0)
+  const dialogs = [...document.querySelectorAll<HTMLElement>('[role="dialog"]')].filter((dialog) => dialog.getClientRects().length > 0)
+  const scope: ParentNode = dialogs[dialogs.length - 1] ?? document
+  const items = [...scope.querySelectorAll<HTMLElement>(FOCUSABLE)].filter(pressable)
+  return [0, 1, 2].flatMap((region) => readingOrder(items.filter((element) => regionOf(element) === region)))
 }
 
 /** Steps the focus to the next (+1) or previous (−1) control, round the ends. */

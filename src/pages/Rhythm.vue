@@ -197,7 +197,7 @@ function listenExample() {
         </section>
       </div>
 
-      <UCard variant="subtle" class="side">
+      <UCard as="aside" variant="subtle" class="side">
         <template #header>
           <UTabs v-model="sideTab" :items="sideTabs" :content="false" size="lg" />
         </template>

@@ -319,7 +319,7 @@ useMk4Actions({
             :label="t('songs.practice')"
             :aria-label="t('songs.practiceLabel', { name: row.label })"
           />
-          <button type="button" class="row__lane" :aria-label="t('songs.seekLabel', { name: row.label })" @click="seekFromEvent">
+          <button type="button" class="row__lane" tabindex="-1" :aria-label="t('songs.seekLabel', { name: row.label })" @click="seekFromEvent">
             <!-- Blocks in percent with CSS corners: a stretched SVG would stretch the corners into ellipses. -->
             <span class="lane" aria-hidden="true">
               <span
