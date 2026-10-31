@@ -116,6 +116,7 @@ function play(): void {
   if (pausedTarget !== null) {
     // While playing, the sequencer keeps the exact time and waits for the next event.
     current.currentTime = pausedTarget
+    useSynth().restoreLearnerTarget()
     settling = { target: pausedTarget, until: performance.now() + SETTLE_MAX_MS }
     pausedTarget = null
   }
@@ -154,6 +155,8 @@ function seek(seconds: number, atNote = false): void {
   }
   const target = Math.max(0, Math.min(seconds, current.duration))
   current.currentTime = target
+  // The jump resets every channel, the learner's too: give it back its instrument (a drum kit for drums).
+  useSynth().restoreLearnerTarget()
   pausedTarget = playing.value || atNote ? null : target
   // Sent straight to the sequencer: it reports the new place a moment late.
   settling = pausedTarget === null ? { target, until: performance.now() + SETTLE_MAX_MS } : null

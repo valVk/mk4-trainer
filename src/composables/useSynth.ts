@@ -285,6 +285,18 @@ function setLearnerTarget(target: { channel: number, preset: Instrument, drums?:
   selectPreset(instance, target.channel, target.preset)
 }
 
+/**
+ * Sets the learner channel's instrument again. The song's sequencer resets every channel when it jumps (a new
+ * attempt starts at the phrase), the learner's too: without this a drum part played on a piano. The synth takes
+ * messages in order, so this lands after the reset.
+ */
+function restoreLearnerTarget(): void {
+  const instance = synth.value
+  if (!instance || !learnerTarget) return
+  instance.midiChannels[learnerTarget.channel]?.setDrums(Boolean(learnerTarget.drums))
+  selectPreset(instance, learnerTarget.channel, learnerTarget.preset)
+}
+
 /** Plays one note on the learner channel, for a pad hit that stands for that note. */
 function playLearnerNote(key: number, velocity = 100): void {
   const instance = synth.value
@@ -311,6 +323,7 @@ export function useSynth() {
     previewInstrument,
     setBank,
     setLearnerTarget,
+    restoreLearnerTarget,
     playLearnerNote,
     /** The shared audio clock; works before the bank is loaded (the metronome needs no bank). */
     audioContext,
