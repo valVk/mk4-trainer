@@ -2,6 +2,7 @@
 import { computed, onBeforeUnmount, ref, shallowRef, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 
+import HelpSwitch from '@/components/HelpSwitch.vue'
 import PageHeader from '@/components/PageHeader.vue'
 import RhythmStaff from '@/components/RhythmStaff.vue'
 import { useLastPlace } from '@/composables/useLastPlace'
@@ -127,9 +128,7 @@ function listenExample() {
 <template>
   <main class="page page--fill rhythm">
     <PageHeader :title="t('rhythm.title')" />
-    <Teleport defer to="#page-actions">
-      <USwitch :model-value="progress.guide.value" size="lg" :label="t('train.guide')" @update:model-value="progress.setGuide($event)" />
-    </Teleport>
+    <HelpSwitch :on="progress.guide.value" />
 
     <div class="layout">
       <div class="main-col">

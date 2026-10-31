@@ -4,6 +4,7 @@ import { useI18n } from 'vue-i18n'
 import { useToast } from '@nuxt/ui/composables'
 
 import PageHeader from '@/components/PageHeader.vue'
+import StarRating from '@/components/StarRating.vue'
 import { useNoteNames } from '@/composables/useNoteNames'
 import { useProgress } from '@/composables/useProgress'
 import { BANKS, useSynth, type BankId } from '@/composables/useSynth'
@@ -254,15 +255,7 @@ async function confirmImport() {
               <p class="level__name text-highlighted">{{ t('train.level', { n: item.id }) }}</p>
               <p class="text-muted text-sm">{{ t(`progress.levelInfo.${item.id}`) }}</p>
             </div>
-            <div class="flex items-center gap-1 shrink-0" :aria-label="t('train.stars', { n: levels[item.id]?.stars ?? 0 })">
-              <UIcon
-                v-for="i in STAR_THRESHOLDS.length"
-                :key="i"
-                name="i-lucide-star"
-                class="size-6 star"
-                :class="{ 'star--on': i <= (levels[item.id]?.stars ?? 0) }"
-              />
-            </div>
+            <StarRating :value="levels[item.id]?.stars ?? 0" :of="STAR_THRESHOLDS.length" size="lg" />
             <p class="level__stats text-muted tabular-nums">
               <span class="stats-long">{{ t('progress.levelStats', { correct: levels[item.id]?.correct ?? 0, streak: levels[item.id]?.bestStreak ?? 0 }) }}</span>
               <span class="stats-short">{{ t('progress.levelStatsShort', { correct: levels[item.id]?.correct ?? 0, streak: levels[item.id]?.bestStreak ?? 0 }) }}</span>
@@ -318,18 +311,6 @@ async function confirmImport() {
 
 .stats-short {
   display: none;
-}
-
-.star {
-  color: var(--star-off);
-}
-
-.star--on {
-  color: var(--color-attention);
-}
-
-.star--on :deep(path) {
-  fill: currentColor;
 }
 
 /* Tablet landscape (Galaxy Tab S10+ is 1400 x ~800 CSS px): cards in two balanced columns, levels as a 2 x 4 grid, no scroll. */

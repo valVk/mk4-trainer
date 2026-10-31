@@ -3,9 +3,10 @@ import { computed, onBeforeUnmount, reactive, ref, shallowRef, watch } from 'vue
 import { useI18n } from 'vue-i18n'
 import { useRoute } from 'vue-router'
 
+import DrawerStatus from '@/components/DrawerStatus.vue'
 import PageHeader from '@/components/PageHeader.vue'
 import SongClock from '@/components/SongClock.vue'
-import SoundControl from '@/components/SoundControl.vue'
+import StarRating from '@/components/StarRating.vue'
 import { useProgress } from '@/composables/useProgress'
 import { useMk4Actions } from '@/composables/useMk4Actions'
 import { useSongPlayer } from '@/composables/useSongPlayer'
@@ -211,9 +212,7 @@ useMk4Actions({
 <template>
   <main ref="page" class="page">
     <PageHeader :title="record?.name ?? t('songs.title')" back="/songs" :back-label="t('songs.title')" />
-    <Teleport defer to="#page-actions">
-      <SoundControl />
-    </Teleport>
+    <DrawerStatus :midi="false" />
 
     <UAlert v-if="notFound" class="mt-6" color="warning" variant="subtle" icon="i-lucide-circle-help" :title="t('songs.notFound')" />
 
@@ -281,7 +280,7 @@ useMk4Actions({
               </span>
               <span class="row__role">
                 <template v-if="row.order">{{ row.order }}. </template>{{ t(`songs.role.${row.role}`) }}<template v-if="row.unitsTotal">, {{ t('songs.unitsDone', { done: row.unitsDone, total: row.unitsTotal }) }}</template>
-                <span v-if="row.stars" class="row__stars" :aria-label="t('train.stars', { n: row.stars })">{{ '★'.repeat(row.stars) }}</span>
+                <StarRating v-if="row.stars" class="row__stars" :value="row.stars" size="inline" earned-only />
               </span>
               <span class="row__meta text-muted">
                 {{ t('songs.channel', { n: row.part.channel + 1 }) }}<template v-if="!row.part.isDrum">, {{ midiName(row.part.range.low) }}–{{ midiName(row.part.range.high) }}, {{ t('songs.polyphony', { n: row.part.maxPolyphony }, row.part.maxPolyphony) }}</template>
@@ -455,7 +454,6 @@ useMk4Actions({
 
 .row__stars {
   margin-left: 0.25rem;
-  color: var(--color-attention);
 }
 
 .sections-row {

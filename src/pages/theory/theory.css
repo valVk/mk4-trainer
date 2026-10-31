@@ -72,16 +72,6 @@
   margin-top: 0.75rem;
 }
 
-.stars {
-  font-size: 1.5rem;
-  letter-spacing: 0.1em;
-  color: var(--color-attention);
-}
-
-.stars__off {
-  color: var(--star-off);
-}
-
 .task {
   position: relative;
   flex: 1;

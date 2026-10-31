@@ -2,13 +2,17 @@
 import { computed, onBeforeUnmount, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 
-import MidiStatus from '@/components/MidiStatus.vue'
-import OctaveMapButton from '@/components/OctaveMapButton.vue'
+import DrawerStatus from '@/components/DrawerStatus.vue'
+import ExamBadge from '@/components/ExamBadge.vue'
+import HelpSwitch from '@/components/HelpSwitch.vue'
 import PageHeader from '@/components/PageHeader.vue'
 import PianoKeyboard from '@/components/PianoKeyboard.vue'
-import SoundControl from '@/components/SoundControl.vue'
+import StarRating from '@/components/StarRating.vue'
+import { useCleanChord } from '@/composables/useCleanChord'
+import { useHelp } from '@/composables/useHelp'
 import { useKeyboardWindow } from '@/composables/useKeyboardWindow'
 import { useLastPlace } from '@/composables/useLastPlace'
+import { useNextAfterRelease } from '@/composables/useNextAfterRelease'
 import { useNoteNames } from '@/composables/useNoteNames'
 import { useNoteSource } from '@/composables/useNoteSource'
 import { usePadActions } from '@/composables/usePadActions'
@@ -16,14 +20,12 @@ import { useProgress } from '@/composables/useProgress'
 import { SETTLE_MS, useSettled } from '@/composables/useSettled'
 import { useSynth } from '@/composables/useSynth'
 import { useWakeLock } from '@/composables/useWakeLock'
-import { LEVELS, STAR_THRESHOLDS, checkTask, formulaSteps, generateTask, isCleanChord, isExam, isLevelOpen, starsFor, taskId, taskNotes, type Task } from '@/lib/levels'
+import { LEVELS, STAR_THRESHOLDS, checkTask, formulaSteps, generateTask, isExam, isLevelOpen, starsFor, taskId, taskNotes, type Task } from '@/lib/levels'
 import { midiName, noteName, pitchClass } from '@/lib/theory'
-
-const NEXT_DELAY_MS = 700
 
 const { t } = useI18n()
 useWakeLock()
-const { heldNotes, pressNote, releaseNote, onEvent } = useNoteSource()
+const { heldNotes, pressNote, releaseNote } = useNoteSource()
 const { status: soundStatus, playChord, playCue } = useSynth()
 const { localName, withLocal } = useNoteNames()
 const progress = useProgress()
@@ -60,29 +62,19 @@ const settledCheck = computed(() => checkTask(task.value, settledHeld.value, ste
  * the semitones between the pressed keys. The last phase of a level is its exam: no help at all, and a chord counts
  * only when it sounds as a chord (its keys down together, none extra).
  */
-const exam = computed(() => isExam(correctIn(level.value)))
-const guideOn = computed(() => progress.guide.value && !exam.value)
-/** When each held key went down: the exam asks the chord's keys to land together. */
-const downAt = new Map<number, number>()
-onEvent((event) => {
-  if (event.type === 'noteOn') downAt.set(event.note, performance.now())
-  else if (event.type === 'noteOff') downAt.delete(event.note)
-})
-/** An exam chord played key by key: said once, then the keys go up and it is tried again. */
-const notTogether = ref(false)
-watch(() => heldNotes.value.length, (count) => {
-  if (count === 0) notTogether.value = false
-})
+const { exam, guideOn } = useHelp(() => isExam(correctIn(level.value)))
+const { notTogether, together } = useCleanChord()
 const target = computed(() => taskNotes(task.value, start.value, step.value))
 const progression = computed(() => (task.value.kind === 'progression' ? task.value : null))
 
 const showHighlight = computed(() => guideOn.value || hintRequested.value)
 const stars = computed(() => starsFor(correctIn(level.value)))
 
-let nextTimer: ReturnType<typeof setTimeout> | undefined
+// Move on once the keys are up; while the level-done offer is open, wait for the student's choice instead.
+const { cancel: cancelNext } = useNextAfterRelease(() => solved.value, () => levelDone.value !== null, () => nextTask())
 
 function nextTask() {
-  clearTimeout(nextTimer)
+  cancelNext()
   task.value = generateTask(level.value, Math.random, task.value)
   step.value = 0
   stepDoneWith.value = null
@@ -94,10 +86,7 @@ function nextTask() {
 // Checked on every press and release: letting go of an extra note can solve the task.
 watch(() => check.value.status, (status) => {
   if (status !== 'correct' || solved.value || notTogether.value) return
-  if (exam.value && task.value.kind !== 'note' && !isCleanChord(heldNotes.value.map((note) => downAt.get(note) ?? 0))) {
-    notTogether.value = true
-    return
-  }
+  if (exam.value && task.value.kind !== 'note' && !together()) return
   const steps = progression.value?.steps.length ?? 1
   if (step.value < steps - 1) {
     stepDoneWith.value = heldKey.value
@@ -126,13 +115,6 @@ watch(() => check.value.status, (status) => {
   }
 })
 
-// Move on once the child lets go of the keys, so the next task starts from silence.
-// While the level-done offer is open, wait for the child's choice instead.
-watch([solved, () => heldNotes.value.length, levelDone], ([isSolved, count, done]) => {
-  if (!isSolved || count > 0 || done !== null) return
-  clearTimeout(nextTimer)
-  nextTimer = setTimeout(nextTask, NEXT_DELAY_MS)
-})
 
 watch(level, (value) => {
   levelDone.value = null
@@ -155,10 +137,7 @@ function stayOnLevel() {
   levelDone.value = null
 }
 
-onBeforeUnmount(() => {
-  clearTimeout(nextTimer)
-  sequenceTimers.forEach(clearTimeout)
-})
+onBeforeUnmount(() => sequenceTimers.forEach(clearTimeout))
 
 function skip() {
   void progress.record({
@@ -269,24 +248,9 @@ const levelItems = computed(() => LEVELS.map((item) => ({ label: String(item.id)
 <template>
   <main class="page page--fill train">
     <PageHeader :title="t('trainChoice.chords')" back="/train" :back-label="t('train.title')" />
-    <!-- Sound and MK4 state live in the drawer, the map in the footer: the content gets the height. -->
-    <Teleport defer to="#footer-tools">
-      <OctaveMapButton :window-start="start" show-on-shift />
-    </Teleport>
-    <Teleport defer to="#page-actions">
-      <!-- A grown-up turns the help off when the student is ready; the exam turns it off by itself. -->
-      <USwitch
-        :model-value="guideOn"
-        :disabled="exam"
-        size="lg"
-        :label="exam ? t('train.guideExam') : t('train.guide')"
-        @update:model-value="progress.setGuide($event)"
-      />
-      <SoundControl />
-    </Teleport>
-    <Teleport defer to="#drawer-status">
-      <MidiStatus />
-    </Teleport>
+    <!-- A grown-up turns the help off when the student is ready; the exam turns it off by itself. -->
+    <HelpSwitch :on="guideOn" :exam="exam" />
+    <DrawerStatus :window-start="start" show-on-shift />
 
     <div class="flex flex-wrap items-center justify-between gap-4 mt-2">
       <div class="levels">
@@ -298,19 +262,8 @@ const levelItems = computed(() => LEVELS.map((item) => ({ label: String(item.id)
         </UTabs>
       </div>
       <div class="flex items-center gap-4">
-        <span class="flex gap-1" :aria-label="t('train.stars', { n: stars })">
-          <UIcon
-            v-for="i in 3"
-            :key="i"
-            name="i-lucide-star"
-            class="size-7 star"
-            :class="{ 'star--on': i <= stars }"
-          />
-        </span>
-        <span v-if="exam" class="exam">
-          <UIcon name="i-lucide-graduation-cap" class="size-5" />
-          {{ t('train.exam') }}
-        </span>
+        <StarRating :value="stars" size="xl" />
+        <ExamBadge v-if="exam" />
         <span class="text-muted tabular-nums">{{ t('train.streak', { n: streak }) }}</span>
       </div>
     </div>
@@ -475,19 +428,6 @@ const levelItems = computed(() => LEVELS.map((item) => ({ label: String(item.id)
   overscroll-behavior-x: contain;
 }
 
-.star {
-  color: var(--star-off);
-  transition: color 200ms ease;
-}
-
-.star--on {
-  color: var(--color-attention);
-}
-
-/* Lucide puts fill="none" on the path itself */
-.star--on :deep(path) {
-  fill: currentColor;
-}
 
 .task {
   flex: 1;

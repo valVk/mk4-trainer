@@ -2,12 +2,10 @@
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 
+import DrawerStatus from '@/components/DrawerStatus.vue'
 import IntervalBar from '@/components/IntervalBar.vue'
-import MidiStatus from '@/components/MidiStatus.vue'
-import OctaveMapButton from '@/components/OctaveMapButton.vue'
 import PageHeader from '@/components/PageHeader.vue'
 import PianoKeyboard from '@/components/PianoKeyboard.vue'
-import SoundControl from '@/components/SoundControl.vue'
 import { useKeyboardWindow } from '@/composables/useKeyboardWindow'
 import { useLastPlace } from '@/composables/useLastPlace'
 import { useNoteNames } from '@/composables/useNoteNames'
@@ -80,15 +78,7 @@ const rangeLabel = computed(() => `${midiName(start.value)} – ${midiName(start
   <main class="page page--fill lab">
     <PageHeader :title="t('lab.title')" />
     <!-- Sound and MK4 state live in the drawer, the map in the footer: the content gets the height. -->
-    <Teleport defer to="#footer-tools">
-      <OctaveMapButton :window-start="start" show-on-shift />
-    </Teleport>
-    <Teleport defer to="#page-actions">
-      <SoundControl />
-    </Teleport>
-    <Teleport defer to="#drawer-status">
-      <MidiStatus />
-    </Teleport>
+    <DrawerStatus :window-start="start" show-on-shift />
 
     <section class="readout" aria-live="polite">
       <p v-if="reading.kind === 'empty'" class="prompt text-muted">{{ t('lab.empty') }}</p>

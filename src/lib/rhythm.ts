@@ -50,6 +50,21 @@ export function quarterSeconds(bpm: number, meter: TimeSignature): number {
   return (60 / bpm) * (meter.denominator / 4)
 }
 
+/**
+ * The countdown before the first note (4, 3, 2, 1 in 4/4): the beats still to wait, shown while the heard position
+ * is within the last bar before the first note (negative seconds); null before that and once it plays. Every
+ * practice starts this way, never straight into the notes (owner's rule).
+ */
+export function countInBeat(position: number, beatSeconds: number, beats: number): number | null {
+  if (position >= 0 || -position > beats * beatSeconds) return null
+  return Math.min(beats, Math.ceil(-position / beatSeconds))
+}
+
+/** One beat of a meter in seconds at `bpm`: a quarter in x/4, an eighth in 6/8 (the metronome counts eighths there). */
+export function beatSeconds(bpm: number, meter: TimeSignature): number {
+  return quarterSeconds(bpm, meter) * (4 / meter.denominator)
+}
+
 /** A sound to play or a silence to keep, in seconds from the start of the rhythm. */
 export interface Sound {
   start: number

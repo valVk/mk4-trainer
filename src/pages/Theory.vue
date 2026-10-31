@@ -3,10 +3,8 @@ import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useRoute, useRouter } from 'vue-router'
 
-import MidiStatus from '@/components/MidiStatus.vue'
-import OctaveMapButton from '@/components/OctaveMapButton.vue'
+import DrawerStatus from '@/components/DrawerStatus.vue'
 import PageHeader from '@/components/PageHeader.vue'
-import SoundControl from '@/components/SoundControl.vue'
 import TheoryNotes from '@/pages/theory/TheoryNotes.vue'
 import TheoryRhythm from '@/pages/theory/TheoryRhythm.vue'
 import { useKeyboardWindow } from '@/composables/useKeyboardWindow'
@@ -78,17 +76,9 @@ function openSection(next: Section) {
       </template>
     </PageHeader>
     <!-- Sound and MK4 state live in the drawer, the map in the footer: the content gets the height. -->
-    <Teleport defer to="#footer-tools">
-      <!-- In «Ритм» any key counts and the window moves as the child taps: the map opens there only on a tap. -->
-      <OctaveMapButton :window-start="windowStart" :show-on-shift="section !== 'rhythm'" />
-    </Teleport>
-    <!-- A piece inside brings its own (its instrument). -->
-    <Teleport v-if="!piece" defer to="#page-actions">
-      <SoundControl />
-    </Teleport>
-    <Teleport defer to="#drawer-status">
-      <MidiStatus />
-    </Teleport>
+    <!-- In «Ритм» any key counts and the window moves as the student taps: the map opens there only on a tap. A
+         piece inside brings its own sound control (its instrument). -->
+    <DrawerStatus :window-start="windowStart" :show-on-shift="section !== 'rhythm'" :sound="!piece" />
 
     <TheoryRhythm v-if="section === 'rhythm'" />
     <!-- One screen for every note-finding section; a new key, so switching sections starts it fresh. -->

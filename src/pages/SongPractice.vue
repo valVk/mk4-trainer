@@ -6,6 +6,9 @@ import { useRoute } from 'vue-router'
 import NoteFall from '@/components/NoteFall.vue'
 import OctaveMapButton from '@/components/OctaveMapButton.vue'
 import PadStrip from '@/components/PadStrip.vue'
+import CountIn from '@/components/CountIn.vue'
+import ExamBadge from '@/components/ExamBadge.vue'
+import HelpSwitch from '@/components/HelpSwitch.vue'
 import PageHeader from '@/components/PageHeader.vue'
 import PianoKeyboard from '@/components/PianoKeyboard.vue'
 import ResultCard from '@/components/ResultCard.vue'
@@ -14,6 +17,8 @@ import SongStaff from '@/components/SongStaff.vue'
 import SoundControl from '@/components/SoundControl.vue'
 import UnitList from '@/components/UnitList.vue'
 import { useMetronome } from '@/composables/useMetronome'
+import { useCountIn } from '@/composables/useCountIn'
+import { useHelp } from '@/composables/useHelp'
 import { useLastPlace } from '@/composables/useLastPlace'
 import { useMk4Actions } from '@/composables/useMk4Actions'
 import { useNoteNames } from '@/composables/useNoteNames'
@@ -22,6 +27,7 @@ import { padsPlayMusic, usePadActions } from '@/composables/usePadActions'
 import { useProgress } from '@/composables/useProgress'
 import { LEARNER_CHANNEL, useSongPlayer } from '@/composables/useSongPlayer'
 import { useSynth } from '@/composables/useSynth'
+import { useTeacherWait } from '@/composables/useTeacherWait'
 import { useWakeLock } from '@/composables/useWakeLock'
 import type { SongProgress } from '@/db/schema'
 import { findName, groupOf } from '@/lib/instruments'
@@ -44,7 +50,7 @@ import { parseMix } from '@/lib/mix'
 import { MIDDLE_C, clefFor, markPlayed, needsGrandStaff, writePart, writePlayed, type PlayedKey } from '@/lib/notation'
 import { drumKind, PAD_NOTE_MIN_S, padLayout } from '@/lib/padLayout'
 import { partPhrases, songSections, type Phrase } from '@/lib/phrases'
-import { KEY_HINT_DELAY_MS, SONG_VIEWS, chooseWindow, coversStep, followWindow, octaveHint, stepIndexAt, upcomingKeys, type SongView } from '@/lib/practice'
+import { SONG_VIEWS, chooseWindow, coversStep, followWindow, octaveHint, stepIndexAt, upcomingKeys, type SongView } from '@/lib/practice'
 import { parseSong, type Part, type Song } from '@/lib/song'
 import { chordSymbol, identifyChord, midiName, noteName } from '@/lib/theory'
 
@@ -229,28 +235,37 @@ function resetTo(time: number) {
 }
 
 /**
- * Beat of the count-in shown big, while the song waits. A unit at the very start of the song has no bars before
- * it to lead in with: those beats are counted in with the metronome's clicks, so the child has time to get ready.
+ * Every attempt starts with a countdown, 4-3-2-1, in the last bar before the student's first note (owner's rule:
+ * never straight into the notes). The time to the first note is one line: clicks the song has no room for (a phrase
+ * at the very start), then the song's own lead-in. `clicksEndAt` is when the clicked part ends (performance time).
  */
-const countIn = ref<number | null>(null)
-let countTimers: ReturnType<typeof setTimeout>[] = []
+const clicksEndAt = ref<number | null>(null)
+let countTimer: ReturnType<typeof setTimeout> | undefined
 let countClicks: AudioScheduledSourceNode[] = []
+/** Counting in before the song plays (the clicked part): ■/▶ stops it like playing. */
+const countingIn = computed(() => clicksEndAt.value !== null)
+const beatsPerBar = computed(() => song.value?.timeSignature.numerator ?? 4)
+const countIn = useCountIn(() => {
+  const beat = barLength.value / beatsPerBar.value / rate.value
+  const songLead = (firstTime.value - startTime.value) / rate.value
+  const position = clicksEndAt.value !== null
+    ? -((clicksEndAt.value - performance.now()) / 1000 + songLead)
+    : (player.time.value - firstTime.value) / rate.value
+  return { active: countingIn.value || player.playing.value, position, beat, beats: beatsPerBar.value }
+})
 
 function stopCountIn() {
-  countTimers.forEach(clearTimeout)
+  clearTimeout(countTimer)
   countClicks.forEach((click) => click.stop())
-  countTimers = []
   countClicks = []
-  countIn.value = null
+  clicksEndAt.value = null
 }
 
-/** Plays from the start of the attempt, counting in first the beats the song has no room for. */
+/** Plays from the start of the attempt, first clicking the beats the song has no room for (one bar at most). */
 function playWithCountIn() {
   stopCountIn()
-  const beatsPerBar = song.value?.timeSignature.numerator ?? 4
-  const beat = barLength.value / beatsPerBar
-  // One bar at most: 4-3-2-1 once is enough to get ready.
-  const missing = Math.min(beatsPerBar, Math.round((leadIn.value - (firstTime.value - startTime.value)) / beat))
+  const beat = barLength.value / beatsPerBar.value
+  const missing = Math.min(beatsPerBar.value, Math.round((leadIn.value - (firstTime.value - startTime.value)) / beat))
   if (missing <= 0) {
     player.play()
     return
@@ -258,16 +273,15 @@ function playWithCountIn() {
   const gap = beat / rate.value
   const audio = metronome.audioContext()
   for (let i = 0; i < missing; i++) {
-    const left = missing - i
-    countClicks.push(...metronome.clickAt(audio.currentTime + 0.05 + i * gap, left % beatsPerBar === 0 ? 'strong' : 'weak'))
-    countTimers.push(setTimeout(() => (countIn.value = (left - 1) % beatsPerBar + 1), 50 + i * gap * 1000))
+    countClicks.push(...metronome.clickAt(audio.currentTime + 0.05 + i * gap, (missing - i) % beatsPerBar.value === 0 ? 'strong' : 'weak'))
   }
-  countTimers.push(setTimeout(() => {
-    countTimers = []
+  const clicksMs = 50 + missing * gap * 1000
+  clicksEndAt.value = performance.now() + clicksMs
+  countTimer = setTimeout(() => {
     countClicks = []
-    countIn.value = null
+    clicksEndAt.value = null
     player.play()
-  }, 50 + missing * gap * 1000))
+  }, clicksMs)
 }
 
 /** Puts the song at the start of the current unit (or part), paused, with a fresh attempt. */
@@ -476,7 +490,7 @@ async function withSound(action: () => void) {
 }
 
 function togglePlay() {
-  if (player.playing.value || waiting.value || countIn.value !== null) {
+  if (player.playing.value || waiting.value || countingIn.value) {
     stopCountIn()
     player.pause()
     waiting.value = false
@@ -615,26 +629,20 @@ const soundingKeys = computed(() => {
  * find it from the notes, like a teacher who waits before pointing. In tempo there is no time to think,
  * so the keys light up as the notes come.
  */
-const keyHint = ref(false)
-let keyHintTimer: ReturnType<typeof setTimeout> | undefined
+const teacher = useTeacherWait()
 watch([waiting, pendingIndex], () => {
-  clearTimeout(keyHintTimer)
-  keyHint.value = false
-  if (waiting.value) keyHintTimer = setTimeout(() => {
-    keyHint.value = true
-  }, KEY_HINT_DELAY_MS)
+  if (waiting.value) teacher.restart()
+  else teacher.stop()
 })
-onBeforeUnmount(() => clearTimeout(keyHintTimer))
 /**
  * The lit keys are the help here: the app's «С подсказкой» switch (plan step 29) turns them on and off. The last
  * rung of a phrase (in tempo, full speed) is its exam: no lit keys, whatever the switch says. «С учителем» is not
  * help but the mode (the ladder or free play), so it stays its own switch.
  */
-const exam = computed(() => guided.value && !!unit.value && rungIndex.value === unit.value.rungs.length - 1 && mode.value !== 'listen')
-const guideOn = computed(() => progress.guide.value && !exam.value)
+const { exam, guideOn } = useHelp(() => guided.value && !!unit.value && rungIndex.value === unit.value.rungs.length - 1 && mode.value !== 'listen')
 const litKeys = computed(() => {
   if (result.value || !guideOn.value) return []
-  if (mode.value === 'wait') return waiting.value && keyHint.value ? pendingKeys.value : []
+  if (mode.value === 'wait') return waiting.value && teacher.shown.value ? pendingKeys.value : []
   return [...new Set([...pendingKeys.value, ...soundingKeys.value])]
 })
 
@@ -706,13 +714,7 @@ const nextLabel = computed(() => {
     <!-- The switches go into the drawer: this screen's own, or «Теория»'s when the piece is shown inside it. -->
     <Teleport defer to="#page-actions">
       <USwitch v-model="guided" size="lg" :label="t('songs.guided')" />
-      <USwitch
-        :model-value="guideOn"
-        :disabled="exam"
-        size="lg"
-        :label="exam ? t('train.guideExam') : t('train.guide')"
-        @update:model-value="progress.setGuide($event)"
-      />
+      <HelpSwitch :on="guideOn" :exam="exam" in-place />
       <USwitch v-if="!onPads" v-model="anyOctave" size="lg" :label="t('songs.anyOctave')" />
       <!-- Tips open on tap: tooltips never show on a touch screen. -->
       <UPopover :content="{ side: 'bottom', align: 'end' }">
@@ -786,20 +788,17 @@ const nextLabel = computed(() => {
             <UButton icon="i-lucide-ear" color="neutral" variant="soft" size="lg" :label="t('songs.listen')" @click="withSound(listen)" />
             <UButton icon="i-lucide-rotate-ccw" color="neutral" variant="soft" size="lg" :label="t('songs.again')" @click="withSound(startAttempt)" />
             <UButton
-              :icon="player.playing.value || waiting || countIn !== null ? 'i-lucide-pause' : 'i-lucide-play'"
+              :icon="player.playing.value || waiting || countingIn ? 'i-lucide-pause' : 'i-lucide-play'"
               size="lg"
               :loading="synth.status.value === 'loading'"
-              :label="player.playing.value || waiting || countIn !== null ? t('songs.pause') : t('songs.play')"
+              :label="player.playing.value || waiting || countingIn ? t('songs.pause') : t('songs.play')"
               @click="withSound(togglePlay)"
             />
 
             <span class="controls__divider" aria-hidden="true" />
 
             <RungLadder v-if="guided && unit" :unit="unit" :passed="passedOf(unit)" :current="rungIndex" @choose="chooseRung" />
-            <span v-if="exam" class="exam">
-              <UIcon name="i-lucide-graduation-cap" class="size-5" />
-              {{ t('train.exam') }}
-            </span>
+            <ExamBadge v-if="exam" />
             <template v-else-if="!guided">
               <div class="segmented" role="radiogroup" :aria-label="t('songs.modeLabel')">
                 <button v-for="item in (['wait', 'tempo', 'listen'] as const)" :key="item" type="button" role="radio" class="segment" :class="{ 'segment--on': freeMode === item }" :aria-checked="freeMode === item" @click="freeMode = item">
@@ -835,7 +834,7 @@ const nextLabel = computed(() => {
               <UIcon :name="hint === 'up' ? 'i-lucide-arrow-up' : 'i-lucide-arrow-down'" class="size-4 shrink-0" />
               {{ t(`songs.octave.${hint}`) }}
             </p>
-            <span v-if="countIn !== null" class="count-in" aria-live="assertive">{{ countIn }}</span>
+            <CountIn :value="countIn" />
             <ResultCard v-if="result" :result="result" :guided="guided" :unit-done="unitFinished && !hasNextRung" :next-label="nextLabel" @next="nextRung" @again="startAttempt" />
             <div class="view-switch segmented" role="radiogroup" :aria-label="t('songs.viewLabel')">
               <button v-for="item in SONG_VIEWS" :key="item" type="button" role="radio" class="segment" :class="{ 'segment--on': view === item }" :aria-checked="view === item" @click="view = item">
@@ -1109,18 +1108,6 @@ const nextLabel = computed(() => {
   }
 }
 
-.count-in {
-  position: absolute;
-  inset: 0;
-  z-index: 2;
-  display: grid;
-  place-items: center;
-  font-family: var(--font-display);
-  font-size: 6rem;
-  font-weight: 800;
-  color: var(--color-active);
-  pointer-events: none;
-}
 
 .stage {
   position: relative;

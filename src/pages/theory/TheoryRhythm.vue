@@ -2,7 +2,13 @@
 import { computed, onBeforeUnmount, ref, shallowRef, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 
+import CountIn from '@/components/CountIn.vue'
+import ExamBadge from '@/components/ExamBadge.vue'
+import HelpSwitch from '@/components/HelpSwitch.vue'
 import RhythmStaff from '@/components/RhythmStaff.vue'
+import StarRating from '@/components/StarRating.vue'
+import { useCountIn } from '@/composables/useCountIn'
+import { useHelp } from '@/composables/useHelp'
 import SongPractice from '@/pages/SongPractice.vue'
 import { useMetronome } from '@/composables/useMetronome'
 import { useMk4Actions } from '@/composables/useMk4Actions'
@@ -16,7 +22,7 @@ import { useTimedPresses, type TimedPress } from '@/composables/useTimedPresses'
 import { useWakeLock } from '@/composables/useWakeLock'
 import { EXAM_STARS } from '@/lib/levels'
 import { scaleGroups } from '@/lib/metronome'
-import { quarterSeconds, scoreRhythm, sounds, type Rhythm, type RhythmScore, type TimingVerdict } from '@/lib/rhythm'
+import { beatSeconds, scoreRhythm, sounds, type Rhythm, type RhythmScore, type TimingVerdict } from '@/lib/rhythm'
 import {
   RHYTHM_LEVELS,
   RHYTHM_TEMPOS,
@@ -98,8 +104,7 @@ const stars = computed(() => starsOf(levelPasses.value))
  * played is marked; off, just the notes. From two stars (the last tempo) the level is in its exam: no help. The
  * metronome's clicks stay: playing with them is the task, not a hint.
  */
-const exam = computed(() => stars.value >= EXAM_STARS)
-const guideOn = computed(() => progress.guide.value && !exam.value)
+const { exam, guideOn } = useHelp(() => stars.value >= EXAM_STARS)
 
 /** Tasks alternate: read the notes, then hear and repeat (the notes show after the attempt). */
 const taskNumber = ref(0)
@@ -340,20 +345,13 @@ onBeforeUnmount(() => {
 const marks = computed<Record<number, TimingVerdict>>(() => Object.fromEntries((score.value?.results ?? []).map((result) => [result.index, result.verdict])))
 const lowerMarks = computed<Record<number, TimingVerdict>>(() => Object.fromEntries((scoreLower.value?.results ?? []).map((result) => [result.index, result.verdict])))
 const showNotes = computed(() => kind.value !== 'repeat' || phase.value === 'result')
-/** Count-in beat shown big while the child waits for the first note. */
-const countIn = ref<number | null>(null)
-let countFrame = 0
-function followCountIn() {
-  const position = player.heardPosition()
-  // One beat of the meter: a quarter in x/4, an eighth in 6/8 (the metronome counts eighths there).
-  const { meter } = task.value
-  const beat = quarterSeconds(bpm.value, meter) * (4 / meter.denominator)
-  const beats = meter.numerator
-  countIn.value = phase.value === 'playing' && position < 0 ? beats - Math.floor(-position / beat) : null
-  countFrame = requestAnimationFrame(followCountIn)
-}
-countFrame = requestAnimationFrame(followCountIn)
-onBeforeUnmount(() => cancelAnimationFrame(countFrame))
+/** The countdown before the first note, shown big. */
+const countIn = useCountIn(() => ({
+  active: phase.value === 'playing',
+  position: player.heardPosition(),
+  beat: beatSeconds(bpm.value, task.value.meter),
+  beats: task.value.meter.numerator,
+}))
 
 /** The intro: one bar of each new value, to look at and listen to. */
 const introRhythms = computed(() => info.value.introduces.map((id) => ({ id, rhythm: introRhythm(id) })))
@@ -396,21 +394,10 @@ const levelTabs = computed(() => RHYTHM_LEVELS.map((item) => ({ id: item.id, ope
         </template>
       </template>
     </div>
-    <span class="stars" :aria-label="t('train.stars', { n: stars })">{{ '★'.repeat(stars) }}<span class="stars__off">{{ '★'.repeat(3 - stars) }}</span></span>
-    <span v-if="exam" class="exam">
-      <UIcon name="i-lucide-graduation-cap" class="size-5" />
-      {{ t('train.exam') }}
-    </span>
+    <StarRating :value="stars" size="lg" />
+    <ExamBadge v-if="exam" />
     <!-- The app's help switch, in the drawer; a level's exam turns it off. -->
-    <Teleport defer to="#page-actions">
-      <USwitch
-        :model-value="guideOn"
-        :disabled="exam"
-        size="lg"
-        :label="exam ? t('train.guideExam') : t('train.guide')"
-        @update:model-value="progress.setGuide($event)"
-      />
-    </Teleport>
+    <HelpSwitch :on="guideOn" :exam="exam" />
     <!-- Tempo from the metronome scale, one tap, like a mechanical metronome. -->
     <UPopover v-model:open="tempoOpen" :content="{ side: 'bottom', align: 'start' }">
       <UButton
@@ -485,7 +472,7 @@ const levelTabs = computed(() => RHYTHM_LEVELS.map((item) => ({ id: item.id, ope
           :lower-marks="phase === 'result' ? lowerMarks : undefined"
         />
         <p v-else class="hidden-notes text-muted">{{ t('theory.hiddenNotes') }}</p>
-        <span v-if="countIn !== null" class="count-in" aria-live="assertive">{{ countIn }}</span>
+        <CountIn :value="countIn" />
       </div>
     </template>
 
@@ -595,18 +582,6 @@ const levelTabs = computed(() => RHYTHM_LEVELS.map((item) => ({ id: item.id, ope
   width: 100%;
   text-align: center;
   font-size: 1.125rem;
-}
-
-.count-in {
-  position: absolute;
-  inset: 0;
-  display: grid;
-  place-items: center;
-  font-family: var(--font-display);
-  font-size: 5rem;
-  font-weight: 800;
-  color: var(--color-active);
-  pointer-events: none;
 }
 
 .beat {

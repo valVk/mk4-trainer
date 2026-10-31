@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { useI18n } from 'vue-i18n'
 
+import StarRating from '@/components/StarRating.vue'
 import { starsFor, type Unit } from '@/lib/ladder'
 
 // The teacher's units of a part (phrases, sections, the whole part), with stars and the suggested next one.
@@ -32,7 +33,7 @@ defineEmits<{ select: [index: number] }>()
     >
       <span class="unit__name">{{ label(item) }}</span>
       <span class="unit__meta">
-        <span class="unit__stars" :aria-label="t('train.stars', { n: starsFor(item, passed[item.id] ?? 0) })">{{ '★'.repeat(starsFor(item, passed[item.id] ?? 0)) }}{{ '☆'.repeat(3 - starsFor(item, passed[item.id] ?? 0)) }}</span>
+        <StarRating :value="starsFor(item, passed[item.id] ?? 0)" size="inline" />
         <template v-if="repeats(item) > 1"> {{ t('songs.repeats', { n: repeats(item) }) }}</template>
       </span>
     </button>
@@ -68,10 +69,6 @@ defineEmits<{ select: [index: number] }>()
 .unit__meta {
   font-size: 0.8125rem;
   color: var(--ui-text-muted);
-}
-
-.unit__stars {
-  color: var(--color-attention);
 }
 
 .unit--current {

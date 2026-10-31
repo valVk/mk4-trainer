@@ -2,6 +2,7 @@
 import { nextTick, onMounted, ref } from 'vue'
 
 import PianoKeyboard from '@/components/PianoKeyboard.vue'
+import StarRating from '@/components/StarRating.vue'
 
 // Development only: one theme's colours (dev colour sheet, /dev/colors), every token with its value and the
 // components that use them, so the owner can judge a theme as a whole. The page puts two of these side by side.
@@ -79,7 +80,7 @@ const off = ref(false)
         <span class="chip chip--done">Р2</span>
         <span class="chip">Р4</span>
         <span class="exam">Экзамен</span>
-        <span class="stars">★★<span class="stars__off">★</span></span>
+        <StarRating :value="2" size="lg" />
       </div>
       <div class="row">
         <span class="focus-ring">Под ручкой</span>
@@ -193,14 +194,6 @@ const off = ref(false)
   box-shadow: 0 0 0 var(--ring-width) var(--color-correct) inset;
 }
 
-.stars {
-  font-size: 1.5rem;
-  color: var(--color-attention);
-}
-
-.stars__off {
-  color: var(--star-off);
-}
 
 .focus-ring,
 .focus-fill,

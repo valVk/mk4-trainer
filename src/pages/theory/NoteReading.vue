@@ -2,8 +2,10 @@
 import { computed, onBeforeUnmount, ref, shallowRef, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 
+import CountIn from '@/components/CountIn.vue'
 import PianoKeyboard from '@/components/PianoKeyboard.vue'
 import RhythmStaff from '@/components/RhythmStaff.vue'
+import { useCountIn } from '@/composables/useCountIn'
 import { useKeyboardWindow } from '@/composables/useKeyboardWindow'
 import { useMk4Actions } from '@/composables/useMk4Actions'
 import { useNoteSource } from '@/composables/useNoteSource'
@@ -11,7 +13,7 @@ import { useRhythmPlayer } from '@/composables/useRhythmPlayer'
 import { useShortScreen } from '@/composables/useShortScreen'
 import { useTimedPresses } from '@/composables/useTimedPresses'
 import { makeMelody, readMarks, readingPasses, type NoteLevel, type ReadMark } from '@/lib/noteLevels'
-import { quarterSeconds, scoreRhythm, sounds, type Rhythm, type RhythmScore, type TimingVerdict } from '@/lib/rhythm'
+import { beatSeconds, scoreRhythm, sounds, type Rhythm, type RhythmScore, type TimingVerdict } from '@/lib/rhythm'
 import { octaveShift } from '@/lib/staff'
 
 // «Теория» → «Ноты», «Читаем с ритмом» (plan step 19): a short melody on the staff, read in rhythm with the
@@ -137,17 +139,13 @@ const advice = computed(() => {
 })
 const shiftNeeded = computed(() => Math.max(...melody.value.notes.map((note) => (note.key === undefined ? 0 : Math.abs(octaveShift(note.key, windowStart.value))))))
 
-/** Count-in beat shown big while the child waits for the first note. */
-const countIn = ref<number | null>(null)
-let countFrame = 0
-function followCountIn() {
-  const position = player.heardPosition()
-  const beat = quarterSeconds(bpm.value, melody.value.meter) * (4 / melody.value.meter.denominator)
-  countIn.value = phase.value === 'playing' && position < 0 ? melody.value.meter.numerator - Math.floor(-position / beat) : null
-  countFrame = requestAnimationFrame(followCountIn)
-}
-countFrame = requestAnimationFrame(followCountIn)
-onBeforeUnmount(() => cancelAnimationFrame(countFrame))
+/** The countdown before the first note, shown big. */
+const countIn = useCountIn(() => ({
+  active: phase.value === 'playing',
+  position: player.heardPosition(),
+  beat: beatSeconds(bpm.value, melody.value.meter),
+  beats: melody.value.meter.numerator,
+}))
 </script>
 
 <template>
@@ -164,7 +162,7 @@ onBeforeUnmount(() => cancelAnimationFrame(countFrame))
         :current="phase === 'playing' ? player.current.value : null"
         :marks="phase === 'result' ? staffMarks : phase === 'playing' ? liveRight : undefined"
       />
-      <span v-if="countIn !== null" class="count-in" aria-live="assertive">{{ countIn }}</span>
+      <CountIn :value="countIn" />
     </div>
     <p v-if="shiftNeeded && phase !== 'playing'" class="pill pill--octave" role="status">{{ t('theory.notes.reading.octave') }}</p>
     <div v-if="phase === 'result'" class="result" :class="passed ? 'result--passed' : 'result--again'" role="status">
@@ -205,18 +203,6 @@ onBeforeUnmount(() => cancelAnimationFrame(countFrame))
   min-height: 8rem;
   display: flex;
   align-items: center;
-}
-
-.count-in {
-  position: absolute;
-  inset: 0;
-  display: grid;
-  place-items: center;
-  font-family: var(--font-display);
-  font-size: 5rem;
-  font-weight: 800;
-  color: var(--color-active);
-  pointer-events: none;
 }
 
 .pill {

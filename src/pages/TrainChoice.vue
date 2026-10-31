@@ -5,6 +5,7 @@ import { useI18n } from 'vue-i18n'
 import ChordDiagram from '@/components/ChordDiagram.vue'
 import PageHeader from '@/components/PageHeader.vue'
 import RhythmStaff from '@/components/RhythmStaff.vue'
+import StarRating from '@/components/StarRating.vue'
 import { useProgress } from '@/composables/useProgress'
 import { LEVELS, starsFor } from '@/lib/levels'
 import { currentLevel, starsOf } from '@/lib/rhythmLevels'
@@ -44,7 +45,7 @@ const rhythmStars = computed(() => starsOf(progress.rhythmProgress.value[rhythmL
         <span class="card__foot">
           <span class="card__where">
             {{ t('trainChoice.chordsWhere', { n: chordLevel, total: LEVELS.length }) }}
-            <span class="stars" :aria-label="t('train.stars', { n: chordStars })">{{ '★'.repeat(chordStars) }}<span class="stars__off">{{ '★'.repeat(3 - chordStars) }}</span></span>
+            <StarRating :value="chordStars" />
           </span>
           <span class="card__go">{{ t('trainChoice.go') }} <UIcon name="i-lucide-arrow-right" class="size-5" /></span>
         </span>
@@ -62,7 +63,7 @@ const rhythmStars = computed(() => starsOf(progress.rhythmProgress.value[rhythmL
         <span class="card__foot">
           <span class="card__where">
             {{ t('trainChoice.theoryWhere', { section: t('theory.sections.rhythm'), n: rhythmLevel }) }}
-            <span class="stars" :aria-label="t('train.stars', { n: rhythmStars })">{{ '★'.repeat(rhythmStars) }}<span class="stars__off">{{ '★'.repeat(3 - rhythmStars) }}</span></span>
+            <StarRating :value="rhythmStars" />
           </span>
           <span class="card__go">{{ t('trainChoice.go') }} <UIcon name="i-lucide-arrow-right" class="size-5" /></span>
         </span>
@@ -185,15 +186,6 @@ const rhythmStars = computed(() => starsOf(progress.rhythmProgress.value[rhythmL
   background: var(--hue);
 }
 
-.stars {
-  font-size: 1.125rem;
-  letter-spacing: 0.08em;
-  color: var(--color-attention);
-}
-
-.stars__off {
-  color: var(--star-off);
-}
 
 @media (prefers-reduced-motion: reduce) {
   .card,

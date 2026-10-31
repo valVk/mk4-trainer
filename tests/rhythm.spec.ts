@@ -10,6 +10,8 @@ import {
   holdVerdict,
   noteQuarters,
   onTimeWindow,
+  beatSeconds,
+  countInBeat,
   quarterSeconds,
   scoreRhythm,
   sounds,
@@ -39,6 +41,18 @@ describe('note values', () => {
     expect(quarterSeconds(60, FOUR)).toBe(1)
     // In 6/8 the metronome counts eighths: at 120 an eighth is 0.5 s, a quarter 1 s.
     expect(quarterSeconds(120, SIX_EIGHT)).toBe(1)
+  })
+
+  it('counts down 4-3-2-1 in the last bar before the first note, then nothing', () => {
+    // 60 bpm in 4/4: one beat a second.
+    expect([-3.5, -2.5, -1.5, -0.5].map((position) => countInBeat(position, beatSeconds(60, FOUR), 4))).toEqual([4, 3, 2, 1])
+    expect(countInBeat(0, 1, 4)).toBeNull()
+    // A longer lead-in (a song's two bars): only its last bar is counted.
+    expect(countInBeat(-6, 1, 4)).toBeNull()
+    // 6/8 counts eighths: at 120 an eighth is half a second.
+    expect(beatSeconds(120, SIX_EIGHT)).toBe(0.5)
+    expect(countInBeat(-2.9, beatSeconds(120, SIX_EIGHT), 6)).toBe(6)
+    expect(countInBeat(-0.25, 0.5, 6)).toBe(1)
   })
 })
 
