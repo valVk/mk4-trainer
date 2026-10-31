@@ -21,6 +21,8 @@ export interface InventoryItem {
   count: number
   /** When it last arrived, ms (for lighting it up). */
   at: number
+  /** The last message in full, hex: what a SysEx really says. */
+  bytes: string
 }
 
 export type Inventory = ReadonlyMap<string, InventoryItem>
@@ -36,7 +38,7 @@ const SUSTAIN_CC = 64
 const MOD_WHEEL_CC = 1
 
 /** The control a raw message comes from, with its value; null for messages that are not a control (clock, sensing). */
-export function controlOf(data: ArrayLike<number>, pads: PadNotes): Omit<InventoryItem, 'min' | 'max' | 'count' | 'at' | 'last'> & { value: number } | null {
+export function controlOf(data: ArrayLike<number>, pads: PadNotes): Omit<InventoryItem, 'min' | 'max' | 'count' | 'at' | 'last' | 'bytes'> & { value: number } | null {
   const status = data[0]
   if (status === undefined) return null
   if (status === 0xf0) {
@@ -69,11 +71,12 @@ export function addMessage(inventory: Inventory, data: ArrayLike<number>, pads: 
   const control = controlOf(data, pads)
   if (!control) return inventory
   const { value, ...rest } = control
+  const bytes = Array.from(data, (byte) => byte.toString(16).padStart(2, '0')).join(' ')
   const before = inventory.get(control.id)
   const next = new Map(inventory)
   next.set(control.id, before
-    ? { ...before, min: Math.min(before.min, value), max: Math.max(before.max, value), last: value, count: before.count + 1, at }
-    : { ...rest, min: value, max: value, last: value, count: 1, at })
+    ? { ...before, min: Math.min(before.min, value), max: Math.max(before.max, value), last: value, count: before.count + 1, at, bytes }
+    : { ...rest, min: value, max: value, last: value, count: 1, at, bytes })
   return next
 }
 
@@ -98,8 +101,8 @@ export function clockTempo(ticks: readonly number[]): number | null {
   return quarter > 0 ? Math.round(60_000 / quarter) : null
 }
 
-/** The inventory as JSON for mapping (plan step 25): the device, the pad map, the controls found. */
-export function inventoryJson(inventory: Inventory, device: string, pads: PadNotes): string {
+/** The inventory as JSON for mapping (plan step 25): the device, the pad map, the controls found, and what was taught. */
+export function inventoryJson(inventory: Inventory, device: string, pads: PadNotes, taught: object = {}): string {
   const controls = [...inventory.values()].sort((a, b) => a.id.localeCompare(b.id)).map(({ at: _at, ...item }) => item)
-  return JSON.stringify({ device, pads, controls }, null, 2)
+  return JSON.stringify({ device, pads, taught, controls }, null, 2)
 }

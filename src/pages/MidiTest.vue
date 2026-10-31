@@ -10,6 +10,7 @@ import StatusLed from '@/components/StatusLed.vue'
 import { useKeyboardWindow } from '@/composables/useKeyboardWindow'
 import { useNoteSource } from '@/composables/useNoteSource'
 import { padsPlayMusic } from '@/composables/usePadActions'
+import { useProgress } from '@/composables/useProgress'
 import { addMessage, clockTempo, inventoryJson, type Inventory } from '@/lib/midiInventory'
 import { midiName } from '@/lib/theory'
 
@@ -33,6 +34,7 @@ const PAD_CHANNEL = 10
 const { t } = useI18n()
 const { connectMidi, padMap } = useNoteSource()
 const keysStart = useKeyboardWindow()
+const progress = useProgress()
 
 /** «Журнал» of raw messages, «Элементы» found (plan step 25), the MK4 drawn with what each control does. */
 const VIEWS = ['log', 'elements', 'panel'] as const
@@ -42,7 +44,7 @@ const clockTicks: number[] = []
 const tempo = ref<number | null>(null)
 const copied = ref(false)
 async function copyInventory() {
-  await navigator.clipboard.writeText(inventoryJson(inventory.value, deviceName.value, pads.value))
+  await navigator.clipboard.writeText(inventoryJson(inventory.value, deviceName.value, pads.value, progress.mk4Panel.value))
   copied.value = true
   setTimeout(() => {
     copied.value = false
