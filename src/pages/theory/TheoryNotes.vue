@@ -22,6 +22,7 @@ import { useCleanChord } from '@/composables/useCleanChord'
 import { useHelp } from '@/composables/useHelp'
 import { useKeyboardWindow } from '@/composables/useKeyboardWindow'
 import { useNextAfterRelease } from '@/composables/useNextAfterRelease'
+import { usePadActions } from '@/composables/usePadActions'
 import { useNoteNames } from '@/composables/useNoteNames'
 import { useNoteSource } from '@/composables/useNoteSource'
 import { useProgress } from '@/composables/useProgress'
@@ -153,6 +154,27 @@ watch(level, () => {
   phase.value = info.value.introduces.length && !introSeen.value.has(level.value) ? 'intro' : 'task'
   newTask(null)
 }, { immediate: true })
+
+/**
+ * The main button, last on the right: «Понятно» in the intro, «Дальше» once found (the next comes by itself when the
+ * keys are up, this is quicker), the next level when this one is done; else waiting for the keys.
+ */
+const primary = computed<{ icon: string, label: string, disabled: boolean, run: () => void }>(() => {
+  if (phase.value === 'intro') return { icon: 'i-lucide-check', label: t('theory.intro.ok'), disabled: false, run: closeIntro }
+  if (levelDone.value && isOpenHere(level.value + 1)) return { icon: 'i-lucide-arrow-right', label: t('theory.nextLevel'), disabled: false, run: () => openLevel(level.value + 1) }
+  if (levelDone.value) return { icon: 'i-lucide-rotate-ccw', label: t('theory.notes.stay'), disabled: false, run: () => { levelDone.value = false } }
+  return { icon: 'i-lucide-arrow-right', label: t('theory.next'), disabled: !solved.value, run: () => newTask(task.value) }
+})
+
+// Pads as on every screen: 1 the main button, 4 skip. «Читаем с ритмом» and a piece have their own.
+usePadActions({
+  next: () => {
+    if (!reading.value && !openPiece.value && !primary.value.disabled) primary.value.run()
+  },
+  skip: () => {
+    if (!reading.value && !openPiece.value && phase.value === 'task' && !solved.value && !levelDone.value) newTask(task.value)
+  },
+})
 
 function closeIntro() {
   introSeen.value = new Set([...introSeen.value, level.value])
@@ -498,6 +520,16 @@ const INTRO_NOTES: Partial<Record<NoteIntroId, { show: 'treble' | 'bass' | 'gran
 </script>
 
 <template>
+  <!-- The buttons first, left, as in «Ритм» and song practice; the same ones in every phase, only what they may do
+       changes. «Читаем с ритмом» puts its own here. -->
+  <div v-if="!openPiece" id="notes-actions" class="controls theory-toolbar">
+    <template v-if="!reading">
+      <UButton icon="i-lucide-skip-forward" color="neutral" variant="soft" size="lg" :disabled="phase === 'intro' || solved || levelDone" :label="t('train.skip')" @click="newTask(task)" />
+      <!-- The main action is always the last button, on the right (owner's rule). -->
+      <UButton :icon="primary.icon" size="lg" class="toolbar-main" :disabled="primary.disabled" :label="primary.label" @click="primary.run" />
+    </template>
+  </div>
+
   <LevelRow
     :tabs="levelTabs"
     :current="openPiece ? null : level"
@@ -516,8 +548,6 @@ const INTRO_NOTES: Partial<Record<NoteIntroId, { show: 'treble' | 'bass' | 'gran
     <span v-if="keysShown && !reading" class="hands">
       <span class="hands__label text-toned">{{ t('theory.notes.underHands', { octaves: underHands }) }}</span>
     </span>
-    <!-- «Читаем с ритмом» puts its play and listen buttons here, after the octave buttons: the main action last. -->
-    <span id="notes-actions" class="row-actions" />
   </LevelRow>
 
   <!-- A piece is played right here: the level row stays, only this content becomes its practice. -->
@@ -526,9 +556,9 @@ const INTRO_NOTES: Partial<Record<NoteIntroId, { show: 'treble' | 'bass' | 'gran
   <NoteReading v-else-if="reading" :level="info" :level-done="levelDone" actions-to="#notes-actions" @passed="onMelodyPassed">
     <template #done>
       <template v-for="piece in piecesAfter(level)" :key="piece.id">
-        <UButton v-if="piece.to" :to="piece.to" icon="i-lucide-music" size="lg" color="success" :label="t('theory.playPiece', { name: piece.title })" />
+        <UButton v-if="piece.to" :to="piece.to" icon="i-lucide-music" size="md" color="success" :label="t('theory.playPiece', { name: piece.title })" />
       </template>
-      <UButton v-if="isOpenHere(level + 1)" icon="i-lucide-arrow-right" size="lg" :label="t('theory.nextLevel')" @click="openLevel(level + 1)" />
+      <UButton v-if="isOpenHere(level + 1)" icon="i-lucide-skip-forward" color="neutral" variant="soft" size="md" :label="t('theory.nextLevel')" @click="openLevel(level + 1)" />
     </template>
   </NoteReading>
   <template v-else>
@@ -619,21 +649,14 @@ const INTRO_NOTES: Partial<Record<NoteIntroId, { show: 'treble' | 'bass' | 'gran
 
       <div v-if="levelDone" class="result result--passed" role="status">
         <p class="result__title">{{ t('theory.notes.levelDone', { tab: tabName(level) }) }}</p>
+        <div class="result__actions">
+          <template v-for="piece in piecesAfter(level)" :key="piece.id">
+            <UButton v-if="piece.to" :to="piece.to" icon="i-lucide-music" size="md" color="success" :label="t('theory.playPiece', { name: piece.title })" />
+          </template>
+          <UButton v-if="isOpenHere(level + 1)" icon="i-lucide-rotate-ccw" color="neutral" variant="soft" size="md" :label="t('theory.notes.stay')" @click="levelDone = false" />
+        </div>
       </div>
     </section>
-
-    <div v-if="phase === 'intro' || levelDone" class="controls">
-      <UButton v-if="phase === 'intro'" icon="i-lucide-check" size="lg" :label="t('theory.intro.ok')" @click="closeIntro" />
-      <template v-else>
-        <UButton v-if="levelDone" icon="i-lucide-rotate-ccw" color="neutral" variant="soft" size="lg" :label="t('theory.notes.stay')" @click="levelDone = false" />
-        <template v-if="levelDone">
-          <template v-for="piece in piecesAfter(level)" :key="piece.id">
-            <UButton v-if="piece.to" :to="piece.to" icon="i-lucide-music" size="lg" color="success" :label="t('theory.playPiece', { name: piece.title })" />
-          </template>
-        </template>
-        <UButton v-if="levelDone && isOpenHere(level + 1)" icon="i-lucide-arrow-right" size="lg" :label="t('theory.nextLevel')" @click="openLevel(level + 1)" />
-      </template>
-    </div>
 
     <PianoKeyboard
       v-if="keysShown"
@@ -711,17 +734,6 @@ const INTRO_NOTES: Partial<Record<NoteIntroId, { show: 'treble' | 'bass' | 'gran
 
 .names__letter {
   font-weight: 600;
-}
-
-.row-actions {
-  display: flex;
-  align-items: center;
-  gap: 0.75rem;
-  margin-left: auto;
-}
-
-.row-actions:empty {
-  display: none;
 }
 
 .big-name {
@@ -852,11 +864,6 @@ const INTRO_NOTES: Partial<Record<NoteIntroId, { show: 'treble' | 'bass' | 'gran
 .hands__label {
   font-weight: 600;
   white-space: nowrap;
-}
-
-/* After the octave buttons the play and listen buttons follow; the push to the right is the group's. */
-.hands + .row-actions {
-  margin-left: 0;
 }
 
 .note-keys {

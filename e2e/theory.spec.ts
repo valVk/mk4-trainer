@@ -46,7 +46,7 @@ test('«Тренировка» leads to chords and theory', async ({ page }) => 
   await page.getByRole('button', { name: 'Пока без звука' }).click()
   // The sections are in the drawer; «Ритм» opens first.
   await page.getByRole('button', { name: /^Меню/ }).click()
-  await expect(page.getByRole('button', { name: 'Ритм' })).toHaveAttribute('aria-current', 'page')
+  await expect(page.getByRole('button', { name: 'Ритм', exact: true })).toHaveAttribute('aria-current', 'page')
 })
 
 test('a rhythm played on time passes and counts once', async ({ page }) => {

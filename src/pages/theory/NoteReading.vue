@@ -169,29 +169,25 @@ const countIn = useCountIn(() => ({
     <div v-if="phase === 'result'" class="result" :class="passed ? 'result--passed' : 'result--again'" role="status">
       <p class="result__title">{{ passed ? t('theory.passed') : t('theory.again') }}</p>
       <p class="text-toned">{{ advice }}</p>
+      <!-- What comes after the level's last star: the piece and the next level. -->
+      <div v-if="levelDone" class="result__actions">
+        <slot name="done" />
+      </div>
     </div>
   </section>
 
-  <!-- Play and listen sit in the level row, next to the stars (owner's choice): the card keeps its height. -->
+  <!-- The buttons go to the section's toolbar, as in «Ритм»: the same ones in the same places in every phase. -->
   <Teleport defer :to="actionsTo">
     <UButton icon="i-lucide-ear" color="neutral" variant="soft" size="lg" :label="t('theory.listen')" :disabled="phase === 'playing'" @click="listen" />
-    <template v-if="phase === 'result' && passed">
-      <UButton icon="i-lucide-rotate-ccw" color="neutral" variant="soft" size="lg" :label="t('theory.again')" @click="start" />
-      <UButton icon="i-lucide-arrow-right" size="lg" :label="t('theory.next')" @click="next" />
-    </template>
+    <UButton icon="i-lucide-rotate-ccw" color="neutral" variant="soft" size="lg" :label="t('theory.again')" :disabled="!(phase === 'result' && passed)" @click="start" />
     <UButton
-      v-else
-      :icon="phase === 'playing' ? 'i-lucide-square' : 'i-lucide-play'"
+      :icon="phase === 'playing' ? 'i-lucide-square' : phase === 'result' && passed ? 'i-lucide-arrow-right' : 'i-lucide-play'"
       size="lg"
-      :label="phase === 'playing' ? t('theory.stop') : phase === 'result' ? t('theory.again') : t('theory.play')"
-      @click="phase === 'playing' ? (player.stop(), phase = 'ready') : start()"
+      class="toolbar-main"
+      :label="phase === 'playing' ? t('theory.stop') : phase === 'result' && passed ? t('theory.next') : t('theory.play')"
+      @click="phase === 'playing' ? (player.stop(), phase = 'ready') : phase === 'result' && passed ? next() : start()"
     />
   </Teleport>
-
-  <!-- What comes after the level's last star: the piece and the next level. -->
-  <div v-if="levelDone && phase === 'result'" class="controls">
-    <slot name="done" />
-  </div>
 
   <PianoKeyboard class="note-keys" :start="windowStart" :held="heldNotes" @press="pressNote" @release="releaseNote" />
 </template>
