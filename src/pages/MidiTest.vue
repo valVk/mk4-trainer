@@ -9,7 +9,7 @@ import PageHeader from '@/components/PageHeader.vue'
 import StatusLed from '@/components/StatusLed.vue'
 import { useKeyboardWindow } from '@/composables/useKeyboardWindow'
 import { useNoteSource } from '@/composables/useNoteSource'
-import { addMessage, clockTempo, type Inventory } from '@/lib/midiInventory'
+import { addMessage, clockTempo, inventoryJson, type Inventory } from '@/lib/midiInventory'
 import { midiName } from '@/lib/theory'
 
 type EventKind = 'noteOn' | 'noteOff' | 'cc' | 'pitchBend' | 'program' | 'aftertouch' | 'other'
@@ -39,6 +39,14 @@ const view = ref<typeof VIEWS[number]>('log')
 const inventory = shallowRef<Inventory>(new Map())
 const clockTicks: number[] = []
 const tempo = ref<number | null>(null)
+const copied = ref(false)
+async function copyInventory() {
+  await navigator.clipboard.writeText(inventoryJson(inventory.value, deviceName.value, pads.value))
+  copied.value = true
+  setTimeout(() => {
+    copied.value = false
+  }, 2000)
+}
 const pads = computed(() => ({ channel: padMap.value.channel, notes: padMap.value.notes }))
 const deviceName = computed(() => inputs.value.find((item) => item.connected)?.name ?? 'MIDI')
 /** Ticks while the page is open, so a control just touched is lit for a moment. */
@@ -194,6 +202,8 @@ onBeforeUnmount(() => {
         <button v-for="item in VIEWS" :key="item" type="button" role="tab" class="view" :class="{ 'view--on': view === item }" :aria-selected="view === item" @click="view = item">
           {{ t(`mk4.views.${item}`) }}
         </button>
+        <!-- On every view: what was found, as JSON for mapping (plan step 25). -->
+        <UButton class="ml-auto" icon="i-lucide-copy" :label="copied ? t('mk4.copied') : t('mk4.copy')" :disabled="inventory.size === 0" @click="copyInventory" />
       </div>
       <Mk4Inventory v-if="view === 'elements'" :inventory="inventory" :tempo="tempo" :device="deviceName" :pads="pads" :now="now" @clear="inventory = new Map()" />
       <Mk4Panel v-else-if="view === 'panel'" :inventory="inventory" :keys-start="keysStart" :pads="pads" :now="now" />

@@ -1,11 +1,11 @@
 <script setup lang="ts">
-import { computed, ref } from 'vue'
+import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 
-import { inventoryJson, inventorySummary, type Inventory, type PadNotes } from '@/lib/midiInventory'
+import { inventorySummary, type Inventory, type PadNotes } from '@/lib/midiInventory'
 
 // «Проверка MK4» → «Элементы» (plan step 25): one row per control that sent something, the one just touched lit,
-// how much of the MK4 has been found, and the whole list as JSON for mapping.
+// and how much of the MK4 has been found (the copy for mapping is in the page's row of views).
 
 const props = defineProps<{
   inventory: Inventory
@@ -22,18 +22,10 @@ const emit = defineEmits<{
 }>()
 
 const { t } = useI18n()
-const copied = ref(false)
 
 const rows = computed(() => [...props.inventory.values()].sort((a, b) => b.at - a.at))
 const summary = computed(() => inventorySummary(props.inventory))
 
-async function copy() {
-  await navigator.clipboard.writeText(inventoryJson(props.inventory, props.device, props.pads))
-  copied.value = true
-  setTimeout(() => {
-    copied.value = false
-  }, 2000)
-}
 </script>
 
 <template>
@@ -42,7 +34,6 @@ async function copy() {
       <p class="font-semibold text-highlighted">{{ t('mk4.summary', summary) }}</p>
       <p v-if="tempo" class="text-toned">{{ t('mk4.clock', { bpm: tempo }) }}</p>
       <UButton class="ml-auto" color="neutral" variant="ghost" icon="i-lucide-trash-2" :label="t('mk4.clear')" @click="emit('clear')" />
-      <UButton icon="i-lucide-copy" :label="copied ? t('mk4.copied') : t('mk4.copy')" :disabled="inventory.size === 0" @click="copy" />
     </div>
     <p v-if="inventory.size === 0" class="text-muted">{{ t('mk4.empty') }}</p>
     <div v-else class="inventory__table">
