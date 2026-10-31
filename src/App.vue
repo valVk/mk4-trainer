@@ -22,6 +22,13 @@ void useProgress().init()
 const router = useRouter()
 const { t } = useI18n()
 document.title = t('app.name')
+// The knob cursor (main.css) shows only while the MK4 knob or the Tab key moves around; a tap or a click hides it
+// again, so a dialog focusing its button by itself never shows a stray highlight on the tablet.
+window.addEventListener('keydown', (event) => {
+  if (event.key === 'Tab') document.documentElement.classList.add('knob-nav')
+})
+window.addEventListener('pointerdown', () => document.documentElement.classList.remove('knob-nav'))
+
 const footer = t('app.footer', { year: new Date().getFullYear(), version: __APP_VERSION__ })
 usePadActions({
   train: () => router.push('/train'),

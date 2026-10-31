@@ -201,14 +201,20 @@ body {
  * primary button) a full peach fill with dark text; on a current step drawn as a blue ring and tint (a rung, a
  * phrase) the same ring and tint in peach, not filled. Neither looks like the blue «selected». Inset shadows replace
  * Nuxt UI's own rings. A control may draw its own focus instead (the practice bar).
+ *
+ * Only while the knob or the Tab key is moving around (`html.knob-nav`, set in lib/focusMove.ts and App.vue): a
+ * dialog that focuses its button by itself, or a tap, shows no cursor, so a tablet never shows a stray peach button.
  */
 :focus-visible {
   outline: none !important;
+}
+
+.knob-nav :focus-visible {
   box-shadow: inset 0 0 0 var(--ring-width) var(--color-focus) !important;
   color: var(--color-focus) !important;
 }
 
-:focus-visible:is(
+.knob-nav :focus-visible:is(
   [aria-checked="true"], [aria-pressed="true"], [aria-selected="true"], [data-state="checked"], [data-state="active"],
   .bg-primary
 ),
@@ -226,25 +232,25 @@ body {
 
 /* A switch that is off under the knob: no ring round the track (it reads as a border); the thumb and the label turn
    peach. A switch that is on fills peach like any selected element. */
-[role="switch"][aria-checked="false"]:focus-visible {
+.knob-nav [role="switch"][aria-checked="false"]:focus-visible {
   box-shadow: none !important;
 }
 
-[role="switch"][aria-checked="false"]:focus-visible [data-slot="thumb"] {
+.knob-nav [role="switch"][aria-checked="false"]:focus-visible [data-slot="thumb"] {
   background: var(--color-focus);
 }
 
 /* On: its track shows through the switch's transparent border, so the track itself turns peach too. */
-[role="switch"][aria-checked="true"]:focus-visible {
+.knob-nav [role="switch"][aria-checked="true"]:focus-visible {
   background-color: var(--color-focus) !important;
 }
 
-[data-slot="root"]:has([role="switch"]:focus-visible) [data-slot="label"] {
+.knob-nav [data-slot="root"]:has([role="switch"]:focus-visible) [data-slot="label"] {
   color: var(--color-focus);
 }
 
 /* The current step (blue ring and tint) under the knob: the same in peach; its label keeps its colour. */
-:focus-visible[aria-current]:not([aria-current="false"]) {
+.knob-nav :focus-visible[aria-current]:not([aria-current="false"]) {
   box-shadow:
     inset 0 0 0 var(--ring-width) var(--color-focus),
     inset 0 0 0 100vmax color-mix(in oklab, var(--color-focus) 14%, var(--ui-bg-elevated)) !important;

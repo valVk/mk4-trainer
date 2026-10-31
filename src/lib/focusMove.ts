@@ -44,6 +44,8 @@ function focusable(): HTMLElement[] {
 
 /** Steps the focus to the next (+1) or previous (−1) control, round the ends. */
 export function moveFocus(step: 1 | -1): void {
+  // The cursor shows from now on, until the next tap (App.vue).
+  document.documentElement.classList.add('knob-nav')
   const items = focusable()
   if (items.length === 0) return
   const current = items.indexOf(document.activeElement as HTMLElement)
