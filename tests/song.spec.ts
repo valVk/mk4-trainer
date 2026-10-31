@@ -34,8 +34,9 @@ const note = (key: number, start: number, length = 0.5): SongNote => ({ key, sta
 
 describe('buildSteps', () => {
   it('groups notes starting together into one step with sorted keys', () => {
-    const steps = buildSteps([note(67, 0), note(60, 0.01), note(64, 0.02), note(65, 0.5)])
-    expect(steps).toEqual([{ time: 0, keys: [60, 64, 67] }, { time: 0.5, keys: [65] }])
+    const steps = buildSteps([note(67, 0), note(60, 0.01, 1), note(64, 0.02), note(65, 0.5)])
+    // Each key keeps its note's length: the student must hold it.
+    expect(steps).toEqual([{ time: 0, keys: [60, 64, 67], lengths: [1, 0.5, 0.5] }, { time: 0.5, keys: [65], lengths: [0.5] }])
   })
 
   it('splits notes that are further apart than the window', () => {
@@ -44,7 +45,7 @@ describe('buildSteps', () => {
   })
 
   it('drops repeated keys inside a step', () => {
-    expect(buildSteps([note(60, 0), note(60, 0.005)])).toEqual([{ time: 0, keys: [60] }])
+    expect(buildSteps([note(60, 0), note(60, 0.005, 2)])).toEqual([{ time: 0, keys: [60], lengths: [2] }])
   })
 })
 

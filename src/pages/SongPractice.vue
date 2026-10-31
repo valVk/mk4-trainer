@@ -41,6 +41,7 @@ import {
   openRungs,
   scoreAttempt,
   starsFor,
+  stepLength,
   type AttemptScore,
   type Press,
   type RungMode,
@@ -372,13 +373,17 @@ function handlePress(key: number, input: TapInput) {
     played.value = [...played.value, { key, start: now, end: null, input }]
     heldUntil.value = now
   }
+  lastInput.set(key, input)
   if (mode.value === 'tempo') {
-    presses.push({ key, time: now })
+    presses.push({ key, time: now, end: null })
     return
   }
   if (mode.value !== 'wait') return
   const step = pending.value
-  if (step && (waiting.value || now >= step.time - EARLY_S)) waitPresses.push({ key, time: now, wrong: isWrongPress(step, key, anyOctave.value) })
+  if (step && (waiting.value || now >= step.time - EARLY_S)) {
+    const wrong = isWrongPress(step, key, anyOctave.value)
+    waitPresses.push({ key, time: now, end: null, wrong, length: wrong ? undefined : stepLength(step, key, anyOctave.value) })
+  }
   pressed.add(key)
   tryAdvance(now)
 }
@@ -402,7 +407,19 @@ onEvent((event) => {
 })
 
 /** A key let go: its note on the child's staff gets its final length. */
+/** Each key's input, for the moment it is let go (the same delay as the press). */
+const lastInput = new Map<number, TapInput>()
+
+/** A key let go: the end of its press, so the scoring knows whether the note was held for its length. */
+function closePress(key: number) {
+  const input = lastInput.get(key)
+  const end = player.currentTime() - (input ? metronome.pressDelay(input) * rate.value : 0)
+  const open = [...presses, ...waitPresses].filter((press) => press.key === key && press.end === null)
+  for (const press of open) press.end = Math.max(press.time, end)
+}
+
 function handleRelease(key: number) {
+  closePress(key)
   let index = played.value.length - 1
   while (index >= 0 && !(played.value[index]!.key === key && played.value[index]!.end === null)) index--
   if (index === -1) return
@@ -427,6 +444,8 @@ async function finishAttempt() {
     played: pendingIndex.value,
     rate: rate.value,
     anyOctave: anyOctave.value,
+    // A drum hit or a pad has no length: only keys are held.
+    checkHold: !part.value?.isDrum && !onPads.value,
   })
   result.value = attempt
   const current = unit.value

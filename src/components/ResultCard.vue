@@ -25,12 +25,14 @@ const title = computed(() => {
 })
 
 const description = computed(() => {
-  const { mode, hits, total, mistakes, extra } = props.result
+  const { mode, hits, total, mistakes, extra, short } = props.result
+  // Notes let go too soon: said first, it is what to change (a note is as long as it is written).
+  const held = short ? `${t('songs.result.short', { n: short }, short)} ` : ''
   if (mode === 'tempo') {
     const timing = t('songs.result.tempo', { hits, total, need: Math.ceil(total * TEMPO_PASS_ACCURACY) })
-    return extra ? `${timing} ${t('songs.result.tempoExtra', { extra, allowed: allowedMistakes(total) })}` : timing
+    return held + (extra ? `${timing} ${t('songs.result.tempoExtra', { extra, allowed: allowedMistakes(total) })}` : timing)
   }
-  if (mode === 'wait') return mistakes ? t('songs.result.wait', { mistakes }) : t('songs.result.waitClean')
+  if (mode === 'wait') return held + (mistakes ? t('songs.result.wait', { mistakes }) : t('songs.result.waitClean'))
   return t('songs.result.listen')
 })
 

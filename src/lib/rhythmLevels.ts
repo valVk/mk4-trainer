@@ -188,10 +188,14 @@ export function introRhythm(id: IntroId): Rhythm {
   }
 }
 
-/** An attempt passes with no note missed, at most one extra tap, and three quarters of the notes on time. */
+/**
+ * An attempt passes with no note missed, at most one extra tap, and three quarters of the notes good: on time and,
+ * on keys, held for their length (a 1/32 tap is not a half note; pads have no length and are judged on time only).
+ */
 export function passes(score: RhythmScore): boolean {
   const missed = score.results.filter((result) => result.verdict === 'missed').length
-  return missed === 0 && score.extra <= 1 && score.onTime >= Math.ceil(score.total * 0.75)
+  const good = score.results.filter((result) => result.verdict === 'onTime' && result.hold !== 'short').length
+  return missed === 0 && score.extra <= 1 && good >= Math.ceil(score.total * 0.75)
 }
 
 export type RhythmHint = 'rushing' | 'dragging' | 'missed' | 'extra' | 'holdLonger' | 'letGo' | 'accent' | 'slowDown' | 'noTaps' | 'great'

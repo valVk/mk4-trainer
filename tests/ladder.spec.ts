@@ -96,6 +96,34 @@ describe('wait mode', () => {
   })
 })
 
+describe('holding notes', () => {
+  // A half note at 1 s: 1 s long.
+  const half = { time: 1, keys: [60], lengths: [1] }
+
+  it('in tempo a note is hit only when held for most of its length, not tapped', () => {
+    expect(scoreTempo([half], [{ key: 60, time: 1, end: 1.9 }], 1, false, true).results).toEqual(['hit'])
+    expect(scoreTempo([half], [{ key: 60, time: 1, end: 1.05 }], 1, false, true).results).toEqual(['short'])
+    // Still held when the attempt ends: held long enough.
+    expect(scoreTempo([half], [{ key: 60, time: 1, end: null }], 1, false, true).results).toEqual(['hit'])
+    // Drums and pads: a hit has no length.
+    expect(scoreTempo([half], [{ key: 60, time: 1, end: 1.05 }], 1, false, false).results).toEqual(['hit'])
+  })
+
+  it('a tapped melody does not pass, a held one does', () => {
+    const steps = [0, 1, 2, 3].map((time) => ({ time, keys: [60 + time], lengths: [1] }))
+    const tapped = steps.map((step) => ({ key: step.keys[0]!, time: step.time, end: step.time + 0.05 }))
+    const held = steps.map((step) => ({ key: step.keys[0]!, time: step.time, end: step.time + 0.8 }))
+    expect(scoreAttempt({ mode: 'tempo', steps, presses: tapped, waitPresses: [], played: 0, rate: 1, anyOctave: false, checkHold: true }).passed).toBe(false)
+    expect(scoreAttempt({ mode: 'tempo', steps, presses: held, waitPresses: [], played: 0, rate: 1, anyOctave: false, checkHold: true }).passed).toBe(true)
+  })
+
+  it('waiting, a right key let go too soon is a mistake', () => {
+    const presses = [{ key: 60, time: 1, end: 1.04, wrong: false, length: 1 }, { key: 62, time: 2, end: 2.9, wrong: false, length: 1 }]
+    expect(countMistakes(presses, 1, true)).toBe(1)
+    expect(countMistakes(presses, 1, false)).toBe(0)
+  })
+})
+
 describe('scoreTempo', () => {
   const steps = [step(1, 60), step(2, 64, 67), step(3, 65)]
 

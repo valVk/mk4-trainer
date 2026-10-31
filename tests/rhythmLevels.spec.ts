@@ -110,6 +110,14 @@ describe('passing and hints', () => {
     expect(hintsFor(score)).toEqual(['great'])
   })
 
+  it('does not pass tapped notes: each must be held for its length', () => {
+    const score = scoreRhythm(quarters, [press(0, 0.05), press(1, 0.05), press(2, 0.05), press(3, 0.05)])
+    expect(passes(score)).toBe(false)
+    expect(hintsFor(score)).toContain('holdLonger')
+    // Pads have no length: the same taps pass.
+    expect(passes(scoreRhythm(quarters, [press(0, 0.05), press(1, 0.05), press(2, 0.05), press(3, 0.05)], false))).toBe(true)
+  })
+
   it('tells a hurrying child to wait for the click', () => {
     const score = scoreRhythm(quarters, [press(0), press(0.85), press(1.84), press(2.86)])
     expect(passes(score)).toBe(false)

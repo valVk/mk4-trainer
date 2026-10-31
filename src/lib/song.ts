@@ -21,6 +21,8 @@ export interface Step {
   time: number
   /** Sorted, without duplicates. */
   keys: number[]
+  /** How long each key's note lasts (seconds), in the order of `keys`: the student must hold it. */
+  lengths?: number[]
 }
 
 export interface Part {
@@ -64,15 +66,20 @@ const STATUS_PROGRAM_CHANGE = 0xc0
 export function buildSteps(notes: readonly SongNote[]): Step[] {
   const sorted = [...notes].sort((a, b) => a.start - b.start || a.key - b.key)
   const steps: Step[] = []
-  let current: { time: number, keys: Set<number> } | null = null
+  let current: { time: number, lengths: Map<number, number> } | null = null
+  const close = (step: { time: number, lengths: Map<number, number> }) => {
+    const keys = [...step.lengths.keys()].sort((a, b) => a - b)
+    steps.push({ time: step.time, keys, lengths: keys.map((key) => step.lengths.get(key)!) })
+  }
   for (const note of sorted) {
     if (!current || note.start - current.time >= STEP_WINDOW_S) {
-      if (current) steps.push({ time: current.time, keys: [...current.keys].sort((a, b) => a - b) })
-      current = { time: note.start, keys: new Set() }
+      if (current) close(current)
+      current = { time: note.start, lengths: new Map() }
     }
-    current.keys.add(note.key)
+    // A key doubled in one step keeps its longer note.
+    current.lengths.set(note.key, Math.max(current.lengths.get(note.key) ?? 0, note.length))
   }
-  if (current) steps.push({ time: current.time, keys: [...current.keys].sort((a, b) => a - b) })
+  if (current) close(current)
   return steps
 }
 

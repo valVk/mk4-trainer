@@ -3,6 +3,7 @@ import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 
 import { keyboardKeys } from '@/lib/keyboard'
 import { PAD_NOTE_MIN_S } from '@/lib/padLayout'
+import { HOLD_SHARE } from '@/lib/rhythm'
 import type { SongNote } from '@/lib/song'
 
 // Falling notes above PianoKeyboard: each note falls in its key's lane and reaches the bottom edge
@@ -45,6 +46,8 @@ const HOLD_EARLY_S = 0.15
 const MISS_AFTER_S = 0.25
 /** Notes the student held while they sounded: they stay green after they pass. */
 let played = new WeakSet<SongNote>()
+/** Played but let go too soon (before HOLD_SHARE of the note): red, like a missed one. */
+let cutShort = new WeakSet<SongNote>()
 let lastNow = 0
 
 /** Pixels between a note and the next one on the same key, so repeats read as separate notes. */
@@ -142,7 +145,10 @@ function draw() {
 
   const now = props.getTime()
   // Back in time (a new attempt): nothing is played yet.
-  if (now < lastNow - 0.3) played = new WeakSet()
+  if (now < lastNow - 0.3) {
+    played = new WeakSet()
+    cutShort = new WeakSet()
+  }
   lastNow = now
   const pxPerSecond = height / props.lookahead
   const nextStart = nextOnKey.value
@@ -166,10 +172,12 @@ function draw() {
     // Held while it sounds (a press a little early counts): played, green now and after. Not played: blue.
     const end = note.start + Math.max(note.length, padIndex === -1 ? 0 : PAD_NOTE_MIN_S)
     if (until <= HOLD_EARLY_S && now < end && held.has(note.key)) played.add(note)
-    const isPlayed = played.has(note)
+    // Keys only (a pad hit has no length): let go before most of the note has sounded.
+    if (props.judge && padIndex === -1 && played.has(note) && !held.has(note.key) && now - note.start < note.length * HOLD_SHARE) cutShort.add(note)
+    const isPlayed = played.has(note) && !cutShort.has(note)
     // Not pressed a moment after it started: missed, red while it still crosses the line (the one the song waits on
     // is not missed: it waits). Faded once it is over.
-    const missed = props.judge && !isPlayed && now - note.start > MISS_AFTER_S && !pending.has(note.key)
+    const missed = props.judge && (cutShort.has(note) || (!isPlayed && now - note.start > MISS_AFTER_S && !pending.has(note.key)))
     const over = now >= end && !pending.has(note.key)
     context.globalAlpha = over ? 0.45 : 1
     context.fillStyle = outside ? colors.outside : isPlayed ? colors.played : missed ? colors.missed : isBlack ? colors.black : colors.white

@@ -202,8 +202,8 @@ export interface RhythmScore {
 export const ON_TIME_S = 0.08
 /** A press further than this from a note (and outside its share of the gap) belongs to no note. */
 const CAPTURE_S = 0.25
-/** A note counts as held when the key stays down this share of its length. */
-const HOLD_SHORT = 0.6
+/** A note counts as held when the key stays down this share of its length (songs and the waterfall use it too). */
+export const HOLD_SHARE = 0.6
 /** Held into the next note's time by more than this share and this many seconds is too long. */
 const HOLD_LONG = 1.5
 const HOLD_LONG_S = 0.2
@@ -252,7 +252,7 @@ export function scoreRhythm(all: readonly Sound[], presses: readonly RhythmPress
 }
 
 export function holdVerdict(held: number, length: number): HoldVerdict {
-  if (held < length * HOLD_SHORT) return 'short'
+  if (held < length * HOLD_SHARE) return 'short'
   if (held > length * HOLD_LONG && held > length + HOLD_LONG_S) return 'long'
   return 'ok'
 }

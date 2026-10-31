@@ -2,6 +2,7 @@
 // whole part), the rungs of each unit, pass rules and scoring. Pure code, no Vue, no UI text.
 
 import type { Phrase, Section } from './phrases'
+import { holdVerdict } from './rhythm'
 import type { Step } from './song'
 import { pitchClass } from './theory'
 
@@ -126,6 +127,17 @@ export interface Press {
   key: number
   /** Song time of the press, in seconds, already moved back to the moment the child heard. */
   time: number
+  /** Song time the key was let go; null or left out while it is still held (it is then held long enough). */
+  end?: number | null
+}
+
+/**
+ * Whether a press held its note long enough: the same rule as in «Теория» (lib/rhythm holdVerdict, 60 % of the
+ * note), so a 1/32 tap on a half note is not a half note. A key still down is held long enough.
+ */
+export function heldLongEnough(press: Press, length: number | undefined): boolean {
+  if (length === undefined || press.end === undefined || press.end === null) return true
+  return holdVerdict(press.end - press.time, length) !== 'short'
 }
 
 /**
@@ -144,12 +156,19 @@ export function isGraze(press: Press, rightPresses: readonly Press[], rate: numb
 export interface WaitPress extends Press {
   /** Whether the press was wrong for the step the song waited on. */
   wrong: boolean
+  /** The note it stands for, how long it lasts (seconds), when it was a right key. */
+  length?: number
 }
 
-/** Wait mode: wrong presses, not counting neighbours brushed together with a right key. */
-export function countMistakes(presses: readonly WaitPress[], rate: number): number {
+/**
+ * Wait mode: wrong presses, not counting neighbours brushed together with a right key; and with `checkHold`, right
+ * keys let go too soon (a note is a note only when it is held).
+ */
+export function countMistakes(presses: readonly WaitPress[], rate: number, checkHold = false): number {
   const right = presses.filter((press) => !press.wrong)
-  return presses.filter((press) => press.wrong && !isGraze(press, right, rate)).length
+  const wrong = presses.filter((press) => press.wrong && !isGraze(press, right, rate)).length
+  const short = checkHold ? right.filter((press) => !heldLongEnough(press, press.length)).length : 0
+  return wrong + short
 }
 
 export interface TempoScore {
@@ -158,11 +177,19 @@ export interface TempoScore {
   accuracy: number
   /** Presses that belong to no step (not counting brushed neighbours and doubled notes). */
   extra: number
-  /** Per step: hit in time, or missed. */
-  results: ('hit' | 'miss')[]
+  /** Steps pressed in time but let go too soon. */
+  short: number
+  /** Per step: hit in time and held, pressed in time but let go too soon, or missed. */
+  results: ('hit' | 'short' | 'miss')[]
 }
 
 const sameNote = (a: number, b: number, anyOctave: boolean) => (anyOctave ? pitchClass(a) === pitchClass(b) : a === b)
+
+/** How long the note a key stands for lasts in a step (the same note, or on «any octave» the same pitch class). */
+export function stepLength(step: Step, key: number, anyOctave: boolean): number | undefined {
+  const index = step.keys.findIndex((own) => sameNote(own, key, anyOctave))
+  return index === -1 ? undefined : step.lengths?.[index]
+}
 
 /**
  * Tempo mode, graded like a teacher listens: a step is hit when each of its keys has its own press
@@ -171,7 +198,7 @@ const sameNote = (a: number, b: number, anyOctave: boolean) => (anyOctave ? pitc
  * narrower in song time at lower speeds. Presses that belong to nothing count as extra, so pressing
  * every key does not pass.
  */
-export function scoreTempo(steps: readonly Step[], presses: readonly Press[], rate: number, anyOctave: boolean): TempoScore {
+export function scoreTempo(steps: readonly Step[], presses: readonly Press[], rate: number, anyOctave: boolean, checkHold = false): TempoScore {
   const window = TEMPO_WINDOW_REAL_S * rate
   const used = new Set<number>()
   // The step a press belongs to for one of its keys: the closest step holding that note.
@@ -197,7 +224,10 @@ export function scoreTempo(steps: readonly Step[], presses: readonly Press[], ra
       picks.push(pick)
     }
     picks.forEach((i) => used.add(i))
-    return 'hit' as const
+    // In time but let go too soon: not this note (its length is part of it).
+    // Picks follow the step's keys, so the k-th pick holds the k-th key's note.
+    const held = !checkHold || picks.every((i, k) => heldLongEnough(presses[i]!, step.lengths?.[k]))
+    return held ? 'hit' as const : 'short' as const
   })
   const first = (steps[0]?.time ?? 0) - window
   const last = (steps[steps.length - 1]?.time ?? 0) + window
@@ -209,7 +239,8 @@ export function scoreTempo(steps: readonly Step[], presses: readonly Press[], ra
     return !doubled && !isGraze(press, matched, rate)
   }).length
   const hits = results.filter((result) => result === 'hit').length
-  return { hits, total: steps.length, accuracy: steps.length ? hits / steps.length : 0, extra, results }
+  const short = results.filter((result) => result === 'short').length
+  return { hits, short, total: steps.length, accuracy: steps.length ? hits / steps.length : 0, extra, results }
 }
 
 export function tempoPasses(score: TempoScore): boolean {
@@ -228,6 +259,8 @@ export interface AttemptScore {
   total: number
   /** Tempo mode: share of steps hit; 0 otherwise. */
   accuracy: number
+  /** Notes let go too soon (tempo: steps, wait: presses). */
+  short: number
 }
 
 export interface Attempt {
@@ -241,18 +274,22 @@ export interface Attempt {
   played: number
   rate: number
   anyOctave: boolean
+  /** Judge how long notes are held (keys); not for drums and pads, a hit has no length. */
+  checkHold?: boolean
 }
 
 /** The verdict on one attempt at a unit, by the rules of its mode. */
 export function scoreAttempt(attempt: Attempt): AttemptScore {
   const total = attempt.steps.length
+  const checkHold = attempt.checkHold ?? false
   if (attempt.mode === 'tempo') {
-    const score = scoreTempo(attempt.steps, attempt.presses, attempt.rate, attempt.anyOctave)
-    return { passed: tempoPasses(score), mode: 'tempo', hits: score.hits, mistakes: 0, extra: score.extra, total, accuracy: score.accuracy }
+    const score = scoreTempo(attempt.steps, attempt.presses, attempt.rate, attempt.anyOctave, checkHold)
+    return { passed: tempoPasses(score), mode: 'tempo', hits: score.hits, mistakes: 0, extra: score.extra, total, accuracy: score.accuracy, short: score.short }
   }
   if (attempt.mode === 'wait') {
-    const mistakes = countMistakes(attempt.waitPresses, attempt.rate)
-    return { passed: attempt.played >= total && waitPasses(total, mistakes), mode: 'wait', hits: attempt.played, mistakes, extra: 0, total, accuracy: 0 }
+    const mistakes = countMistakes(attempt.waitPresses, attempt.rate, checkHold)
+    const short = checkHold ? attempt.waitPresses.filter((press) => !press.wrong && !heldLongEnough(press, press.length)).length : 0
+    return { passed: attempt.played >= total && waitPasses(total, mistakes), mode: 'wait', hits: attempt.played, mistakes, extra: 0, total, accuracy: 0, short }
   }
-  return { passed: true, mode: 'listen', hits: 0, mistakes: 0, extra: 0, total, accuracy: 0 }
+  return { passed: true, mode: 'listen', hits: 0, mistakes: 0, extra: 0, total, accuracy: 0, short: 0 }
 }
