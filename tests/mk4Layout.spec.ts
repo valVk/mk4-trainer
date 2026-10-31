@@ -38,3 +38,14 @@ describe('panel settings', () => {
     expect(parsePanelSettings(null)).toEqual({ learnt: {}, actions: {} })
   })
 })
+
+describe('what the MK4 sends out of the box', () => {
+  it('knows the recorded controls without teaching', () => {
+    expect(controlFor('cc:1:82', {}, 48, PADS)).toBe('tapTempo')
+    expect(controlFor('cc:1:76', {}, 48, PADS)).toBe('playStop')
+    expect(controlFor('cc:1:14', {}, 48, PADS)).toBe('displayKnob')
+    expect(controlFor('cc:1:31', {}, 48, PADS)).toBe('knob8')
+    // A control the owner taught wins.
+    expect(controlFor('cc:1:76', { record: 'cc:1:76' }, 48, PADS)).toBe('record')
+  })
+})

@@ -87,6 +87,10 @@ export const TURN_ACTIONS: readonly PanelAction[] = ['none', 'tempo', 'volume']
 export function controlFor(messageId: string, learnt: Readonly<Record<string, string>>, keysStart: number, pads: { channel: number, notes: readonly number[] }): string | null {
   const byLearning = Object.entries(learnt).find(([, message]) => message === messageId)?.[0]
   if (byLearning) return byLearning
+  // What the MK4 sends out of the box; the display knob turns on a message of its own.
+  if (messageId === MK4_DISPLAY_TURN) return 'displayKnob'
+  const byFactory = Object.entries(MK4_FACTORY).find(([, message]) => message === messageId)?.[0]
+  if (byFactory) return byFactory
   const note = /^note:(\d+):(\d+)$/.exec(messageId)
   if (!note) return null
   const channel = Number(note[1])
@@ -115,3 +119,34 @@ export function parsePanelSettings(value: unknown): PanelSettings {
   }
   return settings
 }
+
+/**
+ * What the MK4 sends out of the box, recorded from the owner's keyboard (31.10.2026, DAW and Plugin ports): the
+ * controls need no teaching. Arp, Latch and Note Repeat send nothing (they switch the MK4 itself); Shift+Tap Tempo
+ * (the metronome in Ableton) has no message of its own: it is Shift (CC 17) held while Tap Tempo (CC 82) comes.
+ */
+export const MK4_FACTORY: Readonly<Record<string, string>> = {
+  tapTempo: 'cc:1:82',
+  bank: 'cc:1:12',
+  minus: 'cc:1:80',
+  plus: 'cc:1:81',
+  shift: 'cc:1:17',
+  plugin: 'sysex:f0 47 00 5d 2d',
+  displayKnob: 'cc:1:13',
+  undo: 'cc:1:73',
+  loop: 'cc:1:74',
+  playStop: 'cc:1:76',
+  record: 'cc:1:77',
+  add: 'cc:1:78',
+  modWheel: 'cc:1:1',
+  pitchWheel: 'pitchBend:1',
+  octDown: 'sysex:mk4-octave',
+  octUp: 'sysex:mk4-octave',
+  ...Object.fromEntries(Array.from({ length: 8 }, (_, i) => [`knob${i + 1}`, `cc:1:${24 + i}`])),
+}
+
+/** The display knob turns as a relative encoder on CC 14: 1 is a click right, 127 a click left. */
+export const MK4_DISPLAY_TURN = 'cc:1:14'
+
+/** Controls that send no MIDI: shown as such on the panel instead of waiting to be taught. */
+export const MK4_SILENT: readonly string[] = ['arp', 'latch', 'noteRepeat']

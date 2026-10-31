@@ -4,7 +4,7 @@ import { useI18n } from 'vue-i18n'
 
 import { useProgress } from '@/composables/useProgress'
 import type { Inventory, PadNotes } from '@/lib/midiInventory'
-import { MK4_PANEL, PANEL_ACTIONS, TURN_ACTIONS, controlFor, type PanelAction, type PanelControl } from '@/lib/mk4Layout'
+import { MK4_FACTORY, MK4_PANEL, MK4_SILENT, PANEL_ACTIONS, TURN_ACTIONS, controlFor, type PanelAction, type PanelControl } from '@/lib/mk4Layout'
 
 // «Проверка MK4» → «Панель MK4» (plan step 25): the MK4 drawn as on its box. A control lights up when its message
 // comes. Keys and pads are known by their notes; every other control is taught: tap it here, press it on the MK4.
@@ -37,9 +37,11 @@ const lastAt = computed(() => {
   return at
 })
 
-const learnable = (control: PanelControl) => control.key === undefined && control.pad === undefined && control.shape !== 'display'
+/** Taught by the owner, else what the MK4 sends out of the box. */
+const messageOf = (control: PanelControl) => learnt.value[control.id] ?? MK4_FACTORY[control.id]
+const learnable = (control: PanelControl) => control.key === undefined && control.pad === undefined && control.shape !== 'display' && !MK4_SILENT.includes(control.id)
 const lit = (control: PanelControl) => props.now - (lastAt.value.get(control.id) ?? -Infinity) < 350
-const silent = (control: PanelControl) => learnable(control) && !learnt.value[control.id]
+const silent = (control: PanelControl) => MK4_SILENT.includes(control.id) || (learnable(control) && !messageOf(control))
 
 function choose(control: PanelControl) {
   selected.value = control
@@ -66,7 +68,7 @@ const actionItems = computed(() => {
 
 function setAction(action: PanelAction) {
   const control = selected.value
-  const message = control ? learnt.value[control.id] : undefined
+  const message = control ? messageOf(control) : undefined
   if (control && message) void progress.setMk4Control(control.id, message, action)
 }
 
@@ -99,10 +101,10 @@ function forget() {
         <p class="font-semibold text-highlighted">{{ selected.label || t('mk4.keyOrPad') }}</p>
         <template v-if="learnable(selected)">
           <p v-if="learningSince !== null" class="learning">{{ t('mk4.pressIt') }}</p>
-          <p v-else-if="learnt[selected.id]" class="font-mono text-sm text-toned">{{ learnt[selected.id] }}</p>
+          <p v-else-if="messageOf(selected)" class="font-mono text-sm text-toned">{{ messageOf(selected) }}</p>
           <p v-else class="text-muted">{{ t('mk4.silent') }}</p>
           <USelect
-            v-if="learnt[selected.id]"
+            v-if="messageOf(selected)"
             :model-value="actions[selected.id] ?? 'none'"
             :items="actionItems"
             :aria-label="t('mk4.actionLabel')"
@@ -113,6 +115,7 @@ function forget() {
             <UButton color="neutral" variant="soft" icon="i-lucide-radio" :label="t('mk4.learnAgain')" @click="choose(selected)" />
           </div>
         </template>
+        <p v-else-if="MK4_SILENT.includes(selected.id)" class="text-muted">{{ t('mk4.noMidi') }}</p>
         <p v-else class="text-muted">{{ t('mk4.known') }}</p>
       </template>
       <p v-else class="text-muted">{{ t('mk4.tapControl') }}</p>
