@@ -522,11 +522,11 @@ const INTRO_NOTES: Partial<Record<NoteIntroId, { show: 'treble' | 'bass' | 'gran
 <template>
   <!-- The buttons first, left, as in «Ритм» and song practice; the same ones in every phase, only what they may do
        changes. «Читаем с ритмом» puts its own here. -->
-  <div v-if="!openPiece" id="notes-actions" class="controls theory-toolbar">
+  <div v-if="!openPiece" id="notes-actions" class="toolbar">
     <template v-if="!reading">
       <UButton icon="i-lucide-skip-forward" color="neutral" variant="soft" size="lg" :disabled="phase === 'intro' || solved || levelDone" :label="t('train.skip')" @click="newTask(task)" />
       <!-- The main action is always the last button, on the right (owner's rule). -->
-      <UButton :icon="primary.icon" size="lg" class="toolbar-main" :disabled="primary.disabled" :label="primary.label" @click="primary.run" />
+      <UButton :icon="primary.icon" size="lg" class="toolbar__main" :disabled="primary.disabled" :label="primary.label" @click="primary.run" />
     </template>
   </div>
 

@@ -90,14 +90,10 @@ const rangeLabel = computed(() => `${midiName(start.value)} – ${midiName(start
             icon="i-lucide-play"
             color="neutral"
             variant="soft"
-            size="xl"
+            size="lg"
             :label="t('sound.listen')"
             @click="listen"
-          >
-            <template #trailing>
-              <UKbd value="2" size="md" />
-            </template>
-          </UButton>
+          />
         </div>
         <p v-if="reading.kind === 'chord'" class="name text-toned">
           {{ reading.name }}<template v-if="reading.inversion > 0">, {{ t(`lab.inversion.${reading.inversion}`) }}</template>

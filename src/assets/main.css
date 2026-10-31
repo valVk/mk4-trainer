@@ -323,3 +323,21 @@ html.drawer-open .shell {
   flex-direction: column;
   flex: 1 0 auto;
 }
+
+/*
+ * A screen's buttons (docs/ui-rules.md): one row right under the page header, left-aligned, secondary first and the
+ * main action last. The same buttons in the same places in every phase; the main one keeps one width whatever it
+ * says, so nothing moves.
+ */
+.toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+  min-height: 2.5rem;
+}
+
+.toolbar__main {
+  min-width: 13rem;
+  justify-content: center;
+}

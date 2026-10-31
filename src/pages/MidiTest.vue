@@ -173,7 +173,7 @@ onBeforeUnmount(() => {
           <UButton
             :disabled="!hasWebMidi"
             icon="i-lucide-plug"
-            size="xl"
+            size="lg"
             class="self-start"
             :label="t('midiTest.connect')"
             @click="connect"

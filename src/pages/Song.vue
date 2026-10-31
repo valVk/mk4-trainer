@@ -231,7 +231,7 @@ useMk4Actions({
         <!-- The main action last, after the seek buttons (owner's rule). -->
         <UButton
           :icon="player.playing.value ? 'i-lucide-pause' : 'i-lucide-play'"
-          size="xl"
+          size="lg"
           :loading="synth.status.value === 'loading'"
           :label="player.playing.value ? t('songs.pause') : t('songs.play')"
           @click="togglePlay"

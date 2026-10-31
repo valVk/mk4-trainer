@@ -412,7 +412,7 @@ const levelTabs = computed(() => RHYTHM_LEVELS.map((item) => ({ id: item.id, ope
 <template>
   <!-- The buttons first, left, as in song practice: the main action last. On the MK4 ▶/■ plays or stops, Loop plays
        again, and the knob reaches every button. Hidden while a piece plays here: it has its own. -->
-  <div v-if="!openPiece" class="controls theory-toolbar">
+  <div v-if="!openPiece" class="toolbar">
     <!-- The same buttons in the same places in every phase: only what they may do changes (stable layout). -->
     <UButton
       icon="i-lucide-timer"
@@ -434,7 +434,7 @@ const levelTabs = computed(() => RHYTHM_LEVELS.map((item) => ({ id: item.id, ope
     <UButton icon="i-lucide-ear" color="neutral" variant="soft" size="lg" :disabled="phase === 'playing' || phase === 'intro'" :label="t('theory.listen')" @click="listen" />
     <UButton icon="i-lucide-rotate-ccw" color="neutral" variant="soft" size="lg" :disabled="!(passedNow && !wasPractice)" :label="t('theory.again')" @click="startAttempt" />
     <!-- The main action is always the last button, on the right (owner's rule); one width for all its words. -->
-    <UButton :icon="primary.icon" size="lg" class="toolbar-main" :label="primary.label" @click="primary.run" />
+    <UButton :icon="primary.icon" size="lg" class="toolbar__main" :label="primary.label" @click="primary.run" />
   </div>
 
   <LevelRow

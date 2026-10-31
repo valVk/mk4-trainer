@@ -252,6 +252,24 @@ const levelItems = computed(() => LEVELS.map((item) => ({ label: String(item.id)
     <HelpSwitch :on="guideOn" :exam="exam" />
     <DrawerStatus :window-start="start" show-on-shift />
 
+    <!-- The buttons, as on every screen (docs/ui-rules.md): one row under the header, the same ones in every phase,
+         «Дальше» last. Pads: 1 next, 2 listen, 3 hint, 4 skip. -->
+    <div class="toolbar">
+      <UButton
+        v-if="!guideOn && !exam"
+        icon="i-lucide-lightbulb"
+        color="neutral"
+        variant="soft"
+        size="lg"
+        :disabled="hintRequested || solved || levelDone !== null"
+        :label="t('train.hint')"
+        @click="hintRequested = true"
+      />
+      <UButton icon="i-lucide-ear" color="neutral" variant="soft" size="lg" :disabled="soundStatus !== 'ready' || levelDone !== null" :label="t('sound.listen')" @click="listen" />
+      <UButton icon="i-lucide-skip-forward" color="neutral" variant="soft" size="lg" :disabled="solved || levelDone !== null" :label="t('train.skip')" @click="skip" />
+      <UButton icon="i-lucide-arrow-right" size="lg" class="toolbar__main" :disabled="!solved || levelDone !== null" :label="t('train.next')" @click="nextTask" />
+    </div>
+
     <div class="flex flex-wrap items-center justify-between gap-4 mt-2">
       <div class="levels">
         <span class="text-muted">{{ t('train.levelLabel') }}</span>
@@ -303,62 +321,10 @@ const levelItems = computed(() => LEVELS.map((item) => ({ label: String(item.id)
           {{ feedback.text }}
         </template>
       </p>
-      <div class="flex flex-wrap gap-3">
-        <UButton
-          v-if="!solved && !guideOn && !exam"
-          icon="i-lucide-lightbulb"
-          color="neutral"
-          variant="soft"
-          size="xl"
-          :disabled="hintRequested"
-          :label="t('train.hint')"
-          @click="hintRequested = true"
-        >
-          <template #trailing>
-            <UKbd value="3" size="md" />
-          </template>
-        </UButton>
-        <UButton
-          v-if="soundStatus === 'ready'"
-          icon="i-lucide-play"
-          color="neutral"
-          variant="soft"
-          size="xl"
-          :label="t('sound.listen')"
-          @click="listen"
-        >
-          <template #trailing>
-            <UKbd value="2" size="md" />
-          </template>
-        </UButton>
-        <UButton
-          v-if="solved"
-          icon="i-lucide-arrow-right"
-          size="xl"
-          :label="t('train.next')"
-          @click="nextTask"
-        >
-          <template #trailing>
-            <UKbd value="1" size="md" />
-          </template>
-        </UButton>
-        <UButton
-          v-else
-          icon="i-lucide-skip-forward"
-          color="neutral"
-          variant="ghost"
-          size="xl"
-          :label="t('train.skip')"
-          @click="skip"
-        >
-          <template #trailing>
-            <UKbd value="4" size="md" />
-          </template>
-        </UButton>
-      </div>
     </section>
 
     <PianoKeyboard
+      class="chord-keys"
       :start="start"
       :held="heldNotes"
       :hint="showHighlight && !solved ? target : []"
@@ -433,7 +399,8 @@ const levelItems = computed(() => LEVELS.map((item) => ({ label: String(item.id)
   flex: 1;
   display: flex;
   flex-direction: column;
-  justify-content: center;
+  /* Top-aligned: the task's words stay put when the feedback under them changes. */
+  justify-content: flex-start;
   gap: 1rem;
   min-height: 15rem;
   padding-block: 1.5rem;
@@ -441,7 +408,8 @@ const levelItems = computed(() => LEVELS.map((item) => ({ label: String(item.id)
 
 .prompt {
   font-family: var(--font-display);
-  font-size: clamp(2.25rem, 6vw, 4rem);
+  /* Bounded by the height too: a long task («…мажор, 2-е обращение») takes two lines on a short tablet. */
+  font-size: clamp(2rem, min(6vw, 7vh), 4rem);
   font-weight: 800;
   line-height: 1.05;
   letter-spacing: -0.02em;
@@ -547,6 +515,28 @@ const levelItems = computed(() => LEVELS.map((item) => ({ label: String(item.id)
   }
 }
 
+/* A third of the screen for the keys, the toolbar and the task share the rest. */
+.chord-keys {
+  --keys-height: clamp(9rem, 32vh, 19rem);
+}
+
+/* Short tablets (650 px high): the toolbar took a row, the task gives it back. */
+@media (max-height: 720px) {
+  .task {
+    gap: 0.5rem;
+    min-height: 10rem;
+    padding-block: 0.5rem;
+  }
+
+  .prompt {
+    font-size: clamp(1.75rem, min(5vw, 7vh), 3rem);
+  }
+
+  .chord-keys {
+    --keys-height: clamp(8rem, 28vh, 12rem);
+  }
+}
+
 /* Phones in landscape: the task in less room, the keys keep theirs. */
 @media (orientation: landscape) and (max-height: 500px) {
   .task {
@@ -556,7 +546,11 @@ const levelItems = computed(() => LEVELS.map((item) => ({ label: String(item.id)
   }
 
   .prompt {
-    font-size: clamp(1.75rem, 4.5vw, 2.5rem);
+    font-size: clamp(1.5rem, 7vh, 2.25rem);
+  }
+
+  .chord-keys {
+    --keys-height: clamp(5.5rem, 22vh, 12rem);
   }
 }
 </style>

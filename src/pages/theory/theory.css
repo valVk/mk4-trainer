@@ -100,19 +100,6 @@
   margin-top: 1rem;
 }
 
-/* Every section's buttons: one row right under the page header, as in song practice; the main one last. */
-.theory-toolbar {
-  min-height: 2.5rem;
-  margin-top: 0;
-}
-
-/* The main button keeps one width whatever it says («Играть», «Стоп», «Дальше»…), so nothing moves. */
-.theory-toolbar :deep(.toolbar-main),
-.theory-toolbar .toolbar-main {
-  min-width: 13rem;
-  justify-content: center;
-}
-
 /* What a result opens (the next level, a piece), inside its card. */
 .result__actions {
   display: flex;

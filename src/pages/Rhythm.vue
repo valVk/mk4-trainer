@@ -195,16 +195,12 @@ function listenExample() {
 
           <UButton
             :icon="running && !calibrating ? 'i-lucide-square' : 'i-lucide-play'"
-            size="xl"
+            size="lg"
             class="self-start"
             :disabled="calibrating"
             :label="running && !calibrating ? t('rhythm.stop') : t('rhythm.start')"
             @click="metronome.toggle()"
-          >
-            <template #trailing>
-              <UKbd value="3" size="md" />
-            </template>
-          </UButton>
+          />
         </section>
       </div>
 

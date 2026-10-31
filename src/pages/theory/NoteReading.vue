@@ -183,7 +183,7 @@ const countIn = useCountIn(() => ({
     <UButton
       :icon="phase === 'playing' ? 'i-lucide-square' : phase === 'result' && passed ? 'i-lucide-arrow-right' : 'i-lucide-play'"
       size="lg"
-      class="toolbar-main"
+      class="toolbar__main"
       :label="phase === 'playing' ? t('theory.stop') : phase === 'result' && passed ? t('theory.next') : t('theory.play')"
       @click="phase === 'playing' ? (player.stop(), phase = 'ready') : phase === 'result' && passed ? next() : start()"
     />

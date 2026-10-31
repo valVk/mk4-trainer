@@ -821,7 +821,7 @@ const nextLabel = computed(() => {
           </section>
         </aside>
         <div class="main-col">
-          <div class="controls">
+          <div class="controls toolbar">
             <!-- Secondary first; the main action is the last button of the group (owner's rule). -->
             <UButton
               icon="i-lucide-timer"
@@ -838,6 +838,7 @@ const nextLabel = computed(() => {
             <UButton
               :icon="player.playing.value || waiting || countingIn ? 'i-lucide-pause' : 'i-lucide-play'"
               size="lg"
+              class="toolbar__main"
               :loading="synth.status.value === 'loading'"
               :label="player.playing.value || waiting || countingIn ? t('songs.pause') : t('songs.play')"
               @click="withSound(togglePlay)"
