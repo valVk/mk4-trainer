@@ -625,8 +625,15 @@ watch([waiting, pendingIndex], () => {
   }, KEY_HINT_DELAY_MS)
 })
 onBeforeUnmount(() => clearTimeout(keyHintTimer))
+/**
+ * The lit keys are the help here: the app's «С подсказкой» switch (plan step 29) turns them on and off. The last
+ * rung of a phrase (in tempo, full speed) is its exam: no lit keys, whatever the switch says. «С учителем» is not
+ * help but the mode (the ladder or free play), so it stays its own switch.
+ */
+const exam = computed(() => guided.value && !!unit.value && rungIndex.value === unit.value.rungs.length - 1 && mode.value !== 'listen')
+const guideOn = computed(() => progress.guide.value && !exam.value)
 const litKeys = computed(() => {
-  if (result.value) return []
+  if (result.value || !guideOn.value) return []
   if (mode.value === 'wait') return waiting.value && keyHint.value ? pendingKeys.value : []
   return [...new Set([...pendingKeys.value, ...soundingKeys.value])]
 })
@@ -699,6 +706,13 @@ const nextLabel = computed(() => {
     <!-- The switches go into the drawer: this screen's own, or «Теория»'s when the piece is shown inside it. -->
     <Teleport defer to="#page-actions">
       <USwitch v-model="guided" size="lg" :label="t('songs.guided')" />
+      <USwitch
+        :model-value="guideOn"
+        :disabled="exam"
+        size="lg"
+        :label="exam ? t('train.guideExam') : t('train.guide')"
+        @update:model-value="progress.setGuide($event)"
+      />
       <USwitch v-if="!onPads" v-model="anyOctave" size="lg" :label="t('songs.anyOctave')" />
       <!-- Tips open on tap: tooltips never show on a touch screen. -->
       <UPopover :content="{ side: 'bottom', align: 'end' }">
@@ -782,6 +796,10 @@ const nextLabel = computed(() => {
             <span class="controls__divider" aria-hidden="true" />
 
             <RungLadder v-if="guided && unit" :unit="unit" :passed="passedOf(unit)" :current="rungIndex" @choose="chooseRung" />
+            <span v-if="exam" class="exam">
+              <UIcon name="i-lucide-graduation-cap" class="size-5" />
+              {{ t('train.exam') }}
+            </span>
             <template v-else-if="!guided">
               <div class="segmented" role="radiogroup" :aria-label="t('songs.modeLabel')">
                 <button v-for="item in (['wait', 'tempo', 'listen'] as const)" :key="item" type="button" role="radio" class="segment" :class="{ 'segment--on': freeMode === item }" :aria-checked="freeMode === item" @click="freeMode = item">
@@ -844,6 +862,18 @@ const nextLabel = computed(() => {
 </template>
 
 <style scoped>
+/* The phrase's exam (its last rung): calm, but clearly another phase. */
+.exam {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.375rem;
+  padding: 0.25rem 0.75rem;
+  border-radius: 999px;
+  font-weight: 600;
+  color: var(--color-attention);
+  box-shadow: 0 0 0 var(--ring-width) var(--color-attention) inset;
+}
+
 .practice {
   padding: clamp(0.75rem, 3vh, 2rem) clamp(1rem, 2.5vw, 2rem);
 }
