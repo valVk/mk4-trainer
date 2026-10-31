@@ -35,6 +35,7 @@ function dispatch(action: Mk4Action, value?: number) {
 function listen() {
   if (listening) return
   listening = true
+  if (import.meta.env.DEV) (window as unknown as { __mk4Dispatch?: typeof dispatch }).__mk4Dispatch = dispatch
   const { onEvent, padMap } = useNoteSource()
   const progress = useProgress()
   const keysStart = useKeyboardWindow()

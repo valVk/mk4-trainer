@@ -111,7 +111,8 @@ async function load(binary: ArrayBuffer, fileName: string): Promise<void> {
 function play(): void {
   const current = sequencer.value
   if (!current) return
-  current.play()
+  // Still playing when a pause was skipped: playing again would sound the held notes twice.
+  if (current.paused) current.play()
   if (pausedTarget !== null) {
     // While playing, the sequencer keeps the exact time and waits for the next event.
     current.currentTime = pausedTarget
@@ -126,7 +127,12 @@ function play(): void {
 function pause(): void {
   const current = sequencer.value
   if (!current) return
-  current.pause()
+  // Sent a moment later, and not at all when play follows at once (start over while playing): a pause and a play
+  // sent together race in the audio thread, whose late answer to the pause leaves the sequencer thinking it is
+  // paused while the song plays on, its time then moving only once a second.
+  queueMicrotask(() => {
+    if (!playing.value) current.pause()
+  })
   settling = null
   playing.value = false
   cancelAnimationFrame(frame)
