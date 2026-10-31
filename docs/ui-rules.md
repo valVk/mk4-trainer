@@ -22,6 +22,13 @@ Tool screens (the metronome «Ритм», a song's map, «Лаборатория
 have no level row, and their controls sit with what they control (a card, a panel, the player). The toolbar, button
 size, word and badge rules below still apply to them.
 
+## Drawer
+
+- Everything that is a setting, not an action, lives in the drawer as one row each: help (`HelpSwitch`), accuracy
+  (`SkillPicker`), sound, octave and MK4 state (`DrawerStatus`). A screen adds rows through `#page-actions`, states
+  through `#drawer-status`; nothing of this goes on the screen.
+- A setting chosen per student (help, accuracy, sound bank) is the same on every screen and on «Прогресс».
+
 ## Toolbar
 
 - One row right under the page header, left-aligned. Secondary buttons first, **the main action last**
@@ -34,6 +41,15 @@ size, word and badge rules below still apply to them.
 - No badges, numbers or key hints on buttons. The MK4 drives screens through the transport (▶/■ plays or stops,
   Loop plays again) and the knob, which reaches every button. Pads work without labels and mean the same on every
   screen: 1 the main button, 2 listen, 3 hint or metronome, 4 skip or another task, 7/8 level down/up.
+
+## Level row
+
+- «Уровень», then plain numbers in one segmented track (`LevelRow`); closed levels dimmed, no lock icons; a finished
+  level gets a small green dot; the piece that ends a group of levels is a small chip inside the track.
+- On the right: stars (`StarRating`), `ExamBadge` in an exam, then the screen's own state (tempo, «Подряд», what is
+  under the hands). The track scrolls sideways on a narrow screen; the row never wraps on a phone.
+- Stars: as many green (on time) notes as yellow (early, late) is one star, more green two, all green three; a red
+  note (missed, let go too soon) fails. A level keeps its best attempt; one star opens the next level.
 
 ## Results and what they open
 
@@ -55,6 +71,36 @@ size, word and badge rules below still apply to them.
   grow to the footer between `--keys-height` (how low they may get) and `--keys-max`. Never a fixed small keyboard
   under empty space.
 - Landscape only; check light and dark theme.
+
+## Colour and states
+
+- Only tokens from `main.css`, never a hex in a component: `--color-active` (chosen, playing), `--color-correct`
+  (right, held), `--color-attention` (close: early, late, a hint to fix), `--color-wrong` (missed, cut short),
+  `--color-on-fill` for text on a fill, `--ui-*` for neutral text, surfaces and borders. Dark and light (the MK4's
+  own colours) are two sets of the same tokens.
+- The same meaning has the same colour everywhere: staff marks, the waterfall, press-and-hold bars, results.
+- Chosen is a filled background, never an outline. Borders are thin (`--ring-width`).
+- The knob cursor shows only while the knob or Tab moves focus (`html.knob-nav`); a tap or click never leaves a
+  cursor behind.
+- A hint on the keys or pads is an outline or ring; a fill always means «pressed».
+
+## Playing
+
+- Every attempt starts with room: a 3-2-1 countdown in plain seconds (`CountIn`), over the notes, never over the keys;
+  in the waterfall the first note is still falling when it ends.
+- What is judged is shown while playing: a held note turns green, a missed or cut-short one red, early or late
+  yellow after the attempt. How strict is the student's accuracy setting (lib/skill), never a constant in a screen.
+- With help on, the time is drawn, not only told: counts under the notes and press-and-hold bars (`BeatRuler`).
+- «Послушай и повтори»: «Играть» plays the model first, then the student's turn with its own countdown.
+- Every key press sounds: the piano when the sound is on, a soft tick otherwise. A screen that plays sound has
+  `meta: { sound: true }` (the sound window asks once), and its play buttons turn the sound on themselves.
+
+## Keys and staffs
+
+- One keyboard component (`PianoKeyboard`), 25 keys as on the MK4, with `fill` on task screens. The pressed note's
+  key lights; on a staff to read, the pressed note turns green and stays found.
+- Staffs (`RhythmStaff`, `NoteStaff`, `SongStaff`) redraw once the music font has loaded; a staff never shows stems
+  apart from their notes.
 
 ## Typography and words
 
