@@ -1,6 +1,6 @@
 import { expect, test, type Page } from '@playwright/test'
 
-import { keyFor, open, storedSetting } from './helpers'
+import { keyFor, open, reload, storeSetting, storedSetting } from './helpers'
 
 const state = (page: Page) => page.evaluate(() => {
   const s = (document.querySelector('.levels-row') as unknown as { __vueParentComponent: { setupState: Record<string, unknown> } }).__vueParentComponent.setupState
@@ -81,4 +81,15 @@ test('saves progress of every level, not only the first', async ({ page }) => {
     await s.progress.addRhythmPass(2)
   })
   await expect.poll(() => storedSetting(page, 'theoryRhythm')).toEqual({ 1: { passes: 9 }, 2: { passes: 1 } })
+})
+
+test('«С подсказкой» puts the count under the notes; switched off, the student counts', async ({ page }) => {
+  await open(page, '/train/theory')
+  await page.getByRole('button', { name: 'Понятно' }).click()
+  await expect(page.getByText(/Под нотой — счёт/)).toBeVisible()
+
+  await storeSetting(page, 'guide', false)
+  await reload(page)
+  await page.getByRole('button', { name: 'Понятно' }).click()
+  await expect(page.getByText(/Считай сам/)).toBeVisible()
 })

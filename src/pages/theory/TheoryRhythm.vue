@@ -14,6 +14,7 @@ import { useTheoryPiece } from '@/composables/useTheoryPiece'
 import { useTheoryPieces } from '@/composables/useTheoryPieces'
 import { useTimedPresses, type TimedPress } from '@/composables/useTimedPresses'
 import { useWakeLock } from '@/composables/useWakeLock'
+import { EXAM_STARS } from '@/lib/levels'
 import { scaleGroups } from '@/lib/metronome'
 import { quarterSeconds, scoreRhythm, sounds, type Rhythm, type RhythmScore, type TimingVerdict } from '@/lib/rhythm'
 import {
@@ -92,6 +93,13 @@ const wasPractice = ref(false)
 /** Its tempo, to say «получилось в темпе 72, для звезды нужно 80». */
 const practiceBpm = ref(0)
 const stars = computed(() => starsOf(levelPasses.value))
+/**
+ * Help is the app's «С подсказкой» switch (plan step 29): on, the count stands under every note and the note being
+ * played is marked; off, just the notes. From two stars (the last tempo) the level is in its exam: no help. The
+ * metronome's clicks stay: playing with them is the task, not a hint.
+ */
+const exam = computed(() => stars.value >= EXAM_STARS)
+const guideOn = computed(() => progress.guide.value && !exam.value)
 
 /** Tasks alternate: read the notes, then hear and repeat (the notes show after the attempt). */
 const taskNumber = ref(0)
@@ -388,6 +396,20 @@ const levelTabs = computed(() => RHYTHM_LEVELS.map((item) => ({ id: item.id, ope
       </template>
     </div>
     <span class="stars" :aria-label="t('train.stars', { n: stars })">{{ '★'.repeat(stars) }}<span class="stars__off">{{ '★'.repeat(3 - stars) }}</span></span>
+    <span v-if="exam" class="exam">
+      <UIcon name="i-lucide-graduation-cap" class="size-5" />
+      {{ t('train.exam') }}
+    </span>
+    <!-- The app's help switch, in the drawer; a level's exam turns it off. -->
+    <Teleport defer to="#page-actions">
+      <USwitch
+        :model-value="guideOn"
+        :disabled="exam"
+        size="lg"
+        :label="exam ? t('train.guideExam') : t('train.guide')"
+        @update:model-value="progress.setGuide($event)"
+      />
+    </Teleport>
     <!-- Tempo from the metronome scale, one tap, like a mechanical metronome. -->
     <UPopover v-model:open="tempoOpen" :content="{ side: 'bottom', align: 'start' }">
       <UButton
@@ -448,16 +470,16 @@ const levelTabs = computed(() => RHYTHM_LEVELS.map((item) => ({ id: item.id, ope
       <div>
         <p class="prompt text-highlighted">{{ t(`theory.kind.${kind}`) }}</p>
         <!-- What to press: the notes sit on one line and have no pitch, so any key will do. -->
-        <p class="how text-toned">{{ lowerTask ? t('theory.howTwoHands') : t('theory.how') }}</p>
+        <p class="how text-toned">{{ lowerTask ? t('theory.howTwoHands') : guideOn ? t('theory.how') : t('theory.howNoCounts') }}</p>
       </div>
       <div class="staff-box">
         <RhythmStaff
           v-if="showNotes"
           :scale="staffScale"
           :rhythm="task"
-          counts
+          :counts="guideOn"
           :lower="lowerTask"
-          :current="phase === 'playing' && kind === 'read' ? player.current.value : null"
+          :current="guideOn && phase === 'playing' && kind === 'read' ? player.current.value : null"
           :marks="phase === 'result' ? marks : undefined"
           :lower-marks="phase === 'result' ? lowerMarks : undefined"
         />
