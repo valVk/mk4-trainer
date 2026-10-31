@@ -91,10 +91,14 @@ body {
   -webkit-touch-callout: none;
 }
 
-/* Visible focus for our own buttons; Nuxt UI components bring their own ring. */
-:where(button, [role="button"], [role="radio"]):focus-visible {
-  outline: 3px solid var(--color-pad-sky);
-  outline-offset: 2px;
+/*
+ * Visible focus (the MK4 display knob, a keyboard) as a slightly lighter background, not an outline: an outline
+ * looks like the selected state (the chosen phrase, the current rung). The inset shadow lies over any background
+ * and under the label. It replaces Nuxt UI's own rings too.
+ */
+:focus-visible {
+  outline: none !important;
+  box-shadow: inset 0 0 0 100vmax color-mix(in oklab, var(--ui-text-highlighted) 14%, transparent) !important;
 }
 
 /* Page frame shared by every screen. Low specificity, so a page's own rules win. */

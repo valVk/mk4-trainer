@@ -105,11 +105,6 @@ const rhythmStars = computed(() => starsOf(progress.rhythmProgress.value[rhythmL
   transition-duration: 60ms;
 }
 
-.card:focus-visible {
-  outline: 3px solid var(--hue);
-  outline-offset: 4px;
-}
-
 .card--tomato { --hue: var(--color-pad-tomato); }
 .card--sky { --hue: var(--color-pad-sky); }
 

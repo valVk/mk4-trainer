@@ -150,10 +150,6 @@ const formatSize = (bytes: number) => `${Math.max(1, Math.round(bytes / 1024))} 
   border-radius: 0.75rem;
 }
 
-.item__link:focus-visible {
-  outline: 2px solid var(--ui-primary);
-}
-
 .item__name {
   display: block;
   font-family: var(--font-display);

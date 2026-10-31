@@ -59,11 +59,6 @@ defineProps<{
   transition-duration: 60ms;
 }
 
-.pad:focus-visible {
-  outline: 3px solid var(--ui-text-highlighted);
-  outline-offset: 4px;
-}
-
 @media (hover: hover) and (pointer: fine) {
   .pad:not(.pad--unlit):hover {
     filter: brightness(1.05);
